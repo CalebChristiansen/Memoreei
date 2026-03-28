@@ -3,7 +3,10 @@
 # Each task gets a fresh Claude Code call with clean context.
 # Stops when: all tasks done, deadline hit, or max failures reached.
 
-set -euo pipefail
+set -uo pipefail
+# NOTE: no -e; we handle errors explicitly. Prevents silent runner death.
+
+trap 'echo "[$(date "+%H:%M:%S")] RUNNER CRASHED (line $LINENO, exit $?)" | tee -a "/home/fi/.openclaw/workspace-elliot/projects/memoreei/logs/runner.log"' ERR
 
 PROJECT_DIR="/home/fi/.openclaw/workspace-elliot/projects/memoreei"
 TASKS_FILE="$PROJECT_DIR/tasks.json"
@@ -84,6 +87,20 @@ for i in $(seq 0 $((total - 1))); do
     continue
   fi
 
+  # Skip if already skipped by agent
+  if [ -f "$LOG_DIR/${task_id}.skip" ]; then
+    log "SKIP $task_id — agent marked skip: $(cat "$LOG_DIR/${task_id}.skip")"
+    continue
+  fi
+
+  # Guard against duplicate side effects on restart (e.g. re-seeding Discord)
+  # If a .running marker exists from a prior crashed run, note it in logs
+  if [ -f "$LOG_DIR/${task_id}.running" ]; then
+    log "WARN $task_id — was running when runner last died. Retrying anyway."
+    live "⚠️ **$task_name** — retrying after prior crash"
+  fi
+  echo "$(date -Iseconds)" > "$LOG_DIR/${task_id}.running"
+
   log "START $task_id: $task_name"
   notify "🔨 Starting task: $task_name"
   live "🔨 **Task: $task_name** (attempt 1)"
@@ -126,6 +143,7 @@ $tail_output
     if run_test "$task_test"; then
       log "  PASS ✅"
       mark_done "$task_id"
+      rm -f "$LOG_DIR/${task_id}.running"
       success=true
       consecutive_failures=0
       break
@@ -180,10 +198,10 @@ If you can't fix it, explain why in $LOG_DIR/${task_id}.skip"
           log "  AGENT FIX ✅"
           success=true
           consecutive_failures=0
-          rm -f "$LOG_DIR/${task_id}.escalate"
+          rm -f "$LOG_DIR/${task_id}.escalate" "$LOG_DIR/${task_id}.running"
         elif [ -f "$LOG_DIR/${task_id}.skip" ]; then
           log "  AGENT SKIPPED — $(cat "$LOG_DIR/${task_id}.skip")"
-          rm -f "$LOG_DIR/${task_id}.escalate"
+          rm -f "$LOG_DIR/${task_id}.escalate" "$LOG_DIR/${task_id}.running"
         else
           log "  AGENT TIMEOUT — no fix in 5 minutes"
         fi

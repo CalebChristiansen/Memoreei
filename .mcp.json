@@ -1,0 +1,1 @@
+{"mcpServers":{"memoreei":{"command":"/home/fi/.openclaw/workspace-elliot/projects/memoreei/.venv/bin/python","args":["-m","memoreei.server"],"cwd":"/home/fi/.openclaw/workspace-elliot/projects/memoreei","env":{"MEMOREEI_DB_PATH":"/home/fi/.openclaw/workspace-elliot/projects/memoreei/memoreei.db"}}}}

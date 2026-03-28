@@ -1,33 +1,71 @@
-# Memoreei
+# 🧠 Memoreei
 
-**Your personal memory, searchable by AI.**
+**Your AI's long-term memory.**
 
-Memoreei is an open-source MCP server that ingests your conversations — WhatsApp exports, Discord messages, or manual notes — into a local hybrid database (keyword + vector) and exposes them as MCP tools. Ask any MCP-compatible AI (Claude Code, Claude Desktop, etc.) to search your memories and it just works.
+Memoreei is a local-first MCP server that gives Claude (and any MCP-compatible agent) persistent, searchable memory across your conversations, chats, and notes. It's not a chatbot wrapper — it's **memory infrastructure** for AI agents.
+
+```
+"What did I say about the printer last week?"
+"Remind me of everything from that Discord thread about the API redesign."
+"What were my notes on the React migration?"
+```
+
+Claude can now answer these. Without Memoreei, it can't.
+
+---
+
+## What It Does
+
+- **Ingests** conversations from WhatsApp, Discord, and manual notes
+- **Embeds** them locally using ONNX-based vector models (no cloud required)
+- **Indexes** everything in SQLite with full-text search (BM25 via FTS5)
+- **Fuses** keyword + semantic results using Reciprocal Rank Fusion
+- **Exposes** 6 MCP tools for any Claude client to query memory in real-time
+
+No SaaS. No mandatory API keys. Your data stays on your machine.
 
 ---
 
 ## Architecture
 
 ```
-  Your Data                  Memoreei MCP Server              AI Client
-  ─────────                  ───────────────────              ─────────
-  WhatsApp .txt  ──ingest──▶  ┌─────────────────┐
-  Discord msgs   ──sync────▶  │   MCP Tools      │ ◀──stdio──▶ Claude Code
-  Manual notes   ──add─────▶  │                  │             Claude Desktop
-                              │  ┌────────────┐  │             Any MCP client
-                              │  │  Hybrid    │  │
-                              │  │  Search    │  │
-                              │  │ FTS5 + Vec │  │
-                              │  └────┬───────┘  │
-                              │       │ RRF       │
-                              │  ┌────▼───────┐  │
-                              │  │  SQLite DB  │  │
-                              │  │ + Embeddings│  │
-                              │  └────────────┘  │
-                              └─────────────────┘
+ ┌─────────────────────────────────────────────────────────────────┐
+ │                        Your Data Sources                        │
+ │                                                                 │
+ │   WhatsApp .txt export    Discord channel    Manual notes       │
+ │          │                      │                 │             │
+ └──────────┼──────────────────────┼─────────────────┼────────────┘
+            │                      │                 │
+            ▼                      ▼                 ▼
+ ┌─────────────────────────────────────────────────────────────────┐
+ │                     Memoreei MCP Server                         │
+ │                                                                 │
+ │  ┌──────────────┐  ┌─────────────────┐  ┌──────────────────┐   │
+ │  │  Connectors  │  │  Hybrid Search  │  │   MCP Tools      │   │
+ │  │              │  │                 │  │                  │   │
+ │  │  whatsapp.py │  │  FTS5 (BM25)    │  │  search_memory   │   │
+ │  │  discord.py  │  │  + vector cosine│  │  get_context     │   │
+ │  │  manual add  │  │  + RRF fusion   │  │  add_memory      │   │
+ │  └──────┬───────┘  └────────┬────────┘  │  list_sources    │   │
+ │         │                   │           │  ingest_whatsapp │   │
+ │         ▼                   ▼           │  sync_discord    │   │
+ │  ┌─────────────────────────────────┐    └────────┬─────────┘   │
+ │  │         SQLite Database         │             │             │
+ │  │  memories + FTS5 index          │             │             │
+ │  │  embeddings (BLOB)              │             │             │
+ │  │  discord sync checkpoint        │             │             │
+ │  └─────────────────────────────────┘             │             │
+ └──────────────────────────────────────────────────┼────────────┘
+                                                    │ stdio / JSON-RPC
+                                                    ▼
+                                         ┌─────────────────────┐
+                                         │   Claude Clients    │
+                                         │                     │
+                                         │   Claude Code       │
+                                         │   Claude Desktop    │
+                                         │   Any MCP client    │
+                                         └─────────────────────┘
 ```
-
-**Hybrid search** combines BM25 keyword matching (SQLite FTS5) with semantic vector similarity (fastembed, local ONNX), merged via Reciprocal Rank Fusion (RRF). Best of both worlds: exact keyword hits + fuzzy semantic matching.
 
 ---
 
@@ -36,8 +74,9 @@ Memoreei is an open-source MCP server that ingests your conversations — WhatsA
 ### 1. Install
 
 ```bash
-git clone https://github.com/CalebChristiansen/Memoreei.git
-cd Memoreei
+git clone <repo-url>
+cd memoreei
+python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
@@ -45,139 +84,276 @@ pip install -e .
 
 ```bash
 cp .env.example .env
-# Edit .env — no API key required for default fastembed mode
+# Edit .env — defaults work out of the box with local embeddings
 ```
 
-### 3. Seed with sample data
+### 3. Connect to Claude
 
-```bash
-python scripts/seed_data.py
-```
-
-### 4. Run the MCP server
-
-```bash
-python -m memoreei.server
-# or
-mcp run src/memoreei/server.py
-```
-
-### 5. Configure Claude Code
-
-Add to your `.mcp.json` or Claude Code MCP settings:
+**Claude Code** — add to `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "memoreei": {
-      "command": "python",
+      "command": "/path/to/memoreei/.venv/bin/python",
       "args": ["-m", "memoreei.server"],
-      "cwd": "/path/to/Memoreei"
+      "cwd": "/path/to/memoreei"
     }
   }
 }
+```
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memoreei": {
+      "command": "/path/to/memoreei/.venv/bin/python",
+      "args": ["-m", "memoreei.server"]
+    }
+  }
+}
+```
+
+### 4. Seed sample data (optional)
+
+```bash
+python scripts/seed_data.py
+```
+
+### 5. Start using memory
+
+```
+# In Claude, via MCP:
+> ingest_whatsapp("/path/to/WhatsApp Chat Export.txt")
+> sync_discord()
+> add_memory("The staging DB password rotates every 90 days")
+> search_memory("printer issues")
 ```
 
 ---
 
 ## MCP Tools
 
+All 6 tools are available to any connected MCP client.
+
 ### `search_memory`
-Search your memories with hybrid keyword + semantic search.
+
+Hybrid keyword + semantic search across all your memories.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | string | required | Natural language search query |
-| `limit` | int | 10 | Max results |
-| `source` | string | null | Filter by source (e.g. `whatsapp:whatsapp_pizza_wars`) |
-| `participant` | string | null | Filter by sender name |
-| `after` | string | null | ISO date lower bound (e.g. `2026-01-01`) |
+| `query` | string | **required** | Natural language search query |
+| `limit` | int | 10 | Max results to return |
+| `source` | string | null | Filter by source: `whatsapp:chat_name`, `discord:ID`, `manual` |
+| `participant` | string | null | Filter by sender name (case-insensitive) |
+| `after` | string | null | ISO date lower bound, e.g. `2026-01-01` |
 | `before` | string | null | ISO date upper bound |
 
+Returns ranked results with scores, content, participants, timestamps, and source metadata.
+
+---
+
 ### `get_context`
-Get surrounding messages around a specific memory for conversation context.
+
+Fetch surrounding messages for a memory — essential for understanding what was actually happening in a conversation.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `memory_id` | string | required | Memory ID from search results |
-| `before` | int | 5 | Messages before target |
-| `after` | int | 5 | Messages after target |
+| `memory_id` | string | **required** | Memory ID (ULID) from search results |
+| `before` | int | 5 | Messages to fetch before the target |
+| `after` | int | 5 | Messages to fetch after the target |
+
+---
 
 ### `add_memory`
-Manually add a note or memory.
+
+Manually store a note, fact, or anything worth remembering.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `content` | string | required | Text to remember |
+| `content` | string | **required** | Text to remember |
 | `source` | string | `"manual"` | Source label |
-| `metadata` | dict | null | Optional key-value metadata |
+| `metadata` | dict | null | Optional key-value pairs |
+
+Auto-embeds the content for semantic search immediately.
+
+---
 
 ### `list_sources`
-List all ingested data sources and message counts.
+
+Inventory all ingested data sources and message counts.
+
+```
+# Example return:
+{
+  "whatsapp:printer_conspiracy": 1842,
+  "discord:REDACTED_CHANNEL_ID": 391,
+  "manual": 12
+}
+```
+
+---
 
 ### `ingest_whatsapp`
+
 Import a WhatsApp chat export `.txt` file.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `file_path` | string | Path to WhatsApp `.txt` export |
+| `file_path` | string | Absolute path to the exported `.txt` file |
 
-### `sync_discord`
-Sync new messages from a Discord channel.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `channel_id` | string | env var | Discord channel ID to sync |
+Handles multi-line messages, media placeholders, system messages, and deduplication on re-import.
 
 ---
 
-## Supported Data Sources
+### `sync_discord`
 
-| Source | How to ingest |
-|--------|---------------|
-| WhatsApp | Export chat → `.txt` → `ingest_whatsapp` tool |
-| Discord | Set `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` → `sync_discord` tool |
-| Manual notes | `add_memory` tool |
+Pull new messages from a Discord channel into memory. Uses checkpoint-based incremental sync — only fetches messages you haven't seen yet.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `channel_id` | string | `DISCORD_CHANNEL_ID` env var | Discord channel ID to sync |
+
+---
+
+## Supported Sources
+
+| Source | How to Ingest | Source ID Format |
+|--------|---------------|------------------|
+| **WhatsApp** | Export chat → `.txt` → `ingest_whatsapp` | `whatsapp:<chat_name>` |
+| **Discord** | Set bot token + channel ID → `sync_discord` | `discord:<channel_id>` |
+| **Manual** | `add_memory` tool | `manual` (or custom label) |
+
+More connectors are easy to add — each is a standalone parser that produces `MemoryItem` objects.
 
 ---
 
 ## Configuration
 
-All configuration via `.env` file:
+Copy `.env.example` to `.env`:
+
+```bash
+# Embedding provider: "fastembed" (local, default) or "openai"
+EMBEDDING_PROVIDER=fastembed
+
+# Required only if EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# Discord bot token (required for sync_discord)
+DISCORD_BOT_TOKEN=your_bot_token_here
+
+# Discord channel to sync (default for sync_discord)
+DISCORD_CHANNEL_ID=1234567890123456789
+
+# SQLite database path
+MEMOREEI_DB_PATH=./memoreei.db
+```
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local) or `openai` |
-| `OPENAI_API_KEY` | — | Required if `EMBEDDING_PROVIDER=openai` |
-| `DISCORD_BOT_TOKEN` | — | Discord bot token for channel sync |
-| `DISCORD_CHANNEL_ID` | `REDACTED_CHANNEL_ID` | Default Discord channel to sync |
+| `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local ONNX) or `openai` |
+| `OPENAI_API_KEY` | — | Required only if using OpenAI embeddings |
+| `DISCORD_BOT_TOKEN` | — | Discord bot token for `sync_discord` |
+| `DISCORD_CHANNEL_ID` | — | Default channel for `sync_discord` |
 | `MEMOREEI_DB_PATH` | `./memoreei.db` | SQLite database path |
 
 ---
 
-## Tech Stack
+## How Hybrid Search Works
 
-- **Python 3.10+**
-- **mcp[cli]** — MCP Python SDK (stdio transport)
-- **fastembed** — Local ONNX embeddings (`BAAI/bge-small-en-v1.5`, no API key needed)
-- **sqlite3 + FTS5** — Full-text search
-- **numpy** — Vector cosine similarity
-- **aiosqlite** — Async SQLite
-- **discord.py / aiohttp** — Discord REST API
-- **python-dotenv** — Config
+Memoreei runs **two searches in parallel** and fuses the results:
+
+```
+Query: "that weird printer incident"
+         │
+         ├──▶ FTS5 BM25 keyword search
+         │    Matches "printer", "incident" — fast, exact
+         │    Returns ranked list of IDs
+         │
+         └──▶ Vector search (cosine similarity)
+              Matches "the HP wouldn't connect", "paper jam saga"
+              Returns ranked list of IDs
+                  │
+                  ▼
+         Reciprocal Rank Fusion (RRF)
+         ─────────────────────────────
+         score(item) = Σ  1 / (60 + rank_i)
+                        i ∈ {keyword_rank, vector_rank}
+
+         Items in BOTH result sets get summed scores → boosted.
+         Items in only one set still contribute.
+         Top N returned, then filtered by source/participant/date.
+```
+
+**Why RRF?** Rank-based — no score normalization needed across different scales. Empirically outperforms weighted linear combinations. Constant `k=60` is the standard default from the original paper.
+
+**Default embedding model:** `BAAI/bge-small-en-v1.5` via FastEmbed — 384-dimensional vectors, ~23MB ONNX model, runs fully offline, no API keys.
 
 ---
 
 ## Privacy
 
-Memoreei is **local-first**. Your data never leaves your machine:
-- All embeddings are computed locally via fastembed (ONNX, no network calls)
-- SQLite database stored on your filesystem
-- No telemetry, no cloud sync
-- Optional: use OpenAI for embeddings (your data goes to OpenAI's API)
+**Local-first by design.**
+
+- All data stored in a single SQLite file on your machine
+- Default embedding model runs locally via ONNX — zero network calls
+- OpenAI embeddings are opt-in only (`EMBEDDING_PROVIDER=openai`)
+- No telemetry, no analytics, no cloud sync
+- Your conversations never leave your machine in the default configuration
+
+The `.env` file and `memoreei.db` are in `.gitignore`.
+
+---
+
+## Project Structure
+
+```
+memoreei/
+├── src/memoreei/
+│   ├── server.py              # MCP server entry point, all 6 tool definitions
+│   ├── storage/
+│   │   ├── database.py        # SQLite + FTS5 virtual table + vector storage
+│   │   └── models.py          # MemoryItem dataclass
+│   ├── search/
+│   │   ├── embeddings.py      # FastEmbed (local ONNX) + OpenAI providers
+│   │   └── hybrid.py          # RRF fusion of BM25 + vector results
+│   └── connectors/
+│       ├── whatsapp.py        # WhatsApp .txt export parser
+│       └── discord_connector.py  # Discord REST API + checkpoint sync
+├── tests/                     # Unit + integration tests
+├── data/samples/              # Sample WhatsApp exports for testing
+├── scripts/
+│   └── seed_data.py           # Load sample data
+├── .env.example               # Config template
+└── pyproject.toml             # Package metadata
+```
 
 ---
 
 ## License
 
 MIT
+
+```
+Copyright (c) 2026 Memoreei Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

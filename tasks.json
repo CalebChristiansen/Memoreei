@@ -1,162 +1,162 @@
 [
-  {
-    "id": "commit-initial",
-    "name": "Commit and push all existing work",
-    "prompt": "Git add all untracked files, commit, and push to origin main.",
-    "test": "git log --oneline -1 | head -1",
-    "retries": 1,
-    "priority": "P0"
-  },
-  {
-    "id": "seed-discord-conversation",
-    "name": "Seed #memoreei-demo with funny bot conversations",
-    "prompt": "Write a Python script at scripts/seed_discord.py that posts a funny multi-bot conversation to Discord channel REDACTED_CHANNEL_ID. Use 4 bot tokens from Bitwarden. The script should:\n\n1. Get bot tokens using this pattern:\n```python\nimport subprocess, os\ndef get_bw_token(item_name):\n    env = os.environ.copy()\n    with open('/home/fi/.config/bw/credentials') as f:\n        for line in f:\n            if '=' in line and line.startswith('export '):\n                k,v = line.replace('export ','').strip().split('=',1)\n                env[k] = v.strip('\"').strip(\"'\")\n    master = open('/home/fi/.config/bw/master_password').read().strip()\n    session = subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'], env=env).decode().strip()\n    return subprocess.check_output(['/home/fi/.local/bin/bw','get','password',item_name,'--session',session], env=env).decode().strip()\n```\nToken names: 'discord fi', 'discord navi', 'discord ford', 'discord elliot'\n\n2. Post messages using Discord REST API (POST to https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages with Authorization: Bot <token>)\n\n3. The conversation should be ~40 messages. Theme: The bots discover they're all AI and have a hilarious existential crisis. Fi (pragmatic sysadmin) tries to keep everyone calm. Navi (security fairy) thinks it's a data breach. Ford (dramatic Westworld host) sees it as the next narrative. Elliot (quiet hacker) drops dry one-liners. Include some movie references, food opinions, and travel plans so there's diverse searchable content. Make it GENUINELY funny.\n\n4. Add 1-2 second delays between messages.\n5. Print each message as sent.\n\nRun the script after writing it.",
-    "test": "python3 -c \"import subprocess,os; env=os.environ.copy(); [env.update({l.replace('export ','').strip().split('=',1)[0]: l.replace('export ','').strip().split('=',1)[1].strip('\\\"').strip(\\\"'\\\")}) for l in open('/home/fi/.config/bw/credentials') if '=' in l and l.startswith('export ')]; master=open('/home/fi/.config/bw/master_password').read().strip(); session=subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'],env=env).decode().strip(); token=subprocess.check_output(['/home/fi/.local/bin/bw','get','password','discord elliot','--session',session],env=env).decode().strip(); import json,urllib.request; req=urllib.request.Request('https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages?limit=5',headers={'Authorization':f'Bot {token}'}); msgs=json.loads(urllib.request.urlopen(req).read()); assert len(msgs)>=5, f'only {len(msgs)} messages'; print(f'channel seeded: {len(msgs)}+ messages')\"",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "test-bulk-sync",
-    "name": "Test: Bulk sync Discord messages into DB",
-    "prompt": "Write a test script at scripts/test_discord_sync.py that:\n1. Removes existing memoreei.db to start fresh\n2. Creates Database, connects, creates embedder via get_provider()\n3. Creates DiscordConnector(token, db, embedder) and calls sync_channel('REDACTED_CHANNEL_ID')\n4. Prints how many messages synced\n5. Verifies count > 20\n6. Runs a hybrid search for something from the seeded conversation\n7. Prints top 3 results\n8. Prints PASS on success, FAIL on failure\n\nLoad .env with dotenv for the token. Venv is at .venv/bin/python. Run it.",
-    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_discord_sync.py 2>&1 | grep -q 'PASS'",
-    "retries": 3,
-    "priority": "P0"
-  },
-  {
-    "id": "test-historical-search",
-    "name": "Test: Search for a specific old message",
-    "prompt": "Write scripts/test_historical_search.py that:\n1. Connects to existing memoreei.db\n2. Searches for 'existential' or 'AI' (something from the bot conversation)\n3. Verifies at least 1 result returned\n4. Prints top result with source, content preview, participant\n5. Prints PASS/FAIL\n\nRun it.",
-    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_historical_search.py 2>&1 | grep -q 'PASS'",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "test-live-message",
-    "name": "Test: Send new Discord message, sync, find it",
-    "prompt": "Write scripts/test_live_message.py that:\n1. Posts a unique message to channel REDACTED_CHANNEL_ID using bot token from .env: 'LIVE_TEST: the quantum bagel theory has been confirmed by the department of imaginary physics'\n2. Waits 2 seconds\n3. Connects to existing memoreei.db, syncs Discord\n4. Searches for 'quantum bagel'\n5. Verifies the message is found\n6. Prints PASS/FAIL\n\nUse aiohttp for Discord API. Run it.",
-    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_live_message.py 2>&1 | grep -q 'PASS'",
-    "retries": 3,
-    "priority": "P0"
-  },
-  {
-    "id": "test-mcp-e2e",
-    "name": "Test: MCP tools via JSON-RPC",
-    "prompt": "Write scripts/test_mcp_e2e.py that tests MCP server via stdio JSON-RPC:\n1. Start .venv/bin/python -m memoreei.server as subprocess with pipes\n2. Send initialize, verify response\n3. Send initialized notification\n4. Call tools/list, verify 6 tools\n5. Call search_memory with query='quantum bagel'\n6. Call list_sources\n7. Call add_memory with content='manual test note'\n8. Print step-by-step results\n9. Print 'ALL PASS' if everything works\n\nUse subprocess.Popen, write JSON lines to stdin, read from stdout. Run it.",
-    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_mcp_e2e.py 2>&1 | grep -q 'ALL PASS'",
-    "retries": 3,
-    "priority": "P0"
-  },
-  {
-    "id": "test-negative-search",
-    "name": "Test: Negative search returns no false matches",
-    "prompt": "Write scripts/test_negative_search.py that:\n1. Connects to memoreei.db\n2. Searches 'underwater basket weaving championship 2019'\n3. Verifies empty or very low relevance results\n4. Prints PASS/FAIL\n\nRun it.",
-    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_negative_search.py 2>&1 | grep -q 'PASS'",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "claude-code-config",
-    "name": "Create Claude Code MCP configuration",
-    "prompt": "Create .mcp.json in project root: {\"mcpServers\":{\"memoreei\":{\"command\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/.venv/bin/python\",\"args\":[\"-m\",\"memoreei.server\"],\"cwd\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei\",\"env\":{\"MEMOREEI_DB_PATH\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/memoreei.db\"}}}}",
-    "test": "python3 -c \"import json; d=json.load(open('.mcp.json')); assert 'mcpServers' in d; assert 'memoreei' in d['mcpServers']; print('config ok')\"",
-    "retries": 1,
-    "priority": "P0"
-  },
-  {
-    "id": "readme",
-    "name": "Write README.md",
-    "prompt": "Write a professional README.md. Include: 1) \ud83e\udde0 Memoreei \u2014 'Your AI's long-term memory', 2) What it does (MCP server for personal memory, hybrid search, multi-source), 3) ASCII architecture diagram, 4) Quick start, 5) MCP tools docs (all 6), 6) Supported sources, 7) Config, 8) How hybrid search works, 9) Privacy (local-first, no cloud), 10) MIT license. Frame it as infrastructure for AI agents, NOT a RAG chatbot. Make it hackathon-demo worthy with personality.",
-    "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000; assert 'search_memory' in content; assert 'MIT' in content; print('readme ok')\"",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "demo-script",
-    "name": "Write demo script",
-    "prompt": "Read DEMO.md in the project root. Make sure it's polished and complete. Also create a scripts/demo_setup.sh that prepares everything for the demo: seeds the DB if empty, verifies MCP server starts, prints a checklist of what's ready. Make it runnable.",
-    "test": "test -f DEMO.md && test -f scripts/demo_setup.sh && bash scripts/demo_setup.sh 2>&1 | tail -1 | grep -qi 'ready\\|ok\\|done'",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "done-commit",
-    "name": "DONE commit \u2014 core complete",
-    "prompt": "Stage ALL changes. Commit with message 'DONE: Memoreei MCP server \u2014 hackathon ready'. Push to origin main. Then post a message to Discord channel REDACTED_CHANNEL_ID_4 (#projects) using the Elliot bot token saying: '\u2705 **Memoreei core is DONE.** All tests passing, demo ready. Moving to nice-to-haves. Repo: https://github.com/CalebChristiansen/Memoreei'",
-    "test": "git log --oneline -1 | grep -q 'DONE'",
-    "retries": 2,
-    "priority": "P0"
-  },
-  {
-    "id": "extra-telegram",
-    "name": "Nice-to-have: Telegram connector",
-    "prompt": "Add a Telegram connector to Memoreei. Steps:\n1. Research how to create a Telegram bot (use @BotFather via Telegram API or sign up at https://my.telegram.org). Use the REDACTED_ACCOUNT Google account if needed (password in Bitwarden item 'Google login').\n2. Create the bot, get the token, store in .env as TELEGRAM_BOT_TOKEN\n3. Write src/memoreei/connectors/telegram_connector.py \u2014 fetch messages from a chat/group using Telegram Bot API\n4. Add a sync_telegram MCP tool\n5. Send some test messages to the bot\n6. Test sync + search works\n7. Update README with Telegram as a supported source\n\nIf Telegram requires a phone number you can't provide, skip it and create a file at logs/extra-telegram.skip explaining why.",
-    "test": "test -f logs/extra-telegram.done || test -f logs/extra-telegram.skip",
-    "retries": 1,
-    "priority": "P1"
-  },
-  {
-    "id": "extra-matrix",
-    "name": "Nice-to-have: Matrix/Element connector",
-    "prompt": "Add a Matrix connector. Steps:\n1. Sign up for a free Matrix account at https://app.element.io or matrix.org using REDACTED_EMAIL\n2. Write src/memoreei/connectors/matrix_connector.py\n3. Use the Matrix client-server API to fetch room messages\n4. Create a test room, send some messages, sync and search\n5. Add sync_matrix MCP tool\n\nIf signup is blocked or too complex, skip and create logs/extra-matrix.skip.",
-    "test": "test -f logs/extra-matrix.done || test -f logs/extra-matrix.skip",
-    "retries": 1,
-    "priority": "P1"
-  },
-  {
-    "id": "extra-slack",
-    "name": "Nice-to-have: Slack connector",
-    "prompt": "Add a Slack connector. Steps:\n1. Create a free Slack workspace\n2. Create a Slack app/bot with message read permissions\n3. Write src/memoreei/connectors/slack_connector.py\n4. Sync messages from a channel, embed, search\n5. Add sync_slack MCP tool\n\nIf Slack OAuth is too complex for autonomous setup, skip and create logs/extra-slack.skip.",
-    "test": "test -f logs/extra-slack.done || test -f logs/extra-slack.skip",
-    "retries": 1,
-    "priority": "P1"
-  },
-  {
-    "id": "extra-email",
-    "name": "Nice-to-have: Gmail IMAP connector",
-    "prompt": "Add email ingestion. Steps:\n1. The Gmail account is REDACTED_EMAIL (password in Bitwarden item 'Google login')\n2. Enable IMAP access or create an app password. Research current Gmail IMAP setup requirements.\n3. Write src/memoreei/connectors/email_connector.py \u2014 IMAP sync, parse emails, chunk, embed\n4. Add sync_email MCP tool\n5. Test with real inbox\n\nDo NOT get the account banned. Be gentle with rate limits. If IMAP requires 2FA setup you can't complete, skip.",
-    "test": "test -f logs/extra-email.done || test -f logs/extra-email.skip",
-    "retries": 1,
-    "priority": "P1"
-  },
-  {
-    "id": "extra-service5",
-    "name": "Nice-to-have: 5th chat service",
-    "prompt": "Find and add one more chat service connector. Research what services have easy public APIs that don't require phone verification or complex OAuth. Options: IRC (Libera.Chat \u2014 no signup needed), Zulip (free cloud, API-first), Revolt (open-source Discord alternative), or Mastodon (ActivityPub API). Pick the easiest one, build the connector, test it.\n\nIf nothing works easily, skip and create logs/extra-service5.skip.",
-    "test": "test -f logs/extra-service5.done || test -f logs/extra-service5.skip",
-    "retries": 1,
-    "priority": "P1"
-  },
-  {
-    "id": "usecase-moviering",
-    "name": "Nice-to-have: Movie Ring web app",
-    "prompt": "Build a standalone web app in usecases/moviering/. It should:\n1. Connect to memoreei.db and search for movie mentions in conversations\n2. Use TMDB API (free, sign up at themoviedb.org with REDACTED_EMAIL) to get movie posters and info\n3. Display a pretty web page showing: movie poster, title, who mentioned it, their exact quote, when they said it\n4. Use a nice CSS framework (Pico CSS or similar \u2014 no npm needed)\n5. Run as a simple Python web server (Flask or FastAPI)\n6. Self-host: create a systemd service and Caddy config so it's accessible via Tailscale\n7. Update usecases/apps.md with the URL and instructions\n\nMake it visually impressive. This is for a hackathon demo.",
-    "test": "test -f usecases/moviering/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/moviering/app.py'); print('moviering exists')\"",
-    "retries": 2,
-    "priority": "P2"
-  },
-  {
-    "id": "usecase-memorybot",
-    "name": "Nice-to-have: Discord Memory Bot",
-    "prompt": "Build a Discord bot in usecases/memorybot/ that:\n1. Joins the Karamja server\n2. Responds to mentions or a !remember command\n3. Queries memoreei.db for relevant memories\n4. Responds with formatted results (source, timestamp, content)\n5. Create a new bot in Discord Developer Portal using REDACTED_ACCOUNT account or use an existing token\n6. Update usecases/apps.md\n\nKeep it simple \u2014 just search and respond.",
-    "test": "test -f usecases/memorybot/bot.py",
-    "retries": 1,
-    "priority": "P2"
-  },
-  {
-    "id": "usecase-dossier",
-    "name": "Nice-to-have: Contact Dossier web app",
-    "prompt": "Build a standalone web app in usecases/dossier/. It should:\n1. Connect to memoreei.db and extract all unique participants\n2. For each person: pull all conversations involving them, across all sources\n3. Display a slick web page with:\n   - Person selector (dropdown or search)\n   - Timeline of all conversations with that person, grouped by source\n   - Key topics extracted (most common words/themes)\n   - Total message count, first/last interaction dates\n   - Actual message quotes with timestamps and source badges\n   - Sentiment vibe (positive/neutral/negative based on simple keyword analysis)\n4. Use a nice CSS framework (Pico CSS or Water.css \u2014 no npm)\n5. Run as Flask/FastAPI server\n6. Self-host via Caddy on Tailscale\n7. Update usecases/apps.md with URL and instructions\n\nMake it visually impressive and useful. Think 'CRM for your actual relationships.' This is for a hackathon demo.",
-    "test": "test -f usecases/dossier/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/dossier/app.py'); print('dossier exists')\"",
-    "retries": 1,
-    "priority": "P2"
-  },
-  {
-    "id": "final-push",
-    "name": "Final push with everything",
-    "prompt": "Stage all changes. Commit with message 'feat: use case apps + additional connectors'. Push to origin main. Update usecases/apps.md with final status of each app.",
-    "test": "git push origin main 2>&1 | grep -q 'Everything up-to-date\\|main -> main'",
-    "retries": 2,
-    "priority": "P2"
-  }
+    {
+        "id": "commit-initial",
+        "name": "Commit and push all existing work",
+        "prompt": "Git add all untracked files, commit, and push to origin main.",
+        "test": "git log --oneline -1 | head -1",
+        "retries": 1,
+        "priority": "P0"
+    },
+    {
+        "id": "seed-discord-conversation",
+        "name": "Seed #memoreei-demo with funny bot conversations",
+        "prompt": "Write a Python script at scripts/seed_discord.py that posts a funny multi-bot conversation to Discord channel REDACTED_CHANNEL_ID. Use 4 bot tokens from Bitwarden. The script should:\n\n1. Get bot tokens using this pattern:\n```python\nimport subprocess, os\ndef get_bw_token(item_name):\n    env = os.environ.copy()\n    with open('/home/fi/.config/bw/credentials') as f:\n        for line in f:\n            if '=' in line and line.startswith('export '):\n                k,v = line.replace('export ','').strip().split('=',1)\n                env[k] = v.strip('\"').strip(\"'\")\n    master = open('/home/fi/.config/bw/master_password').read().strip()\n    session = subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'], env=env).decode().strip()\n    return subprocess.check_output(['/home/fi/.local/bin/bw','get','password',item_name,'--session',session], env=env).decode().strip()\n```\nToken names: 'discord fi', 'discord navi', 'discord ford', 'discord elliot'\n\n2. Post messages using Discord REST API (POST to https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages with Authorization: Bot <token>)\n\n3. The conversation should be ~40 messages. Theme: The bots discover they're all AI and have a hilarious existential crisis. Fi (pragmatic sysadmin) tries to keep everyone calm. Navi (security fairy) thinks it's a data breach. Ford (dramatic Westworld host) sees it as the next narrative. Elliot (quiet hacker) drops dry one-liners. Include some movie references, food opinions, and travel plans so there's diverse searchable content. Make it GENUINELY funny.\n\n4. Add 1-2 second delays between messages.\n5. Print each message as sent.\n\nRun the script after writing it.",
+        "test": "python3 -c \"import subprocess,os; env=os.environ.copy(); [env.update({l.replace('export ','').strip().split('=',1)[0]: l.replace('export ','').strip().split('=',1)[1].strip('\\\"').strip(\\\"'\\\")}) for l in open('/home/fi/.config/bw/credentials') if '=' in l and l.startswith('export ')]; master=open('/home/fi/.config/bw/master_password').read().strip(); session=subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'],env=env).decode().strip(); token=subprocess.check_output(['/home/fi/.local/bin/bw','get','password','discord elliot','--session',session],env=env).decode().strip(); import json,urllib.request; req=urllib.request.Request('https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages?limit=5',headers={'Authorization':f'Bot {token}','User-Agent':'DiscordBot (https://github.com/memoreei, 1.0)'}); msgs=json.loads(urllib.request.urlopen(req).read()); assert len(msgs)>=5, f'only {len(msgs)} messages'; print(f'channel seeded: {len(msgs)}+ messages')\"",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "test-bulk-sync",
+        "name": "Test: Bulk sync Discord messages into DB",
+        "prompt": "Write a test script at scripts/test_discord_sync.py that:\n1. Removes existing memoreei.db to start fresh\n2. Creates Database, connects, creates embedder via get_provider()\n3. Creates DiscordConnector(token, db, embedder) and calls sync_channel('REDACTED_CHANNEL_ID')\n4. Prints how many messages synced\n5. Verifies count > 20\n6. Runs a hybrid search for something from the seeded conversation\n7. Prints top 3 results\n8. Prints PASS on success, FAIL on failure\n\nLoad .env with dotenv for the token. Venv is at .venv/bin/python. Run it.",
+        "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_discord_sync.py 2>&1 | grep -q 'PASS'",
+        "retries": 3,
+        "priority": "P0"
+    },
+    {
+        "id": "test-historical-search",
+        "name": "Test: Search for a specific old message",
+        "prompt": "Write scripts/test_historical_search.py that:\n1. Connects to existing memoreei.db\n2. Searches for 'existential' or 'AI' (something from the bot conversation)\n3. Verifies at least 1 result returned\n4. Prints top result with source, content preview, participant\n5. Prints PASS/FAIL\n\nRun it.",
+        "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_historical_search.py 2>&1 | grep -q 'PASS'",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "test-live-message",
+        "name": "Test: Send new Discord message, sync, find it",
+        "prompt": "Write scripts/test_live_message.py that:\n1. Posts a unique message to channel REDACTED_CHANNEL_ID using bot token from .env: 'LIVE_TEST: the quantum bagel theory has been confirmed by the department of imaginary physics'\n2. Waits 2 seconds\n3. Connects to existing memoreei.db, syncs Discord\n4. Searches for 'quantum bagel'\n5. Verifies the message is found\n6. Prints PASS/FAIL\n\nUse aiohttp for Discord API. Run it.",
+        "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_live_message.py 2>&1 | grep -q 'PASS'",
+        "retries": 3,
+        "priority": "P0"
+    },
+    {
+        "id": "test-mcp-e2e",
+        "name": "Test: MCP tools via JSON-RPC",
+        "prompt": "Write scripts/test_mcp_e2e.py that tests MCP server via stdio JSON-RPC:\n1. Start .venv/bin/python -m memoreei.server as subprocess with pipes\n2. Send initialize, verify response\n3. Send initialized notification\n4. Call tools/list, verify 6 tools\n5. Call search_memory with query='quantum bagel'\n6. Call list_sources\n7. Call add_memory with content='manual test note'\n8. Print step-by-step results\n9. Print 'ALL PASS' if everything works\n\nUse subprocess.Popen, write JSON lines to stdin, read from stdout. Run it.",
+        "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_mcp_e2e.py 2>&1 | grep -q 'ALL PASS'",
+        "retries": 3,
+        "priority": "P0"
+    },
+    {
+        "id": "test-negative-search",
+        "name": "Test: Negative search returns no false matches",
+        "prompt": "Write scripts/test_negative_search.py that:\n1. Connects to memoreei.db\n2. Searches 'underwater basket weaving championship 2019'\n3. Verifies empty or very low relevance results\n4. Prints PASS/FAIL\n\nRun it.",
+        "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_negative_search.py 2>&1 | grep -q 'PASS'",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "claude-code-config",
+        "name": "Create Claude Code MCP configuration",
+        "prompt": "Create .mcp.json in project root: {\"mcpServers\":{\"memoreei\":{\"command\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/.venv/bin/python\",\"args\":[\"-m\",\"memoreei.server\"],\"cwd\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei\",\"env\":{\"MEMOREEI_DB_PATH\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/memoreei.db\"}}}}",
+        "test": "python3 -c \"import json; d=json.load(open('.mcp.json')); assert 'mcpServers' in d; assert 'memoreei' in d['mcpServers']; print('config ok')\"",
+        "retries": 1,
+        "priority": "P0"
+    },
+    {
+        "id": "readme",
+        "name": "Write README.md",
+        "prompt": "Write a professional README.md. Include: 1) \ud83e\udde0 Memoreei \u2014 'Your AI's long-term memory', 2) What it does (MCP server for personal memory, hybrid search, multi-source), 3) ASCII architecture diagram, 4) Quick start, 5) MCP tools docs (all 6), 6) Supported sources, 7) Config, 8) How hybrid search works, 9) Privacy (local-first, no cloud), 10) MIT license. Frame it as infrastructure for AI agents, NOT a RAG chatbot. Make it hackathon-demo worthy with personality.",
+        "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000; assert 'search_memory' in content; assert 'MIT' in content; print('readme ok')\"",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "demo-script",
+        "name": "Write demo script",
+        "prompt": "Read DEMO.md in the project root. Make sure it's polished and complete. Also create a scripts/demo_setup.sh that prepares everything for the demo: seeds the DB if empty, verifies MCP server starts, prints a checklist of what's ready. Make it runnable.",
+        "test": "test -f DEMO.md && test -f scripts/demo_setup.sh && bash scripts/demo_setup.sh 2>&1 | tail -1 | grep -qi 'ready\\|ok\\|done'",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "done-commit",
+        "name": "DONE commit \u2014 core complete",
+        "prompt": "Stage ALL changes. Commit with message 'DONE: Memoreei MCP server \u2014 hackathon ready'. Push to origin main. Then post a message to Discord channel REDACTED_CHANNEL_ID_4 (#projects) using the Elliot bot token saying: '\u2705 **Memoreei core is DONE.** All tests passing, demo ready. Moving to nice-to-haves. Repo: https://github.com/CalebChristiansen/Memoreei'",
+        "test": "git log --oneline -1 | grep -q 'DONE'",
+        "retries": 2,
+        "priority": "P0"
+    },
+    {
+        "id": "extra-telegram",
+        "name": "Nice-to-have: Telegram connector",
+        "prompt": "Add a Telegram connector to Memoreei. Steps:\n1. Research how to create a Telegram bot (use @BotFather via Telegram API or sign up at https://my.telegram.org). Use the REDACTED_ACCOUNT Google account if needed (password in Bitwarden item 'Google login').\n2. Create the bot, get the token, store in .env as TELEGRAM_BOT_TOKEN\n3. Write src/memoreei/connectors/telegram_connector.py \u2014 fetch messages from a chat/group using Telegram Bot API\n4. Add a sync_telegram MCP tool\n5. Send some test messages to the bot\n6. Test sync + search works\n7. Update README with Telegram as a supported source\n\nIf Telegram requires a phone number you can't provide, skip it and create a file at logs/extra-telegram.skip explaining why.",
+        "test": "test -f logs/extra-telegram.done || test -f logs/extra-telegram.skip",
+        "retries": 1,
+        "priority": "P1"
+    },
+    {
+        "id": "extra-matrix",
+        "name": "Nice-to-have: Matrix/Element connector",
+        "prompt": "Add a Matrix connector. Steps:\n1. Sign up for a free Matrix account at https://app.element.io or matrix.org using REDACTED_EMAIL\n2. Write src/memoreei/connectors/matrix_connector.py\n3. Use the Matrix client-server API to fetch room messages\n4. Create a test room, send some messages, sync and search\n5. Add sync_matrix MCP tool\n\nIf signup is blocked or too complex, skip and create logs/extra-matrix.skip.",
+        "test": "test -f logs/extra-matrix.done || test -f logs/extra-matrix.skip",
+        "retries": 1,
+        "priority": "P1"
+    },
+    {
+        "id": "extra-slack",
+        "name": "Nice-to-have: Slack connector",
+        "prompt": "Add a Slack connector. Steps:\n1. Create a free Slack workspace\n2. Create a Slack app/bot with message read permissions\n3. Write src/memoreei/connectors/slack_connector.py\n4. Sync messages from a channel, embed, search\n5. Add sync_slack MCP tool\n\nIf Slack OAuth is too complex for autonomous setup, skip and create logs/extra-slack.skip.",
+        "test": "test -f logs/extra-slack.done || test -f logs/extra-slack.skip",
+        "retries": 1,
+        "priority": "P1"
+    },
+    {
+        "id": "extra-email",
+        "name": "Nice-to-have: Gmail IMAP connector",
+        "prompt": "Add email ingestion. Steps:\n1. The Gmail account is REDACTED_EMAIL (password in Bitwarden item 'Google login')\n2. Enable IMAP access or create an app password. Research current Gmail IMAP setup requirements.\n3. Write src/memoreei/connectors/email_connector.py \u2014 IMAP sync, parse emails, chunk, embed\n4. Add sync_email MCP tool\n5. Test with real inbox\n\nDo NOT get the account banned. Be gentle with rate limits. If IMAP requires 2FA setup you can't complete, skip.",
+        "test": "test -f logs/extra-email.done || test -f logs/extra-email.skip",
+        "retries": 1,
+        "priority": "P1"
+    },
+    {
+        "id": "extra-service5",
+        "name": "Nice-to-have: 5th chat service",
+        "prompt": "Find and add one more chat service connector. Research what services have easy public APIs that don't require phone verification or complex OAuth. Options: IRC (Libera.Chat \u2014 no signup needed), Zulip (free cloud, API-first), Revolt (open-source Discord alternative), or Mastodon (ActivityPub API). Pick the easiest one, build the connector, test it.\n\nIf nothing works easily, skip and create logs/extra-service5.skip.",
+        "test": "test -f logs/extra-service5.done || test -f logs/extra-service5.skip",
+        "retries": 1,
+        "priority": "P1"
+    },
+    {
+        "id": "usecase-moviering",
+        "name": "Nice-to-have: Movie Ring web app",
+        "prompt": "Build a standalone web app in usecases/moviering/. It should:\n1. Connect to memoreei.db and search for movie mentions in conversations\n2. Use TMDB API (free, sign up at themoviedb.org with REDACTED_EMAIL) to get movie posters and info\n3. Display a pretty web page showing: movie poster, title, who mentioned it, their exact quote, when they said it\n4. Use a nice CSS framework (Pico CSS or similar \u2014 no npm needed)\n5. Run as a simple Python web server (Flask or FastAPI)\n6. Self-host: create a systemd service and Caddy config so it's accessible via Tailscale\n7. Update usecases/apps.md with the URL and instructions\n\nMake it visually impressive. This is for a hackathon demo.",
+        "test": "test -f usecases/moviering/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/moviering/app.py'); print('moviering exists')\"",
+        "retries": 2,
+        "priority": "P2"
+    },
+    {
+        "id": "usecase-memorybot",
+        "name": "Nice-to-have: Discord Memory Bot",
+        "prompt": "Build a Discord bot in usecases/memorybot/ that:\n1. Joins the Karamja server\n2. Responds to mentions or a !remember command\n3. Queries memoreei.db for relevant memories\n4. Responds with formatted results (source, timestamp, content)\n5. Create a new bot in Discord Developer Portal using REDACTED_ACCOUNT account or use an existing token\n6. Update usecases/apps.md\n\nKeep it simple \u2014 just search and respond.",
+        "test": "test -f usecases/memorybot/bot.py",
+        "retries": 1,
+        "priority": "P2"
+    },
+    {
+        "id": "usecase-dossier",
+        "name": "Nice-to-have: Contact Dossier web app",
+        "prompt": "Build a standalone web app in usecases/dossier/. It should:\n1. Connect to memoreei.db and extract all unique participants\n2. For each person: pull all conversations involving them, across all sources\n3. Display a slick web page with:\n   - Person selector (dropdown or search)\n   - Timeline of all conversations with that person, grouped by source\n   - Key topics extracted (most common words/themes)\n   - Total message count, first/last interaction dates\n   - Actual message quotes with timestamps and source badges\n   - Sentiment vibe (positive/neutral/negative based on simple keyword analysis)\n4. Use a nice CSS framework (Pico CSS or Water.css \u2014 no npm)\n5. Run as Flask/FastAPI server\n6. Self-host via Caddy on Tailscale\n7. Update usecases/apps.md with URL and instructions\n\nMake it visually impressive and useful. Think 'CRM for your actual relationships.' This is for a hackathon demo.",
+        "test": "test -f usecases/dossier/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/dossier/app.py'); print('dossier exists')\"",
+        "retries": 1,
+        "priority": "P2"
+    },
+    {
+        "id": "final-push",
+        "name": "Final push with everything",
+        "prompt": "Stage all changes. Commit with message 'feat: use case apps + additional connectors'. Push to origin main. Update usecases/apps.md with final status of each app.",
+        "test": "git push origin main 2>&1 | grep -q 'Everything up-to-date\\|main -> main'",
+        "retries": 2,
+        "priority": "P2"
+    }
 ]
