@@ -1,0 +1,58 @@
+[
+  {
+    "id": "commit-initial",
+    "name": "Commit and push all existing work",
+    "prompt": "Git add all files, commit with message 'feat: core memoreei MCP server — storage, search, connectors, tools', and push to origin main. Do NOT add .env or memoreei.db or __pycache__ or .venv to git. Check .gitignore covers them.",
+    "test": "git log --oneline -1 | grep -q 'feat: core' && git status --porcelain | grep -v '^\\.env$\\|memoreei\\.db\\|__pycache__\\|TASK\\.md\\|PROGRESS\\.md\\|PLAN\\.md' | wc -l | grep -q '^0$'",
+    "retries": 2
+  },
+  {
+    "id": "verify-server-starts",
+    "name": "Verify MCP server starts and responds",
+    "prompt": "Test that the MCP server starts correctly. Run: echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' | timeout 10 .venv/bin/python -m memoreei.server — and verify it returns a valid JSON-RPC response with server capabilities listing the tools. If there are errors, fix them. The server must start cleanly via stdio transport.",
+    "test": "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' | timeout 10 .venv/bin/python -m memoreei.server 2>/dev/null | head -1 | python3 -c \"import sys,json; d=json.load(sys.stdin); assert 'result' in d, 'no result'; print('server ok')\"",
+    "retries": 3
+  },
+  {
+    "id": "seed-and-search",
+    "name": "Seed sample data and verify search works end-to-end",
+    "prompt": "Run the seed script to populate the database with WhatsApp sample data: .venv/bin/python scripts/seed_data.py. Then write a quick test script that does an end-to-end search: connect to the database, run a hybrid search for 'sentient printer', and verify it returns results from the printer conspiracy chat. If seed_data.py or the search has errors, fix them. The embedding model will need to download on first run — that's expected.",
+    "test": ".venv/bin/python -c \"import asyncio; from memoreei.storage.database import Database; from memoreei.search.hybrid import HybridSearch; from memoreei.search.embeddings import get_provider; db=Database('./memoreei.db'); loop=asyncio.get_event_loop(); loop.run_until_complete(db.connect()); e=get_provider(); hs=HybridSearch(db,e); results=loop.run_until_complete(hs.search('sentient printer',limit=5)); assert len(results)>0, 'no results'; print(f'search ok: {len(results)} results')\"",
+    "retries": 3
+  },
+  {
+    "id": "discord-sync",
+    "name": "Test Discord connector with real channel",
+    "prompt": "Test the Discord connector against the real channel. The .env file has DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID=REDACTED_CHANNEL_ID. Write a quick test: use the discord connector to fetch messages from the channel. If the channel is empty that's fine — just verify it connects, authenticates, and returns without error. Fix any issues. The connector should use Discord HTTP API (not gateway/websocket).",
+    "test": ".venv/bin/python -c \"import asyncio,os; from dotenv import load_dotenv; load_dotenv(); from memoreei.connectors.discord_connector import DiscordConnector; dc=DiscordConnector(os.environ['DISCORD_BOT_TOKEN']); result=asyncio.get_event_loop().run_until_complete(dc.fetch_messages(os.environ['DISCORD_CHANNEL_ID'],limit=10)); print(f'discord ok: {len(result)} messages')\"",
+    "retries": 3
+  },
+  {
+    "id": "mcp-tool-test",
+    "name": "Test each MCP tool via JSON-RPC",
+    "prompt": "Write a script at scripts/test_mcp_tools.py that tests each MCP tool by sending JSON-RPC requests to the server via stdio. It should: 1) Start the server as a subprocess, 2) Send initialize, 3) Call tools/list and verify all 6 tools are listed, 4) Call search_memory with query='printer', 5) Call list_sources, 6) Call add_memory with some test content. Print results for each. Make it runnable and make sure it passes.",
+    "test": ".venv/bin/python scripts/test_mcp_tools.py 2>&1 | tail -1 | grep -qi 'all.*pass\\|success\\|ok'",
+    "retries": 3
+  },
+  {
+    "id": "claude-code-config",
+    "name": "Create Claude Code MCP configuration",
+    "prompt": "Create a .mcp.json file in the project root that configures Memoreei as an MCP server for Claude Code. The config should point to the server via: {\"mcpServers\":{\"memoreei\":{\"command\":\".venv/bin/python\",\"args\":[\"-m\",\"memoreei.server\"],\"env\":{\"MEMOREEI_DB_PATH\":\"./memoreei.db\"}}}}. Also verify the config is valid JSON.",
+    "test": "python3 -c \"import json; d=json.load(open('.mcp.json')); assert 'mcpServers' in d; assert 'memoreei' in d['mcpServers']; print('config ok')\"",
+    "retries": 1
+  },
+  {
+    "id": "readme",
+    "name": "Write README.md",
+    "prompt": "Write a professional README.md for the Memoreei project. Include: 1) Project name + emoji + one-line description, 2) What it does (3 sentences), 3) ASCII architecture diagram showing connectors -> ingestion -> storage -> MCP server -> clients, 4) Quick start section (clone, install, seed data, configure Claude Code, run), 5) MCP tools documentation (all 6 tools with params), 6) Supported data sources, 7) Configuration (.env options), 8) Privacy note (local-first, data stays on your machine), 9) License: MIT. Keep it clean and hackathon-demo worthy.",
+    "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000, 'too short'; assert 'search_memory' in content; assert 'MIT' in content; assert 'Quick' in content.lower() or 'start' in content.lower(); print('readme ok')\"",
+    "retries": 2
+  },
+  {
+    "id": "final-commit",
+    "name": "Final commit and push",
+    "prompt": "Stage all changes, commit with message 'feat: MCP tools tested, Claude Code config, README — hackathon ready', and push to origin main. Verify push succeeds.",
+    "test": "git diff --cached --quiet && git push origin main 2>&1 | grep -q 'Everything up-to-date\\|main -> main'",
+    "retries": 2
+  }
+]
