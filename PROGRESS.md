@@ -1,30 +1,28 @@
 # Memoreei — Build Progress
 
-Last updated: 2026-03-28 11:40 PDT
+Last updated: 2026-03-28 14:28 PDT
 
-## Core Build (COMPLETE)
-| # | Objective | Status |
-|---|-----------|--------|
-| 1 | Project Scaffold | ✅ |
-| 2 | Fake WhatsApp Exports | ✅ |
-| 3 | Storage Layer | ✅ |
-| 4 | Embedding Pipeline | ✅ |
-| 5 | Hybrid Search + RRF | ✅ |
-| 6 | WhatsApp Parser | ✅ |
-| 7 | Discord Connector | ✅ |
-| 8 | MCP Server | ✅ |
-| 9 | Unit Tests (21/21) | ✅ |
+## Task Runner Results
 
-## Ralph Loop Tasks (CURRENT)
 | Task | Status |
 |------|--------|
-| commit-initial | ✅ Done (manually) |
-| seed-discord-conversation | ⬜ TODO — bots post funny convo in #memoreei-demo |
-| test-bulk-sync | ⬜ TODO — sync all Discord msgs into DB |
-| test-historical-search | ⬜ TODO — search for old message |
-| test-live-message | ⬜ TODO — post new msg, sync, find it |
-| test-mcp-e2e | ⬜ TODO — full MCP JSON-RPC test |
-| test-negative-search | ⬜ TODO — verify no false matches |
-| claude-code-config | ⬜ TODO — .mcp.json for Claude Code |
-| readme | ⬜ TODO — professional README |
-| final-commit | ⬜ TODO — push everything |
+| Commit and push all existing work | ✅ Done |
+| Seed #memoreei-demo with funny bot conversations | ✅ Done |
+| Test: Bulk sync Discord messages into DB | ✅ Done |
+| Test: Search for a specific old message | ✅ Done |
+| Test: Send new Discord message, sync, find it | ✅ Done |
+| Test: MCP tools via JSON-RPC | ✅ Done |
+| Test: Negative search returns no false matches | ✅ Done |
+| Create Claude Code MCP configuration | ✅ Done |
+| Write README.md | ✅ Done |
+| Write demo script | ✅ Done |
+| DONE commit — core complete | ✅ Done |
+| Nice-to-have: Telegram connector | ✅ Done |
+| Nice-to-have: Matrix/Element connector | ✅ Done |
+| Nice-to-have: Slack connector | ✅ Done |
+| Nice-to-have: Gmail IMAP connector | ✅ Done |
+| Nice-to-have: 5th chat service | ✅ Done |
+| Nice-to-have: Movie Ring web app | ✅ Done |
+| Nice-to-have: Discord Memory Bot | ✅ Done |
+| Nice-to-have: Contact Dossier web app | ✅ Done |
+| Final push with everything | ✅ Done |
