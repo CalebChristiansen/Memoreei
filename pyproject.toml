@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memoreei"
+version = "0.1.0"
+description = "Personal memory MCP server — search your WhatsApp, Discord, and notes with hybrid AI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Caleb Christiansen" }]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "fastembed>=0.3.0",
+    "openai>=1.0.0",
+    "aiosqlite>=0.20.0",
+    "python-dotenv>=1.0.0",
+    "discord.py>=2.3.0",
+    "aiohttp>=3.9.0",
+    "numpy>=1.24.0",
+    "python-ulid>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+memoreei = "memoreei.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memoreei"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
