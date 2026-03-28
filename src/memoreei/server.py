@@ -18,7 +18,7 @@ for candidate in [_here.parent.parent.parent / ".env", Path(".env")]:
         load_dotenv(candidate)
         break
 
-mcp = FastMCP("memoreei", description="Personal memory MCP server — search your conversations")
+mcp = FastMCP("memoreei")
 
 # Lazily initialized singletons
 _db: Database | None = None
