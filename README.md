@@ -1,6 +1,6 @@
 # 🧠 Memoreei
 
-**All your AIs should know you**
+**One stop memory shop for all your AIs**
 
 Memoreei is a local-first MCP server that gives Claude (and any MCP-compatible agent) persistent, searchable memory across your conversations, chats, and notes. It's not a chatbot wrapper — it's **memory infrastructure** for AI agents.
 
