@@ -137,8 +137,28 @@ The demo is Discord-first:
 5. Sync again → new message found
 6. Show it working through Claude Code MCP
 
+## Task Priorities
+- **P0 (MUST):** Core demo — seed Discord, integration tests, MCP config, README, demo script, "DONE" commit
+- **P1 (SHOULD):** Additional chat sources — Telegram, Matrix, Slack, Gmail, 5th service
+- **P2 (NICE TO HAVE):** Use case apps — Movie Ring, Discord Memory Bot, Search UI
+- When P0 is done: commit "DONE", post to #projects, then continue with P1/P2
+- Stop at 3:25 PM regardless
+
 ## What's Left to Build
 Check tasks.json and PROGRESS.md for current task queue status.
+
+## Use Case Apps
+Standalone apps in `usecases/`. No dependency on main package. Status tracked in `usecases/apps.md`.
+- Movie Ring — web app showing movie mentions + posters + friend quotes
+- Discord Memory Bot — @ mention to search memories
+- Memory Search UI — web search interface
+
+## Hackathon Rules
+- Read /home/fi/docs/ralphthon-guide.md
+- "Basic RAG" is on the disqualification list — frame as MCP infrastructure
+- 3 min live demo, no slides
+- Lobster Rule: fewer laptop touches = better score (20%)
+- Need: public GitHub repo, 1-min demo video, live demo link
 
 ## Autonomy Infrastructure
 - `run_tasks.sh` — bash loop, spawns fresh Claude Code per task
