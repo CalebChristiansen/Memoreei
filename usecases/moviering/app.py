@@ -39,11 +39,29 @@ TMDB_IMG = "https://image.tmdb.org/t/p/w500"
 # ── Movie detection ────────────────────────────────────────────────────────────
 TITLE_PATTERNS = [
     r'\b(The\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})\b',
-    r'(?:watched?|watching|seen?|loved?|recommend(?:ed)?|rewatch)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+    r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,5})\b',  # Multi-word capitalized phrase (2+ words)
+    r'(?:watched?|watching|seen?|loved?|recommend(?:ed)?|rewatch|finished)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,4})',
     r'"([A-Z][^"]{2,50})"',
     r"'([A-Z][^']{2,50})'",
     r'(?:end of|beginning of|like|loved?|hate[sd]?|enjoyed?)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+    r'(?:movie|film|book|adaptation)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,5})',
 ]
+
+# Known single-word movie titles to look for explicitly (TMDB matches too many false positives on single words)
+KNOWN_SINGLE_WORD_MOVIES = {
+    "inception", "arrival", "oppenheimer", "interstellar", "gravity", "jaws",
+    "alien", "aliens", "gladiator", "braveheart", "amadeus", "casablanca",
+    "psycho", "vertigo", "halloween", "scream", "coco", "frozen",
+    "ratatouille", "shrek", "moana", "encanto", "parasite",
+    "joker", "dunkirk", "tenet", "memento", "rocky", "creed",
+}
+
+# Additional false-positive movie titles to filter out after TMDB lookup
+TMDB_TITLE_BLOCKLIST = {
+    "you are alive!", "the future", "i see you", "pizza wars: the movie",
+    "alien",  # too easily matched from "alien language" etc.
+    "machine learning",
+}
 
 MOVIE_FTS = "Matrix OR Inception OR movie OR film OR watched OR cinema OR netflix OR streaming OR sequel OR prequel OR trilogy OR directed OR starring OR screenplay"
 
@@ -56,6 +74,17 @@ STOP_TITLES = {
     "most", "other", "some", "such", "no", "not", "only", "own", "same", "so",
     "than", "too", "very", "just", "but", "if", "we", "they", "he", "she",
     "we are", "she's not", "navi that", "elliot that",
+    # Bot names and common false positives
+    "fi", "navi", "ford", "elliot", "caleb", "sci",
+    "dr. robert ford", "robert ford", "dr robert ford",
+    "joseph gordon", "joseph gordon-levitt", "gordon-levitt",
+    "cillian murphy", "amy adams", "ralph fiennes", "daniel craig",
+    "ryan gosling", "andy weir", "wes anderson", "hans zimmer",
+    "oscar", "oscars", "imax", "netflix", "youtube",
+    "discord", "telegram", "matrix", "slack",
+    "also", "here", "like", "really", "actually", "genuinely",
+    "still", "ever", "never", "always", "everything", "something",
+    "what", "which", "where", "about", "after", "before",
 }
 
 
@@ -65,36 +94,24 @@ def get_db():
     return conn
 
 
-def fetch_movie_messages(limit: int = 400) -> list[dict]:
-    """Pull messages from the DB that likely contain movie references."""
+def fetch_movie_messages(limit: int = 1000) -> list[dict]:
+    """Pull ALL messages from the DB so we don't miss any movie references.
+    
+    Previous approach used FTS keyword matching which missed movies not in the
+    hardcoded list. Since we do TMDB lookups on candidates anyway, it's better
+    to scan everything and let the title extraction + TMDB matching filter.
+    """
     conn = get_db()
     try:
-        try:
-            rows = conn.execute(
-                """
-                SELECT m.id, m.content, m.source, m.participants, m.ts, m.metadata
-                FROM memories m
-                JOIN memories_fts f ON m.rowid = f.rowid
-                WHERE memories_fts MATCH ?
-                ORDER BY m.ts DESC
-                LIMIT ?
-                """,
-                (MOVIE_FTS, limit),
-            ).fetchall()
-        except Exception:
-            rows = conn.execute(
-                """
-                SELECT id, content, source, participants, ts, metadata
-                FROM memories
-                WHERE content LIKE '%movie%' OR content LIKE '%film%'
-                   OR content LIKE '%watched%' OR content LIKE '%cinema%'
-                   OR content LIKE '%Matrix%' OR content LIKE '%Inception%'
-                   OR content LIKE '%sequel%' OR content LIKE '%netflix%'
-                ORDER BY ts DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+        rows = conn.execute(
+            """
+            SELECT id, content, source, participants, ts, metadata
+            FROM memories
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -103,6 +120,7 @@ def fetch_movie_messages(limit: int = 400) -> list[dict]:
 def extract_candidates(text: str) -> list[str]:
     """Extract potential movie title strings from a message."""
     found = []
+    # First: regex-based extraction (multi-word phrases)
     for pat in TITLE_PATTERNS:
         for match in re.finditer(pat, text):
             title = match.group(1).strip().rstrip(".,!?;:")
@@ -111,8 +129,17 @@ def extract_candidates(text: str) -> list[str]:
                 continue
             if title.lower() in STOP_TITLES:
                 continue
+            # Skip single-word matches from regex (too many false positives)
+            if len(words) == 1:
+                continue
             if title[0].isupper():
                 found.append(title)
+    # Second: check for known single-word movie titles explicitly
+    text_lower = text.lower()
+    for movie in KNOWN_SINGLE_WORD_MOVIES:
+        if re.search(r'\b' + re.escape(movie) + r'\b', text_lower):
+            # Use proper capitalization
+            found.append(movie.title())
     return list(dict.fromkeys(found))
 
 
@@ -132,6 +159,16 @@ def tmdb_search(title: str) -> dict | None:
         if not results:
             return None
         m = results[0]
+        # Relevance check: TMDB title must be reasonably close to our query
+        tmdb_title = (m.get("title") or "").lower()
+        query_lower = title.lower()
+        if query_lower not in tmdb_title and tmdb_title not in query_lower:
+            # Check word overlap
+            query_words = set(query_lower.split())
+            title_words = set(tmdb_title.split())
+            overlap = query_words & title_words
+            if len(overlap) < max(1, len(query_words) // 2):
+                return None
         return {
             "tmdb_id": m.get("id"),
             "title": m.get("title", title),
@@ -176,6 +213,26 @@ def fmt_platform(source: str) -> str:
     return (source or "unknown").split(":")[0].lower()
 
 
+def _build_mention(msg: dict) -> dict:
+    """Build a mention dict from a raw message row."""
+    content = msg.get("content", "")
+    participants = json.loads(msg.get("participants") or "[]")
+    speaker = parse_speaker(content, participants)
+    quote = strip_speaker(content)
+    ts = msg.get("ts") or 0
+    date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else "Unknown"
+    source = msg.get("source") or ""
+    return {
+        "id": msg.get("id", ""),
+        "quote": quote,
+        "speaker": speaker,
+        "source": fmt_source(source),
+        "platform": fmt_platform(source),
+        "date": date_str,
+        "ts": ts,
+    }
+
+
 def process_messages(messages: list[dict], sort_by: str = "mentions") -> tuple[list[dict], list[dict]]:
     """
     Returns (movie_cards, quote_cards) with aggregated mention stats.
@@ -193,31 +250,23 @@ def process_messages(messages: list[dict], sort_by: str = "mentions") -> tuple[l
         seen_message_ids.add(msg_id)
 
         content = msg.get("content", "")
-        participants = json.loads(msg.get("participants") or "[]")
-        speaker = parse_speaker(content, participants)
-        quote = strip_speaker(content)
-        ts = msg.get("ts") or 0
-        date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else "Unknown"
-        source = msg.get("source") or ""
-        platform = fmt_platform(source)
-        source_label = fmt_source(source)
-
-        mention = {
-            "id": msg_id,
-            "quote": quote,
-            "speaker": speaker,
-            "source": source_label,
-            "platform": platform,
-            "date": date_str,
-            "ts": ts,
-        }
+        # Strip speaker prefix (e.g. "Dr. Robert Ford: ...") before extracting
+        if ": " in content:
+            parts = content.split(": ", 1)
+            if len(parts[0]) < 40 and not parts[0].startswith("http"):
+                content_for_extract = parts[1]
+            else:
+                content_for_extract = content
+        else:
+            content_for_extract = content
+        mention = _build_mention(msg)
 
         matched = False
         if TMDB_API_KEY:
-            candidates = extract_candidates(content)
-            for candidate in candidates[:4]:
+            candidates = extract_candidates(content_for_extract)
+            for candidate in candidates[:6]:
                 info = tmdb_search(candidate)
-                if info:
+                if info and info["title"].lower() not in TMDB_TITLE_BLOCKLIST:
                     tid = info["tmdb_id"]
                     if tid not in movie_data:
                         movie_data[tid] = {
@@ -233,6 +282,29 @@ def process_messages(messages: list[dict], sort_by: str = "mentions") -> tuple[l
 
         if not matched:
             quote_cards.append(mention)
+
+    # Phase 2: for each discovered movie, scan ALL DB messages for title mentions
+    # This catches cases where regex failed to extract the title from a message.
+    if movie_data and TMDB_API_KEY:
+        conn = get_db()
+        try:
+            for tid, data in movie_data.items():
+                title = data["movie"]["title"]
+                rows = conn.execute(
+                    "SELECT id, content, source, participants, ts, metadata FROM memories"
+                    " WHERE content LIKE ? COLLATE NOCASE",
+                    (f"%{title}%",),
+                ).fetchall()
+                for row in rows:
+                    row_dict = dict(row)
+                    row_id = row_dict.get("id", "")
+                    if row_id not in data["seen_msg_ids"]:
+                        data["mentions"].append(_build_mention(row_dict))
+                        data["seen_msg_ids"].add(row_id)
+                        # Remove from quote_cards if it ended up there
+                        quote_cards[:] = [q for q in quote_cards if q["id"] != row_id]
+        finally:
+            conn.close()
 
     # Build final movie cards with aggregated stats
     movie_cards = []
@@ -299,7 +371,7 @@ def index():
     total_sources = len(set(
         (msg.get("source") or "").split(":")[0] for msg in messages
     ))
-    total_mentions = sum(c["mention_count"] for c in movie_cards) + len(quote_cards)
+    total_mentions = sum(c["mention_count"] for c in movie_cards)
 
     return render_template(
         "index.html",
@@ -346,6 +418,7 @@ def api_refresh():
 
 
 @app.route("/health")
+@app.route("/api/health")
 def health():
     try:
         conn = get_db()
