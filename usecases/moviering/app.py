@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+Movie Ring — Memoreei use case app
+Scans your conversations for movie mentions, shows them with TMDB posters and friend quotes.
+"""
+import os
+import re
+import json
+import sqlite3
+import time
+from pathlib import Path
+from datetime import datetime
+from functools import lru_cache
+
+import requests
+from flask import Flask, render_template, jsonify, request
+
+app = Flask(__name__)
+
+# ── Config ────────────────────────────────────────────────────────────────────
+_here = Path(__file__).parent
+_project_root = _here.parent.parent
+
+# Load .env from project root
+env_file = _project_root / ".env"
+if env_file.exists():
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip())
+
+_db_raw = os.environ.get("MEMOREEI_DB_PATH", str(_project_root / "memoreei.db"))
+# Resolve relative paths against project root so the service can run from any cwd
+DB_PATH = str((_project_root / _db_raw).resolve() if not Path(_db_raw).is_absolute() else Path(_db_raw))
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+TMDB_BASE = "https://api.themoviedb.org/3"
+TMDB_IMG = "https://image.tmdb.org/t/p/w500"
+
+# ── Movie detection ────────────────────────────────────────────────────────────
+# Regex: extract explicit movie title mentions
+TITLE_PATTERNS = [
+    # "The Matrix had sequels" / "like the end of Inception"
+    r'\b(The\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})\b',
+    # "watched Dune" / "seen Oppenheimer"
+    r'(?:watched?|watching|seen?|loved?|recommend(?:ed)?|rewatch)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+    # Quoted titles: "Inception" or 'The Godfather'
+    r'"([A-Z][^"]{2,50})"',
+    r"'([A-Z][^']{2,50})'",
+    # "like the end of Inception"
+    r'(?:end of|beginning of|like|loved?|hate[sd]?|enjoyed?)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+]
+
+# FTS search keywords
+MOVIE_FTS = "Matrix OR Inception OR movie OR film OR watched OR cinema OR netflix OR streaming OR sequel OR prequel OR trilogy OR directed OR starring OR screenplay"
+
+STOP_TITLES = {
+    "i", "it", "the", "a", "an", "and", "or", "but", "is", "was", "are", "were",
+    "be", "been", "being", "have", "has", "had", "do", "does", "did", "will",
+    "would", "could", "should", "may", "might", "shall", "can", "need", "dare",
+    "this", "that", "these", "those", "what", "which", "who", "whom", "whose",
+    "when", "where", "why", "how", "all", "both", "each", "every", "few", "more",
+    "most", "other", "some", "such", "no", "not", "only", "own", "same", "so",
+    "than", "too", "very", "just", "but", "if", "we", "they", "he", "she",
+    "we are", "she's not", "navi that", "elliot that",
+}
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def fetch_movie_messages(limit: int = 400) -> list[dict]:
+    """Pull messages from the DB that likely contain movie references."""
+    conn = get_db()
+    try:
+        try:
+            rows = conn.execute(
+                """
+                SELECT m.id, m.content, m.source, m.participants, m.ts, m.metadata
+                FROM memories m
+                JOIN memories_fts f ON m.rowid = f.rowid
+                WHERE memories_fts MATCH ?
+                ORDER BY m.ts DESC
+                LIMIT ?
+                """,
+                (MOVIE_FTS, limit),
+            ).fetchall()
+        except Exception:
+            rows = conn.execute(
+                """
+                SELECT id, content, source, participants, ts, metadata
+                FROM memories
+                WHERE content LIKE '%movie%' OR content LIKE '%film%'
+                   OR content LIKE '%watched%' OR content LIKE '%cinema%'
+                   OR content LIKE '%Matrix%' OR content LIKE '%Inception%'
+                   OR content LIKE '%sequel%' OR content LIKE '%netflix%'
+                ORDER BY ts DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def extract_candidates(text: str) -> list[str]:
+    """Extract potential movie title strings from a message."""
+    found = []
+    for pat in TITLE_PATTERNS:
+        for match in re.finditer(pat, text):
+            title = match.group(1).strip().rstrip(".,!?;:")
+            words = title.split()
+            if len(words) < 1 or len(title) < 3 or len(title) > 60:
+                continue
+            if title.lower() in STOP_TITLES:
+                continue
+            # Must start with capital and not be a common filler phrase
+            if title[0].isupper():
+                found.append(title)
+    return list(dict.fromkeys(found))  # dedupe preserving order
+
+
+@lru_cache(maxsize=500)
+def tmdb_search(title: str) -> dict | None:
+    """Search TMDB for a movie title. Cached."""
+    if not TMDB_API_KEY:
+        return None
+    try:
+        r = requests.get(
+            f"{TMDB_BASE}/search/movie",
+            params={"api_key": TMDB_API_KEY, "query": title, "language": "en-US"},
+            timeout=6,
+        )
+        r.raise_for_status()
+        results = r.json().get("results", [])
+        if not results:
+            return None
+        m = results[0]
+        return {
+            "tmdb_id": m.get("id"),
+            "title": m.get("title", title),
+            "overview": (m.get("overview") or "")[:300],
+            "poster_url": f"{TMDB_IMG}{m['poster_path']}" if m.get("poster_path") else None,
+            "year": (m.get("release_date") or "")[:4] or "?",
+            "rating": round(m.get("vote_average", 0), 1),
+            "tmdb_url": f"https://www.themoviedb.org/movie/{m.get('id')}",
+        }
+    except Exception:
+        return None
+
+
+def parse_speaker(content: str, participants: list[str]) -> str:
+    """Extract the actual speaker name, stripping it from the message if needed."""
+    if not content:
+        return participants[0] if participants else "Unknown"
+    # Messages often formatted as "Name: message"
+    if ": " in content:
+        name = content.split(": ", 1)[0]
+        if len(name) < 40 and not name.startswith("http"):
+            return name
+    return participants[0] if participants else "Unknown"
+
+
+def strip_speaker(content: str) -> str:
+    """Remove 'Speaker: ' prefix from content."""
+    if ": " in content:
+        parts = content.split(": ", 1)
+        if len(parts[0]) < 40 and not parts[0].startswith("http"):
+            return parts[1]
+    return content
+
+
+def fmt_source(source: str) -> str:
+    if not source:
+        return "Unknown"
+    parts = source.split(":", 1)
+    platform = parts[0].capitalize()
+    label = parts[1] if len(parts) > 1 else ""
+    return f"{platform}" + (f" · {label}" if label else "")
+
+
+def fmt_platform(source: str) -> str:
+    return (source or "unknown").split(":")[0].lower()
+
+
+def process_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
+    """
+    Returns (movie_cards, quote_cards).
+    movie_cards: messages where we found + matched a TMDB movie.
+    quote_cards: everything else that's movie-related.
+    """
+    movie_cards: list[dict] = []
+    quote_cards: list[dict] = []
+    seen_movie_ids: set[int] = set()
+    seen_message_ids: set[str] = set()
+
+    for msg in messages:
+        msg_id = msg.get("id", "")
+        if msg_id in seen_message_ids:
+            continue
+        seen_message_ids.add(msg_id)
+
+        content = msg.get("content", "")
+        participants = json.loads(msg.get("participants") or "[]")
+        speaker = parse_speaker(content, participants)
+        quote = strip_speaker(content)
+        ts = msg.get("ts") or 0
+        date_str = datetime.fromtimestamp(ts).strftime("%b %d, %Y") if ts else "Unknown"
+        source = msg.get("source") or ""
+        platform = fmt_platform(source)
+        source_label = fmt_source(source)
+
+        base = {
+            "id": msg_id,
+            "quote": quote,
+            "speaker": speaker,
+            "source": source_label,
+            "platform": platform,
+            "date": date_str,
+            "ts": ts,
+        }
+
+        matched = False
+        if TMDB_API_KEY:
+            candidates = extract_candidates(content)
+            for candidate in candidates[:4]:
+                info = tmdb_search(candidate)
+                if info:
+                    tid = info["tmdb_id"]
+                    if tid not in seen_movie_ids:
+                        seen_movie_ids.add(tid)
+                        movie_cards.append({**base, "movie": info, "matched_title": candidate})
+                    else:
+                        # Extra quote for same movie
+                        existing = next((c for c in movie_cards if c["movie"]["tmdb_id"] == tid), None)
+                        if existing:
+                            existing.setdefault("extra_quotes", []).append(
+                                {"speaker": speaker, "quote": quote, "date": date_str, "source": source_label}
+                            )
+                    matched = True
+                    break
+
+        if not matched:
+            quote_cards.append(base)
+
+    return movie_cards, quote_cards
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/")
+def index():
+    messages = fetch_movie_messages(400)
+    movie_cards, quote_cards = process_messages(messages)
+
+    all_platforms = sorted({c["platform"] for c in (movie_cards + quote_cards)})
+    total_sources = len(set(
+        (msg.get("source") or "").split(":")[0] for msg in messages
+    ))
+
+    return render_template(
+        "index.html",
+        movie_cards=movie_cards,
+        quote_cards=quote_cards,
+        total_messages=len(messages),
+        total_movies=len(movie_cards),
+        all_platforms=all_platforms,
+        has_tmdb=bool(TMDB_API_KEY),
+        total_sources=total_sources,
+        db_path=DB_PATH,
+    )
+
+
+@app.route("/api/movies")
+def api_movies():
+    messages = fetch_movie_messages(400)
+    movie_cards, quote_cards = process_messages(messages)
+    return jsonify({"movies": movie_cards, "quotes": quote_cards})
+
+
+@app.route("/health")
+def health():
+    try:
+        conn = get_db()
+        count = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        conn.close()
+        return jsonify({"status": "ok", "memories": count, "tmdb": bool(TMDB_API_KEY)})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("MOVIERING_PORT", "5050"))
+    print(f"Movie Ring starting on http://0.0.0.0:{port}")
+    print(f"  DB: {DB_PATH}")
+    print(f"  TMDB: {'configured' if TMDB_API_KEY else 'NOT SET — movie posters disabled'}")
+    app.run(host="0.0.0.0", port=port, debug=bool(os.environ.get("DEBUG")))

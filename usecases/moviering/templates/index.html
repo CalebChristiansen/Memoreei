@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Ring — Your Conversations' Watchlist</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --cinema-gold: #f5c518;
+      --cinema-dark: #0d0d0d;
+      --cinema-card: #1a1a2e;
+      --cinema-card2: #16213e;
+      --cinema-accent: #e94560;
+      --cinema-text: #e0e0e0;
+      --cinema-muted: #8a8a9a;
+      --cinema-border: rgba(245, 197, 24, 0.2);
+      --pico-background-color: #0d0d0d;
+      --pico-card-background-color: #1a1a2e;
+      --pico-card-border-color: rgba(245, 197, 24, 0.15);
+      --pico-primary: #f5c518;
+      --pico-primary-hover: #e0b000;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--cinema-dark);
+      color: var(--cinema-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Hero Header ── */
+    .hero {
+      background: linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 40%, #0f3460 100%);
+      border-bottom: 2px solid var(--cinema-gold);
+      padding: 3rem 2rem 2rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        transparent 28px,
+        rgba(245,197,24,0.04) 28px,
+        rgba(245,197,24,0.04) 30px
+      );
+      pointer-events: none;
+    }
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 900;
+      color: var(--cinema-gold);
+      letter-spacing: -1px;
+      margin: 0 0 0.25rem;
+      text-shadow: 0 0 40px rgba(245,197,24,0.4);
+    }
+    .hero-title span { color: var(--cinema-accent); }
+    .hero-sub {
+      color: var(--cinema-muted);
+      font-size: 1.1rem;
+      margin: 0 0 2rem;
+    }
+
+    /* ── Stats Bar ── */
+    .stats-bar {
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--cinema-gold);
+      display: block;
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--cinema-muted);
+    }
+
+    /* ── Notice ── */
+    .no-tmdb-notice {
+      background: rgba(233,69,96,0.15);
+      border: 1px solid var(--cinema-accent);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin: 1.5rem auto;
+      max-width: 700px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #ffb3be;
+    }
+    .no-tmdb-notice code {
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--cinema-gold);
+    }
+
+    /* ── Layout ── */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    /* ── Section Heading ── */
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 0 0 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--cinema-border);
+    }
+    .section-heading h2 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: var(--cinema-gold);
+      font-weight: 700;
+    }
+    .badge {
+      background: var(--cinema-accent);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── Movie Cards Grid ── */
+    .movies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .movie-card {
+      background: var(--cinema-card);
+      border: 1px solid var(--cinema-border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .movie-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(245,197,24,0.15);
+      border-color: rgba(245,197,24,0.4);
+    }
+
+    .movie-poster-area {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem;
+      background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+    }
+    .movie-poster {
+      width: 90px;
+      min-width: 90px;
+      height: 135px;
+      border-radius: 6px;
+      object-fit: cover;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .movie-poster-placeholder {
+      width: 90px;
+      min-width: 90px;
+      height: 135px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #2a2a4a, #1a1a3a);
+      border: 1px solid var(--cinema-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+    .movie-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .movie-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 0 0.25rem;
+      line-height: 1.2;
+    }
+    .movie-year-rating {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .movie-year {
+      color: var(--cinema-muted);
+      font-size: 0.85rem;
+    }
+    .movie-rating {
+      background: var(--cinema-gold);
+      color: #000;
+      font-weight: 700;
+      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .movie-overview {
+      font-size: 0.8rem;
+      color: var(--cinema-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .movie-tmdb-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--cinema-gold);
+      text-decoration: none;
+    }
+    .movie-tmdb-link:hover { text-decoration: underline; }
+
+    /* ── Quotes in card ── */
+    .quotes-area {
+      padding: 0 1rem 1rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .quote-block {
+      background: rgba(255,255,255,0.04);
+      border-left: 3px solid var(--cinema-gold);
+      border-radius: 0 6px 6px 0;
+      padding: 0.6rem 0.8rem;
+    }
+    .quote-text {
+      font-size: 0.9rem;
+      color: var(--cinema-text);
+      line-height: 1.5;
+      margin: 0 0 0.35rem;
+      font-style: italic;
+    }
+    .quote-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .quote-speaker {
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: var(--cinema-gold);
+    }
+    .quote-sep { color: var(--cinema-muted); font-size: 0.75rem; }
+    .quote-date { color: var(--cinema-muted); font-size: 0.75rem; }
+    .platform-badge {
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .platform-discord { background: rgba(88,101,242,0.3); color: #8fa3ff; }
+    .platform-whatsapp { background: rgba(37,211,102,0.2); color: #5dd87a; }
+    .platform-telegram { background: rgba(0,136,204,0.2); color: #4db8ff; }
+    .platform-slack { background: rgba(74,21,75,0.4); color: #e879f9; }
+    .platform-matrix { background: rgba(0,189,157,0.2); color: #4dd9c4; }
+    .platform-email { background: rgba(234,88,12,0.2); color: #fb923c; }
+
+    /* ── Quotes-only list (no TMDB) ── */
+    .quotes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 3rem;
+    }
+    .quote-row {
+      background: var(--cinema-card);
+      border: 1px solid var(--cinema-border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      transition: border-color 0.15s;
+    }
+    .quote-row:hover { border-color: rgba(245,197,24,0.35); }
+    .quote-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .quote-body { flex: 1; min-width: 0; }
+    .quote-content {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--cinema-text);
+      font-style: italic;
+      margin-bottom: 0.4rem;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--cinema-muted);
+    }
+    .empty-state .big-icon { font-size: 4rem; display: block; margin-bottom: 1rem; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--cinema-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--cinema-border);
+    }
+    footer a { color: var(--cinema-gold); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--cinema-gold); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .hero-title { font-size: 2rem; }
+      .movies-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="hero-title">
+    <span>&#127916;</span> Movie Ring
+  </div>
+  <p class="hero-sub">What movies are your people talking about?</p>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-num">{{ total_movies }}</span>
+      <span class="stat-label">Movies Found</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ total_messages }}</span>
+      <span class="stat-label">Messages Scanned</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ total_sources }}</span>
+      <span class="stat-label">Platforms</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ (movie_cards + quote_cards) | length }}</span>
+      <span class="stat-label">Mentions</span>
+    </div>
+  </div>
+</header>
+
+<main class="main-content">
+
+  {% if not has_tmdb %}
+  <div class="no-tmdb-notice">
+    <strong>No TMDB key detected</strong> — movie posters are disabled.<br>
+    Add <code>TMDB_API_KEY=your_key</code> to <code>.env</code> and restart to enable them.
+    Get a free key at <strong>themoviedb.org</strong>.
+  </div>
+  {% endif %}
+
+  <!-- Movie cards with TMDB data -->
+  {% if movie_cards %}
+  <div class="section-heading">
+    <h2>&#127916; Matched Movies</h2>
+    <span class="badge">{{ movie_cards | length }}</span>
+  </div>
+
+  <div class="movies-grid">
+    {% for card in movie_cards %}
+    <article class="movie-card">
+      <div class="movie-poster-area">
+        {% if card.movie.poster_url %}
+        <img class="movie-poster" src="{{ card.movie.poster_url }}" alt="{{ card.movie.title }} poster" loading="lazy">
+        {% else %}
+        <div class="movie-poster-placeholder">&#127916;</div>
+        {% endif %}
+        <div class="movie-meta">
+          <div class="movie-title">{{ card.movie.title }}</div>
+          <div class="movie-year-rating">
+            <span class="movie-year">{{ card.movie.year }}</span>
+            {% if card.movie.rating %}
+            <span class="movie-rating">&#11088; {{ card.movie.rating }}</span>
+            {% endif %}
+          </div>
+          {% if card.movie.overview %}
+          <p class="movie-overview">{{ card.movie.overview }}</p>
+          {% endif %}
+          <a class="movie-tmdb-link" href="{{ card.movie.tmdb_url }}" target="_blank" rel="noopener">
+            View on TMDB &#8599;
+          </a>
+        </div>
+      </div>
+
+      <div class="quotes-area">
+        <!-- Primary quote -->
+        <div class="quote-block">
+          <p class="quote-text">"{{ card.quote }}"</p>
+          <div class="quote-meta">
+            <span class="quote-speaker">{{ card.speaker }}</span>
+            <span class="quote-sep">·</span>
+            <span class="quote-date">{{ card.date }}</span>
+            <span class="platform-badge platform-{{ card.platform }}">{{ card.platform }}</span>
+          </div>
+        </div>
+        <!-- Extra quotes if same movie mentioned multiple times -->
+        {% for extra in card.get('extra_quotes', [])[:2] %}
+        <div class="quote-block">
+          <p class="quote-text">"{{ extra.quote }}"</p>
+          <div class="quote-meta">
+            <span class="quote-speaker">{{ extra.speaker }}</span>
+            <span class="quote-sep">·</span>
+            <span class="quote-date">{{ extra.date }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Quotes without TMDB match -->
+  {% if quote_cards %}
+  <div class="section-heading">
+    <h2>&#128172; All Movie Mentions</h2>
+    <span class="badge">{{ quote_cards | length }}</span>
+  </div>
+
+  <div class="quotes-list">
+    {% for card in quote_cards %}
+    <div class="quote-row">
+      <span class="quote-icon">&#127916;</span>
+      <div class="quote-body">
+        <p class="quote-content">"{{ card.quote }}"</p>
+        <div class="quote-meta">
+          <span class="quote-speaker">{{ card.speaker }}</span>
+          <span class="quote-sep">·</span>
+          <span class="quote-date">{{ card.date }}</span>
+          <span class="quote-sep">·</span>
+          <span class="platform-badge platform-{{ card.platform }}">{{ card.source }}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not movie_cards and not quote_cards %}
+  <div class="empty-state">
+    <span class="big-icon">&#128269;</span>
+    <h3>No movie mentions found yet</h3>
+    <p>Sync some conversations with Memoreei and movie mentions will appear here.</p>
+  </div>
+  {% endif %}
+
+</main>
+
+<footer>
+  Powered by <a href="https://github.com/your-username/memoreei" target="_blank">Memoreei</a>
+  &nbsp;&bull;&nbsp;
+  DB: <code>{{ db_path }}</code>
+  &nbsp;&bull;&nbsp;
+  TMDB: {{ 'enabled' if has_tmdb else 'disabled' }}
+</footer>
+
+</body>
+</html>

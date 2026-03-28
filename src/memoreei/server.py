@@ -125,6 +125,112 @@ async def sync_discord(channel_id: str | None = None) -> dict:
     return await tools.sync_discord_tool(channel_id=channel_id)
 
 
+@mcp.tool()
+async def sync_telegram(chat_id: str | None = None) -> dict:
+    """Sync new Telegram messages received by the bot into memory.
+
+    Uses the Telegram Bot API (getUpdates) to fetch messages sent to the bot
+    since the last sync. Requires TELEGRAM_BOT_TOKEN in environment.
+
+    Args:
+        chat_id: Telegram chat ID to filter (positive = user DM, negative = group).
+                 Syncs all chats if not provided. Uses TELEGRAM_CHAT_ID env var as default.
+    """
+    tools = await _get_tools()
+    return await tools.sync_telegram_tool(chat_id=chat_id)
+
+
+@mcp.tool()
+async def sync_matrix(room_id: str | None = None) -> dict:
+    """Sync Matrix room messages into memory using the Matrix Client-Server API.
+
+    Fetches messages from a Matrix room and stores them for search. Uses
+    a per-room pagination token checkpoint to avoid re-ingesting messages.
+
+    Requires environment variables:
+        MATRIX_HOMESERVER    - e.g. https://matrix.org
+        MATRIX_ACCESS_TOKEN  - user access token
+        MATRIX_ROOM_ID       - default room to sync (optional if room_id provided)
+
+    Args:
+        room_id: Matrix room ID to sync (e.g. !abc123:matrix.org).
+                 Uses MATRIX_ROOM_ID env var if not provided.
+    """
+    tools = await _get_tools()
+    return await tools.sync_matrix_tool(room_id=room_id)
+
+
+@mcp.tool()
+async def sync_slack(channel_id: str | None = None) -> dict:
+    """Sync recent Slack messages from the configured channel into memory.
+
+    Uses the Slack Web API (conversations.history) to fetch messages since the
+    last sync. Requires a bot token with channels:history and users:read scopes.
+
+    Requires environment variables:
+        SLACK_BOT_TOKEN    - Slack bot token (xoxb-...)
+        SLACK_CHANNEL_ID   - default channel to sync (optional if channel_id provided)
+
+    Args:
+        channel_id: Slack channel ID to sync (e.g. C1234567890).
+                    Uses SLACK_CHANNEL_ID env var if not provided.
+    """
+    tools = await _get_tools()
+    return await tools.sync_slack_tool(channel_id=channel_id)
+
+
+@mcp.tool()
+async def sync_email(folder: str = "INBOX", max_emails: int = 200) -> dict:
+    """Sync Gmail messages into memory via IMAP.
+
+    Fetches emails from a Gmail folder and stores them for search. Uses a
+    per-folder UID checkpoint to avoid re-ingesting messages on subsequent syncs.
+
+    Requires environment variables:
+        GMAIL_EMAIL        - Gmail address (e.g. you@gmail.com)
+        GMAIL_APP_PASSWORD - Gmail App Password (required if 2FA is enabled).
+                             Create one at https://myaccount.google.com/apppasswords
+                             GMAIL_PASSWORD may be used instead for non-2FA accounts,
+                             but Google has deprecated plain-password IMAP access.
+
+    Args:
+        folder:     IMAP folder to sync (default: 'INBOX'). Other options: '[Gmail]/Sent Mail',
+                    '[Gmail]/All Mail', etc.
+        max_emails: Maximum number of emails to ingest per sync (default: 200).
+    """
+    tools = await _get_tools()
+    return await tools.sync_email_tool(folder=folder, max_emails=max_emails)
+
+
+@mcp.tool()
+async def sync_mastodon(
+    instance: str | None = None,
+    hashtag: str | None = None,
+    access_token: str | None = None,
+) -> dict:
+    """Sync recent Mastodon posts from a public or hashtag timeline into memory.
+
+    Uses the Mastodon REST API. Public and hashtag timelines require no authentication.
+    An access token is only needed for home timeline or private accounts.
+
+    Optional environment variables:
+        MASTODON_INSTANCE     - Mastodon instance URL (default: https://mastodon.social)
+        MASTODON_HASHTAG      - default hashtag to sync (without #)
+        MASTODON_ACCESS_TOKEN - access token for authenticated requests (optional)
+
+    Args:
+        instance:     Mastodon instance base URL (e.g. https://fosstodon.org).
+                      Uses MASTODON_INSTANCE env var if not provided.
+        hashtag:      Hashtag to sync (without #, e.g. 'python').
+                      Uses MASTODON_HASHTAG env var or public timeline if not provided.
+        access_token: OAuth access token. Uses MASTODON_ACCESS_TOKEN env var if not provided.
+    """
+    tools = await _get_tools()
+    return await tools.sync_mastodon_tool(
+        instance=instance, hashtag=hashtag, access_token=access_token
+    )
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

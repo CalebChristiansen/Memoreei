@@ -1,0 +1,14 @@
+[Unit]
+Description=Contact Dossier — Memoreei CRM
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.openclaw/workspace-elliot/projects/memoreei
+ExecStart=%h/.openclaw/workspace-elliot/projects/memoreei/.venv/bin/python usecases/dossier/app.py
+Restart=on-failure
+RestartSec=5
+Environment=DOSSIER_PORT=5051
+
+[Install]
+WantedBy=default.target

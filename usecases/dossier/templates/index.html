@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Dossier — Memoreei</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --sidebar-width: 280px;
+      --accent: #6c63ff;
+      --accent-dim: rgba(108, 99, 255, 0.15);
+      --card-bg: #1a1a2e;
+      --surface: #16213e;
+      --border: rgba(255,255,255,0.08);
+      --text-dim: #888;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: #0f0f1a;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-width);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.2rem 1rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h2 {
+      margin: 0 0 0.1rem;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .sidebar-header p {
+      margin: 0;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    .search-box {
+      padding: 0.7rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 0.45rem 0.7rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.82rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--accent);
+    }
+
+    .people-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.4rem 0;
+    }
+
+    .people-list::-webkit-scrollbar { width: 4px; }
+    .people-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .person-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 1rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-left: 3px solid transparent;
+    }
+
+    .person-item:hover {
+      background: rgba(108, 99, 255, 0.08);
+    }
+
+    .person-item.active {
+      background: var(--accent-dim);
+      border-left-color: var(--accent);
+    }
+
+    .person-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .person-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .person-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e0e0e0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .person-meta {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+
+    .person-count {
+      font-size: 0.7rem;
+      background: rgba(108, 99, 255, 0.2);
+      color: #a89af7;
+      padding: 1px 6px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .source-dots {
+      display: flex;
+      gap: 2px;
+      margin-top: 2px;
+    }
+
+    .source-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    /* ── Main content ── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      background: #0f0f1a;
+    }
+
+    .main::-webkit-scrollbar { width: 6px; }
+    .main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .empty-state .icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.3;
+    }
+
+    .empty-state h3 { color: var(--text-dim); margin: 0 0 0.5rem; }
+    .empty-state p { margin: 0; font-size: 0.85rem; }
+
+    /* ── Dossier ── */
+    .dossier {
+      padding: 1.5rem 2rem 3rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .dossier-header {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1.2rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dossier-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .dossier-title h1 {
+      margin: 0 0 0.3rem;
+      font-size: 1.6rem;
+      font-weight: 800;
+    }
+
+    .dossier-subtitle {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+
+    /* ── Stats grid ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.3rem;
+    }
+
+    /* ── Two-column layout ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem;
+    }
+
+    .section-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin: 0 0 0.9rem;
+    }
+
+    /* ── Sentiment ── */
+    .sentiment-display {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .sentiment-label {
+      font-size: 1.2rem;
+      font-weight: 700;
+      min-width: 120px;
+    }
+
+    .sentiment-label.very-positive { color: #22c55e; }
+    .sentiment-label.positive { color: #86efac; }
+    .sentiment-label.neutral { color: #94a3b8; }
+    .sentiment-label.mixed { color: #fbbf24; }
+    .sentiment-label.negative { color: #f87171; }
+
+    .sentiment-bar-wrap {
+      flex: 1;
+    }
+
+    .sentiment-bar-track {
+      height: 8px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .sentiment-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s ease;
+    }
+
+    .sentiment-bar-fill.very-positive { background: linear-gradient(90deg, #22c55e, #86efac); }
+    .sentiment-bar-fill.positive { background: linear-gradient(90deg, #16a34a, #22c55e); }
+    .sentiment-bar-fill.neutral { background: linear-gradient(90deg, #64748b, #94a3b8); }
+    .sentiment-bar-fill.mixed { background: linear-gradient(90deg, #d97706, #fbbf24); }
+    .sentiment-bar-fill.negative { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+    .sentiment-counts {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+    }
+
+    /* ── Sources breakdown ── */
+    .source-bars { }
+
+    .source-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .source-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      min-width: 70px;
+      text-align: center;
+      text-transform: capitalize;
+      color: white;
+    }
+
+    .source-bar-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .source-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s ease;
+      opacity: 0.85;
+    }
+
+    .source-bar-count {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      min-width: 30px;
+      text-align: right;
+    }
+
+    /* ── Topics ── */
+    .topics-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .topic-tag {
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(108, 99, 255, 0.15);
+      border: 1px solid rgba(108, 99, 255, 0.25);
+      color: #a89af7;
+      cursor: default;
+      transition: background 0.2s;
+    }
+
+    .topic-tag:hover {
+      background: rgba(108, 99, 255, 0.3);
+    }
+
+    .topic-tag.size-lg {
+      font-size: 0.9rem;
+      padding: 0.35rem 0.9rem;
+      background: rgba(108, 99, 255, 0.25);
+    }
+
+    .topic-tag.size-sm {
+      font-size: 0.68rem;
+      padding: 0.25rem 0.6rem;
+      opacity: 0.7;
+    }
+
+    /* ── Timeline ── */
+    .timeline-section {
+      margin-bottom: 1rem;
+    }
+
+    .timeline-source-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .timeline-source-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .timeline-source-count {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .timeline-messages {
+      padding-left: 1rem;
+      border-left: 2px solid var(--border);
+    }
+
+    .msg-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+    }
+
+    .msg-card::before {
+      content: '';
+      position: absolute;
+      left: -1.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .msg-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .msg-speaker {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #c4b5fd;
+    }
+
+    .msg-date {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+    }
+
+    .msg-content {
+      font-size: 0.83rem;
+      line-height: 1.5;
+      color: #ccc;
+      word-break: break-word;
+    }
+
+    /* ── Recent quotes ── */
+    .quote-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      margin-bottom: 0.7rem;
+    }
+
+    .quote-card .msg-meta { margin-bottom: 0.5rem; }
+
+    .quote-text {
+      font-size: 0.85rem;
+      line-height: 1.55;
+      color: #ddd;
+    }
+
+    /* ── Loader ── */
+    .loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      display: flex;
+      gap: 0.3rem;
+      margin-bottom: 1.2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+
+    .tab-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: -1px;
+    }
+
+    .tab-btn:hover { color: #ddd; }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .sidebar { width: 220px; }
+      .dossier { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>🕵️ Dossier</h2>
+        <p>{{ people|length }} people across all sources</p>
+      </div>
+      <div class="search-box">
+        <input type="text" id="search" placeholder="Search people..." autocomplete="off">
+      </div>
+      <div class="people-list" id="people-list">
+        {% for p in people %}
+        <div class="person-item"
+             data-name="{{ p.name }}"
+             onclick="loadDossier('{{ p.name | replace("'", "\\'") }}', this)">
+          <div class="person-avatar">{{ p.name[0].upper() }}</div>
+          <div class="person-info">
+            <div class="person-name">{{ p.name }}</div>
+            <div class="source-dots">
+              {% for src in p.sources %}
+              <div class="source-dot" style="background: {{ {
+                'discord': '#5865F2', 'telegram': '#229ED9', 'matrix': '#0DBD8B',
+                'slack': '#E01E5A', 'email': '#EA4335', 'whatsapp': '#25D366',
+                'mastodon': '#6364FF', 'manual': '#888888'
+              }.get(src, '#666') }};" title="{{ src }}"></div>
+              {% endfor %}
+            </div>
+          </div>
+          <span class="person-count">{{ p.count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main" id="main">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">🕵️</div>
+        <h3>Pick someone to investigate</h3>
+        <p>Select a person from the sidebar to see their full dossier —<br>timeline, topics, sentiment, and every message across all platforms.</p>
+      </div>
+      <div id="dossier-container" style="display:none;"></div>
+    </main>
+  </div>
+
+  <script>
+    const SOURCE_COLORS = {
+      discord: '#5865F2', telegram: '#229ED9', matrix: '#0DBD8B',
+      slack: '#E01E5A', email: '#EA4335', whatsapp: '#25D366',
+      mastodon: '#6364FF', manual: '#888888'
+    };
+
+    function srcColor(src) {
+      return SOURCE_COLORS[src] || '#666';
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Search filter
+    document.getElementById('search').addEventListener('input', function() {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('.person-item').forEach(el => {
+        const name = el.dataset.name.toLowerCase();
+        el.style.display = name.includes(q) ? '' : 'none';
+      });
+    });
+
+    let currentName = null;
+
+    async function loadDossier(name, el) {
+      // Highlight active
+      document.querySelectorAll('.person-item').forEach(e => e.classList.remove('active'));
+      el.classList.add('active');
+
+      currentName = name;
+      document.getElementById('empty-state').style.display = 'none';
+      const container = document.getElementById('dossier-container');
+      container.style.display = 'block';
+      container.innerHTML = '<div class="loader">Loading dossier...</div>';
+
+      const resp = await fetch(`/api/dossier/${encodeURIComponent(name)}`);
+      const d = await resp.json();
+
+      if (!d.found) {
+        container.innerHTML = `<div class="dossier"><p>No messages found for <strong>${escHtml(name)}</strong>.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = renderDossier(d);
+      // Animate bars after render
+      requestAnimationFrame(() => {
+        document.querySelectorAll('[data-width]').forEach(el => {
+          el.style.width = el.dataset.width + '%';
+        });
+      });
+
+      // Tab switching
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const tab = this.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+          document.getElementById('tab-' + tab).classList.add('active');
+        });
+      });
+    }
+
+    function renderDossier(d) {
+      const initials = d.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      const sourceKeys = Object.keys(d.sources);
+      const maxCount = Math.max(...Object.values(d.sources));
+
+      // Stats
+      const stats = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${d.total_messages.toLocaleString()}</div>
+            <div class="stat-label">Messages</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${d.source_count}</div>
+            <div class="stat-label">Platforms</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1.1rem;">${d.first_seen}</div>
+            <div class="stat-label">First seen</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1.1rem;">${d.last_seen}</div>
+            <div class="stat-label">Last seen</div>
+          </div>
+        </div>
+      `;
+
+      // Sentiment
+      const s = d.sentiment;
+      const sentiment = `
+        <div class="section-card">
+          <div class="section-title">Sentiment Vibe</div>
+          <div class="sentiment-display">
+            <div class="sentiment-label ${s.cls}">${s.label}</div>
+            <div class="sentiment-bar-wrap">
+              <div class="sentiment-bar-track">
+                <div class="sentiment-bar-fill ${s.cls}" data-width="${s.score}" style="width:0%"></div>
+              </div>
+              <div class="sentiment-counts">
+                ${s.pos} positive signals · ${s.neg} negative signals · ${s.score}% positive
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Source breakdown
+      const sourceBars = sourceKeys.map(src => {
+        const count = d.sources[src];
+        const pct = Math.round((count / maxCount) * 100);
+        const color = srcColor(src);
+        return `
+          <div class="source-bar-row">
+            <span class="source-badge" style="background:${color}88; border: 1px solid ${color}44;">${escHtml(src)}</span>
+            <div class="source-bar-track">
+              <div class="source-bar-fill" data-width="${pct}" style="width:0%; background:${color};"></div>
+            </div>
+            <span class="source-bar-count">${count}</span>
+          </div>
+        `;
+      }).join('');
+
+      const sources = `
+        <div class="section-card">
+          <div class="section-title">Platforms</div>
+          <div class="source-bars">${sourceBars}</div>
+        </div>
+      `;
+
+      // Topics
+      const maxTopicCount = d.topics.length > 0 ? d.topics[0].count : 1;
+      const topicTags = d.topics.map((t, i) => {
+        const ratio = t.count / maxTopicCount;
+        const cls = ratio > 0.6 ? 'size-lg' : ratio < 0.25 ? 'size-sm' : '';
+        return `<span class="topic-tag ${cls}" title="${t.count} mentions">${escHtml(t.word)}</span>`;
+      }).join('');
+
+      const topics = `
+        <div class="section-card" style="margin-bottom:1rem;">
+          <div class="section-title">Key Topics</div>
+          <div class="topics-cloud">${topicTags || '<span style="color:var(--text-dim);font-size:.8rem;">No strong topics found</span>'}</div>
+        </div>
+      `;
+
+      // Timeline by source
+      const timelineHtml = sourceKeys.map(src => {
+        const msgs = d.timeline[src] || [];
+        // Show last 15 per source to keep it manageable
+        const displayed = msgs.slice(-15);
+        const color = srcColor(src);
+        const msgCards = displayed.map(m => `
+          <div class="msg-card">
+            <div class="msg-meta">
+              <span class="msg-speaker">${escHtml(m.speaker)}</span>
+              <span class="msg-date">${escHtml(m.date)}</span>
+            </div>
+            <div class="msg-content">${escHtml(m.content)}</div>
+          </div>
+        `).join('');
+        return `
+          <div class="timeline-section">
+            <div class="timeline-source-header">
+              <span class="source-badge" style="background:${color}88; border:1px solid ${color}44;">${escHtml(src)}</span>
+              <span class="timeline-source-count">${msgs.length} messages${msgs.length > 15 ? ' · showing last 15' : ''}</span>
+            </div>
+            <div class="timeline-messages">${msgCards}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Recent quotes
+      const recentHtml = d.recent_quotes.map(q => {
+        const color = srcColor(q.source);
+        return `
+          <div class="quote-card" style="border-left-color:${color};">
+            <div class="msg-meta">
+              <span class="msg-speaker">${escHtml(q.speaker)}</span>
+              <span class="source-badge" style="background:${color}55; border:1px solid ${color}44; font-size:0.65rem; padding:1px 6px;">${escHtml(q.source)}</span>
+              <span class="msg-date">${escHtml(q.date)}</span>
+            </div>
+            <div class="quote-text">${escHtml(q.content)}</div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="dossier">
+          <div class="dossier-header">
+            <div class="dossier-avatar">${initials}</div>
+            <div class="dossier-title">
+              <h1>${escHtml(d.name)}</h1>
+              <div class="dossier-subtitle">
+                ${d.total_messages} messages · ${d.source_count} platform${d.source_count !== 1 ? 's' : ''} · ${d.first_seen} → ${d.last_seen}
+              </div>
+            </div>
+          </div>
+
+          ${stats}
+
+          <div class="two-col">
+            ${sentiment}
+            ${sources}
+          </div>
+
+          ${topics}
+
+          <div class="tab-nav">
+            <button class="tab-btn active" data-tab="quotes">Recent Messages</button>
+            <button class="tab-btn" data-tab="timeline">Full Timeline</button>
+          </div>
+
+          <div id="tab-quotes" class="tab-content active">
+            ${recentHtml || '<p style="color:var(--text-dim);">No recent messages.</p>'}
+          </div>
+
+          <div id="tab-timeline" class="tab-content">
+            ${timelineHtml || '<p style="color:var(--text-dim);">No timeline data.</p>'}
+          </div>
+        </div>
+      `;
+    }
+
+    // Auto-select first person if any
+    const firstPerson = document.querySelector('.person-item');
+    if (firstPerson) {
+      // Don't auto-load, let user pick
+    }
+  </script>
+</body>
+</html>
