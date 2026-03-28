@@ -41,6 +41,30 @@ CREATE TABLE IF NOT EXISTS discord_checkpoint (
     last_message_id TEXT NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS telegram_checkpoint (
+    chat_id TEXT PRIMARY KEY,
+    last_update_id INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS matrix_checkpoint (
+    room_id TEXT PRIMARY KEY,
+    prev_batch TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS slack_checkpoint (
+    channel_id TEXT PRIMARY KEY,
+    last_ts TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_checkpoint (
+    key TEXT PRIMARY KEY,
+    last_uid TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 """
 
 FTS_TRIGGER_INSERT = """
@@ -269,5 +293,98 @@ class Database:
                 updated_at = excluded.updated_at
             """,
             (channel_id, last_message_id, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_telegram_checkpoint(self, chat_id: str) -> int | None:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT last_update_id FROM telegram_checkpoint WHERE chat_id = ?",
+            (chat_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["last_update_id"] if row else None
+
+    async def set_telegram_checkpoint(self, chat_id: str, last_update_id: int) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            """
+            INSERT INTO telegram_checkpoint (chat_id, last_update_id, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                last_update_id = excluded.last_update_id,
+                updated_at = excluded.updated_at
+            """,
+            (chat_id, last_update_id, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_matrix_checkpoint(self, room_id: str) -> str | None:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT prev_batch FROM matrix_checkpoint WHERE room_id = ?",
+            (room_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["prev_batch"] if row else None
+
+    async def set_matrix_checkpoint(self, room_id: str, prev_batch: str) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            """
+            INSERT INTO matrix_checkpoint (room_id, prev_batch, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(room_id) DO UPDATE SET
+                prev_batch = excluded.prev_batch,
+                updated_at = excluded.updated_at
+            """,
+            (room_id, prev_batch, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_slack_checkpoint(self, channel_id: str) -> str | None:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT last_ts FROM slack_checkpoint WHERE channel_id = ?",
+            (channel_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["last_ts"] if row else None
+
+    async def set_slack_checkpoint(self, channel_id: str, last_ts: str) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            """
+            INSERT INTO slack_checkpoint (channel_id, last_ts, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(channel_id) DO UPDATE SET
+                last_ts = excluded.last_ts,
+                updated_at = excluded.updated_at
+            """,
+            (channel_id, last_ts, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_email_checkpoint(self, email_addr: str, folder: str) -> str | None:
+        assert self._db is not None
+        key = f"{email_addr}:{folder}"
+        async with self._db.execute(
+            "SELECT last_uid FROM email_checkpoint WHERE key = ?", (key,)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["last_uid"] if row else None
+
+    async def set_email_checkpoint(self, email_addr: str, folder: str, last_uid: str) -> None:
+        assert self._db is not None
+        key = f"{email_addr}:{folder}"
+        await self._db.execute(
+            """
+            INSERT INTO email_checkpoint (key, last_uid, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                last_uid = excluded.last_uid,
+                updated_at = excluded.updated_at
+            """,
+            (key, last_uid, int(time.time())),
         )
         await self._db.commit()

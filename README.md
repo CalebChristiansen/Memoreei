@@ -16,11 +16,11 @@ Claude can now answer these. Without Memoreei, it can't.
 
 ## What It Does
 
-- **Ingests** conversations from WhatsApp, Discord, and manual notes
+- **Ingests** conversations from WhatsApp, Discord, Telegram, and manual notes
 - **Embeds** them locally using ONNX-based vector models (no cloud required)
 - **Indexes** everything in SQLite with full-text search (BM25 via FTS5)
 - **Fuses** keyword + semantic results using Reciprocal Rank Fusion
-- **Exposes** 6 MCP tools for any Claude client to query memory in real-time
+- **Exposes** 7 MCP tools for any Claude client to query memory in real-time
 
 No SaaS. No mandatory API keys. Your data stays on your machine.
 
@@ -32,11 +32,11 @@ No SaaS. No mandatory API keys. Your data stays on your machine.
  ┌─────────────────────────────────────────────────────────────────┐
  │                        Your Data Sources                        │
  │                                                                 │
- │   WhatsApp .txt export    Discord channel    Manual notes       │
- │          │                      │                 │             │
- └──────────┼──────────────────────┼─────────────────┼────────────┘
-            │                      │                 │
-            ▼                      ▼                 ▼
+ │  WhatsApp .txt export  Discord channel  Telegram bot  Manual notes  │
+ │         │                    │                │              │      │
+ └─────────┼────────────────────┼────────────────┼──────────────┼─────┘
+           │                    │                │              │
+           ▼                    ▼                ▼              ▼
  ┌─────────────────────────────────────────────────────────────────┐
  │                     Memoreei MCP Server                         │
  │                                                                 │
@@ -45,10 +45,11 @@ No SaaS. No mandatory API keys. Your data stays on your machine.
  │  │              │  │                 │  │                  │   │
  │  │  whatsapp.py │  │  FTS5 (BM25)    │  │  search_memory   │   │
  │  │  discord.py  │  │  + vector cosine│  │  get_context     │   │
- │  │  manual add  │  │  + RRF fusion   │  │  add_memory      │   │
- │  └──────┬───────┘  └────────┬────────┘  │  list_sources    │   │
- │         │                   │           │  ingest_whatsapp │   │
- │         ▼                   ▼           │  sync_discord    │   │
+ │  │  telegram.py │  │  + RRF fusion   │  │  add_memory      │   │
+ │  │  manual add  │  │                 │  │  list_sources    │   │
+ │  └──────┬───────┘  └────────┬────────┘  │  ingest_whatsapp │   │
+ │         │                   │           │  sync_discord    │   │
+ │         │                   │           │  sync_telegram   │   │
  │  ┌─────────────────────────────────┐    └────────┬─────────┘   │
  │  │         SQLite Database         │             │             │
  │  │  memories + FTS5 index          │             │             │
@@ -136,7 +137,7 @@ python scripts/seed_data.py
 
 ## MCP Tools
 
-All 6 tools are available to any connected MCP client.
+All 7 tools are available to any connected MCP client.
 
 ### `search_memory`
 
@@ -218,12 +219,25 @@ Pull new messages from a Discord channel into memory. Uses checkpoint-based incr
 
 ---
 
+### `sync_telegram`
+
+Pull new messages received by the Telegram bot into memory via the Bot API (`getUpdates`). Uses checkpoint-based incremental sync — only fetches messages the bot has received since the last sync.
+
+Requires the bot to be a member of the target group, or for users to have sent direct messages to the bot.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `chat_id` | string | `TELEGRAM_CHAT_ID` env var | Telegram chat ID to filter (positive = DM, negative = group). Syncs all chats if omitted. |
+
+---
+
 ## Supported Sources
 
 | Source | How to Ingest | Source ID Format |
 |--------|---------------|------------------|
 | **WhatsApp** | Export chat → `.txt` → `ingest_whatsapp` | `whatsapp:<chat_name>` |
 | **Discord** | Set bot token + channel ID → `sync_discord` | `discord:<channel_id>` |
+| **Telegram** | Set bot token → `sync_telegram` | `telegram:<chat_id>` |
 | **Manual** | `add_memory` tool | `manual` (or custom label) |
 
 More connectors are easy to add — each is a standalone parser that produces `MemoryItem` objects.
@@ -247,6 +261,12 @@ DISCORD_BOT_TOKEN=your_bot_token_here
 # Discord channel to sync (default for sync_discord)
 DISCORD_CHANNEL_ID=1234567890123456789
 
+# Telegram bot token for syncing messages via sync_telegram
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+
+# Default Telegram chat ID for sync_telegram (positive = DM, negative = group)
+# TELEGRAM_CHAT_ID=
+
 # SQLite database path
 MEMOREEI_DB_PATH=./memoreei.db
 ```
@@ -257,6 +277,8 @@ MEMOREEI_DB_PATH=./memoreei.db
 | `OPENAI_API_KEY` | — | Required only if using OpenAI embeddings |
 | `DISCORD_BOT_TOKEN` | — | Discord bot token for `sync_discord` |
 | `DISCORD_CHANNEL_ID` | — | Default channel for `sync_discord` |
+| `TELEGRAM_BOT_TOKEN` | — | Telegram bot token for `sync_telegram` (create via @BotFather) |
+| `TELEGRAM_CHAT_ID` | — | Default chat/group ID for `sync_telegram` |
 | `MEMOREEI_DB_PATH` | `./memoreei.db` | SQLite database path |
 
 ---
@@ -320,8 +342,9 @@ memoreei/
 │   │   ├── embeddings.py      # FastEmbed (local ONNX) + OpenAI providers
 │   │   └── hybrid.py          # RRF fusion of BM25 + vector results
 │   └── connectors/
-│       ├── whatsapp.py        # WhatsApp .txt export parser
-│       └── discord_connector.py  # Discord REST API + checkpoint sync
+│       ├── whatsapp.py           # WhatsApp .txt export parser
+│       ├── discord_connector.py  # Discord REST API + checkpoint sync
+│       └── telegram_connector.py # Telegram Bot API + checkpoint sync
 ├── tests/                     # Unit + integration tests
 ├── data/samples/              # Sample WhatsApp exports for testing
 ├── scripts/

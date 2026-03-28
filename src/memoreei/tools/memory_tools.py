@@ -8,6 +8,11 @@ from typing import Any
 from ulid import ULID
 
 from memoreei.connectors.discord_connector import sync_discord
+from memoreei.connectors.email_connector import sync_email
+from memoreei.connectors.mastodon_connector import sync_mastodon
+from memoreei.connectors.matrix_connector import sync_matrix
+from memoreei.connectors.slack_connector import sync_slack
+from memoreei.connectors.telegram_connector import sync_telegram
 from memoreei.connectors.whatsapp import parse_whatsapp_export
 from memoreei.search.embeddings import EmbeddingProvider
 from memoreei.search.hybrid import HybridSearch
@@ -98,3 +103,31 @@ class MemoryTools:
 
     async def sync_discord_tool(self, channel_id: str | None = None) -> dict[str, Any]:
         return await sync_discord(db=self.db, embedder=self.embedder, channel_id=channel_id)
+
+    async def sync_telegram_tool(self, chat_id: str | None = None) -> dict[str, Any]:
+        return await sync_telegram(db=self.db, embedder=self.embedder, chat_id=chat_id)
+
+    async def sync_matrix_tool(self, room_id: str | None = None) -> dict[str, Any]:
+        return await sync_matrix(db=self.db, embedder=self.embedder, room_id=room_id)
+
+    async def sync_slack_tool(self, channel_id: str | None = None) -> dict[str, Any]:
+        return await sync_slack(db=self.db, embedder=self.embedder, channel_id=channel_id)
+
+    async def sync_email_tool(
+        self, folder: str = "INBOX", max_emails: int = 200
+    ) -> dict[str, Any]:
+        return await sync_email(db=self.db, embedder=self.embedder, folder=folder, max_emails=max_emails)
+
+    async def sync_mastodon_tool(
+        self,
+        instance: str | None = None,
+        hashtag: str | None = None,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        return await sync_mastodon(
+            db=self.db,
+            embedder=self.embedder,
+            instance=instance,
+            hashtag=hashtag,
+            access_token=access_token,
+        )
