@@ -31,9 +31,9 @@ Each app is standalone — no imports from the main memoreei package. They conne
 **Tech:** Python, cron-driven or on-demand
 **Status:** ⬜ Not started
 
-### 5. 🔍 Memory Search UI
-**What:** Clean web search interface for your memories. Type a query, see results with sources, timestamps, participants, and context. Like a personal Google for your life.
-**Tech:** FastAPI + HTMX or simple HTML/JS, self-hosted
+### 5. 🕵️ Contact Dossier
+**What:** Pick any person and get a full dossier — every conversation across all platforms, key topics, timeline, sentiment. A CRM for your actual relationships.
+**Tech:** Flask/FastAPI, Pico CSS, self-hosted via Caddy
 **URL:** TBD
 **Status:** ⬜ Not started
 

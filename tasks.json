@@ -66,7 +66,7 @@
   {
     "id": "readme",
     "name": "Write README.md",
-    "prompt": "Write a professional README.md. Include: 1) 🧠 Memoreei — 'Your AI's long-term memory', 2) What it does (MCP server for personal memory, hybrid search, multi-source), 3) ASCII architecture diagram, 4) Quick start, 5) MCP tools docs (all 6), 6) Supported sources, 7) Config, 8) How hybrid search works, 9) Privacy (local-first, no cloud), 10) MIT license. Frame it as infrastructure for AI agents, NOT a RAG chatbot. Make it hackathon-demo worthy with personality.",
+    "prompt": "Write a professional README.md. Include: 1) \ud83e\udde0 Memoreei \u2014 'Your AI's long-term memory', 2) What it does (MCP server for personal memory, hybrid search, multi-source), 3) ASCII architecture diagram, 4) Quick start, 5) MCP tools docs (all 6), 6) Supported sources, 7) Config, 8) How hybrid search works, 9) Privacy (local-first, no cloud), 10) MIT license. Frame it as infrastructure for AI agents, NOT a RAG chatbot. Make it hackathon-demo worthy with personality.",
     "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000; assert 'search_memory' in content; assert 'MIT' in content; print('readme ok')\"",
     "retries": 2,
     "priority": "P0"
@@ -81,8 +81,8 @@
   },
   {
     "id": "done-commit",
-    "name": "DONE commit — core complete",
-    "prompt": "Stage ALL changes. Commit with message 'DONE: Memoreei MCP server — hackathon ready'. Push to origin main. Then post a message to Discord channel REDACTED_CHANNEL_ID_4 (#projects) using the Elliot bot token saying: '✅ **Memoreei core is DONE.** All tests passing, demo ready. Moving to nice-to-haves. Repo: https://github.com/CalebChristiansen/Memoreei'",
+    "name": "DONE commit \u2014 core complete",
+    "prompt": "Stage ALL changes. Commit with message 'DONE: Memoreei MCP server \u2014 hackathon ready'. Push to origin main. Then post a message to Discord channel REDACTED_CHANNEL_ID_4 (#projects) using the Elliot bot token saying: '\u2705 **Memoreei core is DONE.** All tests passing, demo ready. Moving to nice-to-haves. Repo: https://github.com/CalebChristiansen/Memoreei'",
     "test": "git log --oneline -1 | grep -q 'DONE'",
     "retries": 2,
     "priority": "P0"
@@ -90,7 +90,7 @@
   {
     "id": "extra-telegram",
     "name": "Nice-to-have: Telegram connector",
-    "prompt": "Add a Telegram connector to Memoreei. Steps:\n1. Research how to create a Telegram bot (use @BotFather via Telegram API or sign up at https://my.telegram.org). Use the REDACTED_ACCOUNT Google account if needed (password in Bitwarden item 'Google login').\n2. Create the bot, get the token, store in .env as TELEGRAM_BOT_TOKEN\n3. Write src/memoreei/connectors/telegram_connector.py — fetch messages from a chat/group using Telegram Bot API\n4. Add a sync_telegram MCP tool\n5. Send some test messages to the bot\n6. Test sync + search works\n7. Update README with Telegram as a supported source\n\nIf Telegram requires a phone number you can't provide, skip it and create a file at logs/extra-telegram.skip explaining why.",
+    "prompt": "Add a Telegram connector to Memoreei. Steps:\n1. Research how to create a Telegram bot (use @BotFather via Telegram API or sign up at https://my.telegram.org). Use the REDACTED_ACCOUNT Google account if needed (password in Bitwarden item 'Google login').\n2. Create the bot, get the token, store in .env as TELEGRAM_BOT_TOKEN\n3. Write src/memoreei/connectors/telegram_connector.py \u2014 fetch messages from a chat/group using Telegram Bot API\n4. Add a sync_telegram MCP tool\n5. Send some test messages to the bot\n6. Test sync + search works\n7. Update README with Telegram as a supported source\n\nIf Telegram requires a phone number you can't provide, skip it and create a file at logs/extra-telegram.skip explaining why.",
     "test": "test -f logs/extra-telegram.done || test -f logs/extra-telegram.skip",
     "retries": 1,
     "priority": "P1"
@@ -114,7 +114,7 @@
   {
     "id": "extra-email",
     "name": "Nice-to-have: Gmail IMAP connector",
-    "prompt": "Add email ingestion. Steps:\n1. The Gmail account is REDACTED_EMAIL (password in Bitwarden item 'Google login')\n2. Enable IMAP access or create an app password. Research current Gmail IMAP setup requirements.\n3. Write src/memoreei/connectors/email_connector.py — IMAP sync, parse emails, chunk, embed\n4. Add sync_email MCP tool\n5. Test with real inbox\n\nDo NOT get the account banned. Be gentle with rate limits. If IMAP requires 2FA setup you can't complete, skip.",
+    "prompt": "Add email ingestion. Steps:\n1. The Gmail account is REDACTED_EMAIL (password in Bitwarden item 'Google login')\n2. Enable IMAP access or create an app password. Research current Gmail IMAP setup requirements.\n3. Write src/memoreei/connectors/email_connector.py \u2014 IMAP sync, parse emails, chunk, embed\n4. Add sync_email MCP tool\n5. Test with real inbox\n\nDo NOT get the account banned. Be gentle with rate limits. If IMAP requires 2FA setup you can't complete, skip.",
     "test": "test -f logs/extra-email.done || test -f logs/extra-email.skip",
     "retries": 1,
     "priority": "P1"
@@ -122,7 +122,7 @@
   {
     "id": "extra-service5",
     "name": "Nice-to-have: 5th chat service",
-    "prompt": "Find and add one more chat service connector. Research what services have easy public APIs that don't require phone verification or complex OAuth. Options: IRC (Libera.Chat — no signup needed), Zulip (free cloud, API-first), Revolt (open-source Discord alternative), or Mastodon (ActivityPub API). Pick the easiest one, build the connector, test it.\n\nIf nothing works easily, skip and create logs/extra-service5.skip.",
+    "prompt": "Find and add one more chat service connector. Research what services have easy public APIs that don't require phone verification or complex OAuth. Options: IRC (Libera.Chat \u2014 no signup needed), Zulip (free cloud, API-first), Revolt (open-source Discord alternative), or Mastodon (ActivityPub API). Pick the easiest one, build the connector, test it.\n\nIf nothing works easily, skip and create logs/extra-service5.skip.",
     "test": "test -f logs/extra-service5.done || test -f logs/extra-service5.skip",
     "retries": 1,
     "priority": "P1"
@@ -130,7 +130,7 @@
   {
     "id": "usecase-moviering",
     "name": "Nice-to-have: Movie Ring web app",
-    "prompt": "Build a standalone web app in usecases/moviering/. It should:\n1. Connect to memoreei.db and search for movie mentions in conversations\n2. Use TMDB API (free, sign up at themoviedb.org with REDACTED_EMAIL) to get movie posters and info\n3. Display a pretty web page showing: movie poster, title, who mentioned it, their exact quote, when they said it\n4. Use a nice CSS framework (Pico CSS or similar — no npm needed)\n5. Run as a simple Python web server (Flask or FastAPI)\n6. Self-host: create a systemd service and Caddy config so it's accessible via Tailscale\n7. Update usecases/apps.md with the URL and instructions\n\nMake it visually impressive. This is for a hackathon demo.",
+    "prompt": "Build a standalone web app in usecases/moviering/. It should:\n1. Connect to memoreei.db and search for movie mentions in conversations\n2. Use TMDB API (free, sign up at themoviedb.org with REDACTED_EMAIL) to get movie posters and info\n3. Display a pretty web page showing: movie poster, title, who mentioned it, their exact quote, when they said it\n4. Use a nice CSS framework (Pico CSS or similar \u2014 no npm needed)\n5. Run as a simple Python web server (Flask or FastAPI)\n6. Self-host: create a systemd service and Caddy config so it's accessible via Tailscale\n7. Update usecases/apps.md with the URL and instructions\n\nMake it visually impressive. This is for a hackathon demo.",
     "test": "test -f usecases/moviering/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/moviering/app.py'); print('moviering exists')\"",
     "retries": 2,
     "priority": "P2"
@@ -138,16 +138,16 @@
   {
     "id": "usecase-memorybot",
     "name": "Nice-to-have: Discord Memory Bot",
-    "prompt": "Build a Discord bot in usecases/memorybot/ that:\n1. Joins the Karamja server\n2. Responds to mentions or a !remember command\n3. Queries memoreei.db for relevant memories\n4. Responds with formatted results (source, timestamp, content)\n5. Create a new bot in Discord Developer Portal using REDACTED_ACCOUNT account or use an existing token\n6. Update usecases/apps.md\n\nKeep it simple — just search and respond.",
+    "prompt": "Build a Discord bot in usecases/memorybot/ that:\n1. Joins the Karamja server\n2. Responds to mentions or a !remember command\n3. Queries memoreei.db for relevant memories\n4. Responds with formatted results (source, timestamp, content)\n5. Create a new bot in Discord Developer Portal using REDACTED_ACCOUNT account or use an existing token\n6. Update usecases/apps.md\n\nKeep it simple \u2014 just search and respond.",
     "test": "test -f usecases/memorybot/bot.py",
     "retries": 1,
     "priority": "P2"
   },
   {
-    "id": "usecase-searchui",
-    "name": "Nice-to-have: Memory Search Web UI",
-    "prompt": "Build a clean web search UI in usecases/searchui/. A single-page app where you type a query and see memory results with sources, timestamps, and participants. Use HTMX or plain JS. Make it look good. Self-host via Caddy. Update usecases/apps.md.",
-    "test": "test -f usecases/searchui/app.py || test -f usecases/searchui/index.html",
+    "id": "usecase-dossier",
+    "name": "Nice-to-have: Contact Dossier web app",
+    "prompt": "Build a standalone web app in usecases/dossier/. It should:\n1. Connect to memoreei.db and extract all unique participants\n2. For each person: pull all conversations involving them, across all sources\n3. Display a slick web page with:\n   - Person selector (dropdown or search)\n   - Timeline of all conversations with that person, grouped by source\n   - Key topics extracted (most common words/themes)\n   - Total message count, first/last interaction dates\n   - Actual message quotes with timestamps and source badges\n   - Sentiment vibe (positive/neutral/negative based on simple keyword analysis)\n4. Use a nice CSS framework (Pico CSS or Water.css \u2014 no npm)\n5. Run as Flask/FastAPI server\n6. Self-host via Caddy on Tailscale\n7. Update usecases/apps.md with URL and instructions\n\nMake it visually impressive and useful. Think 'CRM for your actual relationships.' This is for a hackathon demo.",
+    "test": "test -f usecases/dossier/app.py && python3 -c \"import importlib.util; spec=importlib.util.spec_from_file_location('app','/home/fi/.openclaw/workspace-elliot/projects/memoreei/usecases/dossier/app.py'); print('dossier exists')\"",
     "retries": 1,
     "priority": "P2"
   },
