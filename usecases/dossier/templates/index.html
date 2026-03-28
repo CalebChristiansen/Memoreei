@@ -573,7 +573,35 @@
       <div class="sidebar-header">
         <h2>🕵️ Dossier</h2>
         <p>{{ people|length }} people across all sources</p>
+        <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.6rem;">
+          <button id="refresh-btn" onclick="doRefresh()" style="background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:0.25rem 0.8rem;cursor:pointer;font-size:0.78rem;">&#8635; Refresh</button>
+          <span id="refresh-status" style="font-size:0.75rem;color:var(--text-dim);"></span>
+        </div>
       </div>
+      <script>
+      async function doRefresh() {
+        const btn = document.getElementById('refresh-btn');
+        const status = document.getElementById('refresh-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Syncing…';
+        status.textContent = '';
+        try {
+          const r = await fetch('/api/refresh');
+          const data = await r.json();
+          if (data.status === 'ok') {
+            const n = data.synced ?? 0;
+            status.textContent = n > 0 ? `✓ ${n} new` : '✓ Up to date';
+            if (n > 0) setTimeout(() => location.reload(), 1400);
+          } else {
+            status.textContent = `✗ ${data.error}`;
+          }
+        } catch (e) {
+          status.textContent = `✗ ${e}`;
+        }
+        btn.disabled = false;
+        btn.textContent = '↻ Refresh';
+      }
+      </script>
       <div class="search-box">
         <input type="text" id="search" placeholder="Search people..." autocomplete="off">
       </div>

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 import time
 from typing import Any
 
@@ -15,6 +17,49 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 DEFAULT_CHANNEL_ID = "REDACTED_CHANNEL_ID"
 SOURCE_PREFIX = "discord"
 FETCH_LIMIT = 100  # Discord max per request
+_MIN_REQUEST_INTERVAL: float = 1.0  # Never more than 1 req/sec
+
+# Module-level rate limit tracking (shared across all connector instances)
+_last_request_time: float = 0.0
+_rate_limit_remaining: int = 5
+_rate_limit_reset: float = 0.0
+
+
+async def _enforce_rate_limit() -> None:
+    """Sleep as needed to stay under 1 req/sec and respect X-RateLimit headers."""
+    global _last_request_time, _rate_limit_remaining, _rate_limit_reset
+
+    # Enforce minimum 1-second gap between requests
+    elapsed = time.monotonic() - _last_request_time
+    if elapsed < _MIN_REQUEST_INTERVAL:
+        await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+
+    # If rate limit bucket is nearly empty, wait until it resets
+    if _rate_limit_remaining <= 1:
+        reset_in = _rate_limit_reset - time.time()
+        if reset_in > 0:
+            print(
+                f"[discord] Rate limit low ({_rate_limit_remaining} remaining), "
+                f"sleeping {reset_in:.1f}s until reset",
+                file=sys.stderr,
+            )
+            await asyncio.sleep(reset_in + 0.2)
+
+
+def _update_rate_limit_headers(resp: aiohttp.ClientResponse) -> None:
+    global _rate_limit_remaining, _rate_limit_reset
+    try:
+        remaining = resp.headers.get("X-RateLimit-Remaining")
+        if remaining is not None:
+            _rate_limit_remaining = int(remaining)
+    except (ValueError, TypeError):
+        pass
+    try:
+        reset_ts = resp.headers.get("X-RateLimit-Reset")
+        if reset_ts is not None:
+            _rate_limit_reset = float(reset_ts)
+    except (ValueError, TypeError):
+        pass
 
 
 class DiscordConnector:
@@ -58,24 +103,49 @@ class DiscordConnector:
         self, channel_id: str, after: str | None = None
     ) -> list[dict]:
         """Fetch messages from Discord channel. Returns list newest-first."""
+        global _last_request_time
+
+        await _enforce_rate_limit()
+
         url = f"{DISCORD_API_BASE}/channels/{channel_id}/messages"
         params: dict[str, Any] = {"limit": FETCH_LIMIT}
         if after:
             params["after"] = after
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self._headers, params=params) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                elif resp.status == 401:
-                    raise ValueError("Discord bot token is invalid or unauthorized")
-                elif resp.status == 403:
-                    raise ValueError(f"Bot does not have access to channel {channel_id}")
-                elif resp.status == 404:
-                    raise ValueError(f"Channel {channel_id} not found")
-                else:
-                    text = await resp.text()
-                    raise RuntimeError(f"Discord API error {resp.status}: {text}")
+        backoff = 1.0
+        for attempt in range(5):
+            _last_request_time = time.monotonic()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self._headers, params=params) as resp:
+                    _update_rate_limit_headers(resp)
+
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 429:
+                        retry_after_str = resp.headers.get("Retry-After", str(backoff))
+                        try:
+                            retry_after = float(retry_after_str)
+                        except (ValueError, TypeError):
+                            retry_after = backoff
+                        print(
+                            f"[discord] 429 rate limited on channel {channel_id}, "
+                            f"retry after {retry_after:.1f}s (attempt {attempt + 1}/5)",
+                            file=sys.stderr,
+                        )
+                        await asyncio.sleep(retry_after)
+                        backoff = min(backoff * 2, 60.0)
+                        continue
+                    elif resp.status == 401:
+                        raise ValueError("Discord bot token is invalid or unauthorized")
+                    elif resp.status == 403:
+                        raise ValueError(f"Bot does not have access to channel {channel_id}")
+                    elif resp.status == 404:
+                        raise ValueError(f"Channel {channel_id} not found")
+                    else:
+                        text = await resp.text()
+                        raise RuntimeError(f"Discord API error {resp.status}: {text}")
+
+        raise RuntimeError(f"Discord API: too many rate limit retries for channel {channel_id}")
 
     def _to_memory_item(self, msg: dict, channel_id: str) -> MemoryItem:
         author = msg.get("author", {})

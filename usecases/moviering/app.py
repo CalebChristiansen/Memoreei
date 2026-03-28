@@ -31,27 +31,20 @@ if env_file.exists():
             os.environ.setdefault(k.strip(), v.strip())
 
 _db_raw = os.environ.get("MEMOREEI_DB_PATH", str(_project_root / "memoreei.db"))
-# Resolve relative paths against project root so the service can run from any cwd
 DB_PATH = str((_project_root / _db_raw).resolve() if not Path(_db_raw).is_absolute() else Path(_db_raw))
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_IMG = "https://image.tmdb.org/t/p/w500"
 
 # ── Movie detection ────────────────────────────────────────────────────────────
-# Regex: extract explicit movie title mentions
 TITLE_PATTERNS = [
-    # "The Matrix had sequels" / "like the end of Inception"
     r'\b(The\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})\b',
-    # "watched Dune" / "seen Oppenheimer"
     r'(?:watched?|watching|seen?|loved?|recommend(?:ed)?|rewatch)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
-    # Quoted titles: "Inception" or 'The Godfather'
     r'"([A-Z][^"]{2,50})"',
     r"'([A-Z][^']{2,50})'",
-    # "like the end of Inception"
     r'(?:end of|beginning of|like|loved?|hate[sd]?|enjoyed?)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
 ]
 
-# FTS search keywords
 MOVIE_FTS = "Matrix OR Inception OR movie OR film OR watched OR cinema OR netflix OR streaming OR sequel OR prequel OR trilogy OR directed OR starring OR screenplay"
 
 STOP_TITLES = {
@@ -118,10 +111,9 @@ def extract_candidates(text: str) -> list[str]:
                 continue
             if title.lower() in STOP_TITLES:
                 continue
-            # Must start with capital and not be a common filler phrase
             if title[0].isupper():
                 found.append(title)
-    return list(dict.fromkeys(found))  # dedupe preserving order
+    return list(dict.fromkeys(found))
 
 
 @lru_cache(maxsize=500)
@@ -154,10 +146,8 @@ def tmdb_search(title: str) -> dict | None:
 
 
 def parse_speaker(content: str, participants: list[str]) -> str:
-    """Extract the actual speaker name, stripping it from the message if needed."""
     if not content:
         return participants[0] if participants else "Unknown"
-    # Messages often formatted as "Name: message"
     if ": " in content:
         name = content.split(": ", 1)[0]
         if len(name) < 40 and not name.startswith("http"):
@@ -166,7 +156,6 @@ def parse_speaker(content: str, participants: list[str]) -> str:
 
 
 def strip_speaker(content: str) -> str:
-    """Remove 'Speaker: ' prefix from content."""
     if ": " in content:
         parts = content.split(": ", 1)
         if len(parts[0]) < 40 and not parts[0].startswith("http"):
@@ -187,15 +176,14 @@ def fmt_platform(source: str) -> str:
     return (source or "unknown").split(":")[0].lower()
 
 
-def process_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
+def process_messages(messages: list[dict], sort_by: str = "mentions") -> tuple[list[dict], list[dict]]:
     """
-    Returns (movie_cards, quote_cards).
-    movie_cards: messages where we found + matched a TMDB movie.
-    quote_cards: everything else that's movie-related.
+    Returns (movie_cards, quote_cards) with aggregated mention stats.
+    movie_cards sorted by sort_by: 'mentions' | 'recent' | 'people'
     """
-    movie_cards: list[dict] = []
+    # tmdb_id -> aggregated data
+    movie_data: dict[int, dict] = {}
     quote_cards: list[dict] = []
-    seen_movie_ids: set[int] = set()
     seen_message_ids: set[str] = set()
 
     for msg in messages:
@@ -214,7 +202,7 @@ def process_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
         platform = fmt_platform(source)
         source_label = fmt_source(source)
 
-        base = {
+        mention = {
             "id": msg_id,
             "quote": quote,
             "speaker": speaker,
@@ -231,21 +219,67 @@ def process_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
                 info = tmdb_search(candidate)
                 if info:
                     tid = info["tmdb_id"]
-                    if tid not in seen_movie_ids:
-                        seen_movie_ids.add(tid)
-                        movie_cards.append({**base, "movie": info, "matched_title": candidate})
-                    else:
-                        # Extra quote for same movie
-                        existing = next((c for c in movie_cards if c["movie"]["tmdb_id"] == tid), None)
-                        if existing:
-                            existing.setdefault("extra_quotes", []).append(
-                                {"speaker": speaker, "quote": quote, "date": date_str, "source": source_label}
-                            )
+                    if tid not in movie_data:
+                        movie_data[tid] = {
+                            "movie": info,
+                            "mentions": [],
+                            "seen_msg_ids": set(),
+                        }
+                    if msg_id not in movie_data[tid]["seen_msg_ids"]:
+                        movie_data[tid]["mentions"].append(mention)
+                        movie_data[tid]["seen_msg_ids"].add(msg_id)
                     matched = True
                     break
 
         if not matched:
-            quote_cards.append(base)
+            quote_cards.append(mention)
+
+    # Build final movie cards with aggregated stats
+    movie_cards = []
+    for tid, data in movie_data.items():
+        mentions = data["mentions"]
+        # Sort mentions by timestamp ascending for first/last
+        mentions_sorted = sorted(mentions, key=lambda m: m["ts"] or 0)
+
+        speakers = [m["speaker"] for m in mentions]
+        unique_people = list(dict.fromkeys(speakers))
+
+        timestamps = [m["ts"] for m in mentions if m["ts"]]
+        first_seen = datetime.fromtimestamp(min(timestamps)).strftime("%b %d, %Y") if timestamps else "Unknown"
+        last_seen = datetime.fromtimestamp(max(timestamps)).strftime("%b %d, %Y") if timestamps else "Unknown"
+        last_ts = max(timestamps) if timestamps else 0
+
+        # Group by person
+        by_person: dict[str, list] = {}
+        for m in mentions:
+            by_person.setdefault(m["speaker"], []).append(m)
+
+        movie_cards.append({
+            "movie": data["movie"],
+            "mentions": mentions,
+            "mention_count": len(mentions),
+            "unique_people": unique_people,
+            "unique_people_count": len(unique_people),
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "last_ts": last_ts,
+            "by_person": [{"speaker": sp, "quotes": qs} for sp, qs in by_person.items()],
+            # primary quote/speaker for compat
+            "quote": mentions_sorted[0]["quote"] if mentions_sorted else "",
+            "speaker": mentions_sorted[0]["speaker"] if mentions_sorted else "Unknown",
+            "date": mentions_sorted[0]["date"] if mentions_sorted else "Unknown",
+            "platform": mentions_sorted[0]["platform"] if mentions_sorted else "unknown",
+            "source": mentions_sorted[0]["source"] if mentions_sorted else "Unknown",
+            "ts": mentions_sorted[0]["ts"] if mentions_sorted else 0,
+        })
+
+    # Sort
+    if sort_by == "recent":
+        movie_cards.sort(key=lambda c: c["last_ts"], reverse=True)
+    elif sort_by == "people":
+        movie_cards.sort(key=lambda c: c["unique_people_count"], reverse=True)
+    else:  # mentions (default)
+        movie_cards.sort(key=lambda c: c["mention_count"], reverse=True)
 
     return movie_cards, quote_cards
 
@@ -254,13 +288,18 @@ def process_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
 
 @app.route("/")
 def index():
+    sort_by = request.args.get("sort", "mentions")
+    if sort_by not in ("mentions", "recent", "people"):
+        sort_by = "mentions"
+
     messages = fetch_movie_messages(400)
-    movie_cards, quote_cards = process_messages(messages)
+    movie_cards, quote_cards = process_messages(messages, sort_by=sort_by)
 
     all_platforms = sorted({c["platform"] for c in (movie_cards + quote_cards)})
     total_sources = len(set(
         (msg.get("source") or "").split(":")[0] for msg in messages
     ))
+    total_mentions = sum(c["mention_count"] for c in movie_cards) + len(quote_cards)
 
     return render_template(
         "index.html",
@@ -268,18 +307,42 @@ def index():
         quote_cards=quote_cards,
         total_messages=len(messages),
         total_movies=len(movie_cards),
+        total_mentions=total_mentions,
         all_platforms=all_platforms,
         has_tmdb=bool(TMDB_API_KEY),
         total_sources=total_sources,
         db_path=DB_PATH,
+        sort_by=sort_by,
     )
 
 
 @app.route("/api/movies")
 def api_movies():
+    sort_by = request.args.get("sort", "mentions")
     messages = fetch_movie_messages(400)
-    movie_cards, quote_cards = process_messages(messages)
+    movie_cards, quote_cards = process_messages(messages, sort_by=sort_by)
     return jsonify({"movies": movie_cards, "quotes": quote_cards})
+
+
+@app.route("/api/refresh")
+def api_refresh():
+    """Trigger an incremental Discord sync and return counts."""
+    import asyncio
+    try:
+        from memoreei.connectors.discord_connector import sync_discord
+        from memoreei.search.embeddings import get_provider
+        from memoreei.storage.database import Database
+
+        async def do_refresh():
+            db = Database(db_path=DB_PATH)
+            await db.connect()
+            embedder = get_provider()
+            return await sync_discord(db=db, embedder=embedder)
+
+        result = asyncio.run(do_refresh())
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @app.route("/health")

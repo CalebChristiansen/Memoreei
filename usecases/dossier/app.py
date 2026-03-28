@@ -311,6 +311,27 @@ def api_dossier(name: str):
     return jsonify(build_dossier(name))
 
 
+@app.route("/api/refresh")
+def api_refresh():
+    """Trigger an incremental Discord sync and return counts."""
+    import asyncio
+    try:
+        from memoreei.connectors.discord_connector import sync_discord
+        from memoreei.search.embeddings import get_provider
+        from memoreei.storage.database import Database
+
+        async def do_refresh():
+            db = Database(db_path=DB_PATH)
+            await db.connect()
+            embedder = get_provider()
+            return await sync_discord(db=db, embedder=embedder)
+
+        result = asyncio.run(do_refresh())
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/health")
 def health():
     try:

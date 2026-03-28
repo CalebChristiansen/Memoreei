@@ -8,6 +8,8 @@
   <style>
     :root {
       --cinema-gold: #f5c518;
+      --cinema-silver: #c0c0c0;
+      --cinema-bronze: #cd7f32;
       --cinema-dark: #0d0d0d;
       --cinema-card: #1a1a2e;
       --cinema-card2: #16213e;
@@ -76,9 +78,7 @@
       flex-wrap: wrap;
       margin-top: 1.5rem;
     }
-    .stat {
-      text-align: center;
-    }
+    .stat { text-align: center; }
     .stat-num {
       font-size: 2rem;
       font-weight: 800;
@@ -127,6 +127,7 @@
       margin: 0 0 1.5rem;
       padding-bottom: 0.75rem;
       border-bottom: 1px solid var(--cinema-border);
+      flex-wrap: wrap;
     }
     .section-heading h2 {
       margin: 0;
@@ -143,12 +144,64 @@
       border-radius: 20px;
     }
 
+    /* ── Sort Controls ── */
+    .sort-controls {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .sort-label {
+      font-size: 0.8rem;
+      color: var(--cinema-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .sort-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--cinema-muted);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .sort-btn:hover {
+      border-color: var(--cinema-gold);
+      color: var(--cinema-gold);
+    }
+    .sort-btn.active {
+      background: rgba(245,197,24,0.2);
+      border-color: var(--cinema-gold);
+      color: var(--cinema-gold);
+      font-weight: 700;
+    }
+
     /* ── Movie Cards Grid ── */
     .movies-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 1.5rem;
       margin-bottom: 3rem;
+    }
+
+    /* ── Rank styles ── */
+    .rank-1 {
+      border-color: var(--cinema-gold) !important;
+      box-shadow: 0 0 20px rgba(245,197,24,0.2);
+      grid-column: span 1;
+    }
+    .rank-2 {
+      border-color: var(--cinema-silver) !important;
+      box-shadow: 0 0 12px rgba(192,192,192,0.15);
+    }
+    .rank-3 {
+      border-color: var(--cinema-bronze) !important;
+      box-shadow: 0 0 12px rgba(205,127,50,0.15);
     }
 
     .movie-card {
@@ -159,17 +212,57 @@
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
     .movie-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 12px 40px rgba(245,197,24,0.15);
-      border-color: rgba(245,197,24,0.4);
     }
+
+    /* ── Rank Badge ── */
+    .rank-badge {
+      position: absolute;
+      top: 0.6rem;
+      left: 0.6rem;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 900;
+      z-index: 2;
+      letter-spacing: -0.5px;
+    }
+    .rank-badge-1 { background: var(--cinema-gold); color: #000; font-size: 0.9rem; width: 2.2rem; height: 2.2rem; }
+    .rank-badge-2 { background: var(--cinema-silver); color: #000; }
+    .rank-badge-3 { background: var(--cinema-bronze); color: #fff; }
+    .rank-badge-other { background: rgba(255,255,255,0.1); color: var(--cinema-muted); font-size: 0.7rem; }
+
+    /* ── Mention Count Pill ── */
+    .mention-pill {
+      position: absolute;
+      top: 0.6rem;
+      right: 0.6rem;
+      background: rgba(233,69,96,0.9);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 12px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .mention-pill-count { font-size: 1rem; line-height: 1; }
 
     .movie-poster-area {
       display: flex;
       gap: 1rem;
       padding: 1rem;
+      padding-top: 1.5rem;
       background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
     }
     .movie-poster {
@@ -192,10 +285,7 @@
       justify-content: center;
       font-size: 2rem;
     }
-    .movie-meta {
-      flex: 1;
-      min-width: 0;
-    }
+    .movie-meta { flex: 1; min-width: 0; }
     .movie-title {
       font-size: 1.15rem;
       font-weight: 800;
@@ -209,10 +299,7 @@
       gap: 0.5rem;
       margin-bottom: 0.5rem;
     }
-    .movie-year {
-      color: var(--cinema-muted);
-      font-size: 0.85rem;
-    }
+    .movie-year { color: var(--cinema-muted); font-size: 0.85rem; }
     .movie-rating {
       background: var(--cinema-gold);
       color: #000;
@@ -239,42 +326,105 @@
     }
     .movie-tmdb-link:hover { text-decoration: underline; }
 
+    /* ── Movie Stats Row ── */
+    .movie-stats {
+      display: flex;
+      gap: 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.2);
+    }
+    .movie-stat {
+      flex: 1;
+      text-align: center;
+      padding: 0.5rem 0.25rem;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .movie-stat:last-child { border-right: none; }
+    .movie-stat-val {
+      display: block;
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--cinema-gold);
+      line-height: 1;
+    }
+    .movie-stat-lbl {
+      display: block;
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--cinema-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Date Range ── */
+    .date-range {
+      padding: 0.4rem 1rem;
+      font-size: 0.72rem;
+      color: var(--cinema-muted);
+      background: rgba(0,0,0,0.15);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .date-range-arrow { color: rgba(255,255,255,0.2); }
+
     /* ── Quotes in card ── */
     .quotes-area {
-      padding: 0 1rem 1rem;
+      padding: 0.75rem 1rem 1rem;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.6rem;
+    }
+    .person-group { }
+    .person-header {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.3rem;
+    }
+    .person-name {
+      font-weight: 700;
+      font-size: 0.82rem;
+      color: var(--cinema-gold);
+    }
+    .person-count {
+      font-size: 0.68rem;
+      background: rgba(245,197,24,0.15);
+      color: var(--cinema-gold);
+      border-radius: 10px;
+      padding: 1px 6px;
     }
     .quote-block {
       background: rgba(255,255,255,0.04);
-      border-left: 3px solid var(--cinema-gold);
+      border-left: 3px solid rgba(245,197,24,0.4);
       border-radius: 0 6px 6px 0;
-      padding: 0.6rem 0.8rem;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.3rem;
+    }
+    .person-group:first-child .quote-block:first-child {
+      border-left-color: var(--cinema-gold);
     }
     .quote-text {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       color: var(--cinema-text);
       line-height: 1.5;
-      margin: 0 0 0.35rem;
+      margin: 0 0 0.3rem;
       font-style: italic;
     }
     .quote-meta {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
       flex-wrap: wrap;
     }
-    .quote-speaker {
-      font-weight: 700;
-      font-size: 0.8rem;
-      color: var(--cinema-gold);
-    }
-    .quote-sep { color: var(--cinema-muted); font-size: 0.75rem; }
-    .quote-date { color: var(--cinema-muted); font-size: 0.75rem; }
+    .quote-speaker { font-weight: 700; font-size: 0.78rem; color: var(--cinema-gold); }
+    .quote-sep { color: var(--cinema-muted); font-size: 0.72rem; }
+    .quote-date { color: var(--cinema-muted); font-size: 0.72rem; }
     .platform-badge {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       padding: 1px 6px;
       border-radius: 10px;
       font-weight: 600;
@@ -286,6 +436,21 @@
     .platform-slack { background: rgba(74,21,75,0.4); color: #e879f9; }
     .platform-matrix { background: rgba(0,189,157,0.2); color: #4dd9c4; }
     .platform-email { background: rgba(234,88,12,0.2); color: #fb923c; }
+
+    /* ── More quotes toggle ── */
+    .more-quotes-toggle {
+      font-size: 0.75rem;
+      color: var(--cinema-muted);
+      cursor: pointer;
+      text-align: center;
+      padding: 0.25rem;
+      border-radius: 4px;
+      transition: color 0.15s;
+      user-select: none;
+    }
+    .more-quotes-toggle:hover { color: var(--cinema-gold); }
+    .extra-quotes { display: none; }
+    .extra-quotes.open { display: flex; flex-direction: column; gap: 0.6rem; }
 
     /* ── Quotes-only list (no TMDB) ── */
     .quotes-list {
@@ -305,11 +470,7 @@
       transition: border-color 0.15s;
     }
     .quote-row:hover { border-color: rgba(245,197,24,0.35); }
-    .quote-icon {
-      font-size: 1.5rem;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
+    .quote-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 2px; }
     .quote-body { flex: 1; min-width: 0; }
     .quote-content {
       font-size: 0.95rem;
@@ -347,6 +508,7 @@
     @media (max-width: 600px) {
       .hero-title { font-size: 2rem; }
       .movies-grid { grid-template-columns: 1fr; }
+      .sort-controls { margin-left: 0; }
     }
   </style>
 </head>
@@ -365,6 +527,10 @@
       <span class="stat-label">Movies Found</span>
     </div>
     <div class="stat">
+      <span class="stat-num">{{ total_mentions }}</span>
+      <span class="stat-label">Total Mentions</span>
+    </div>
+    <div class="stat">
       <span class="stat-num">{{ total_messages }}</span>
       <span class="stat-label">Messages Scanned</span>
     </div>
@@ -372,11 +538,35 @@
       <span class="stat-num">{{ total_sources }}</span>
       <span class="stat-label">Platforms</span>
     </div>
-    <div class="stat">
-      <span class="stat-num">{{ (movie_cards + quote_cards) | length }}</span>
-      <span class="stat-label">Mentions</span>
-    </div>
   </div>
+  <div style="margin-top:1.2rem;display:flex;align-items:center;justify-content:center;gap:0.8rem;">
+    <button id="refresh-btn" onclick="doRefresh()" style="background:rgba(245,197,24,0.15);color:var(--cinema-gold);border:1px solid var(--cinema-gold);border-radius:6px;padding:0.4rem 1.1rem;cursor:pointer;font-size:0.9rem;transition:background 0.2s;">&#8635; Refresh</button>
+    <span id="refresh-status" style="font-size:0.85rem;color:var(--cinema-muted);"></span>
+  </div>
+  <script>
+  async function doRefresh() {
+    const btn = document.getElementById('refresh-btn');
+    const status = document.getElementById('refresh-status');
+    btn.disabled = true;
+    btn.textContent = '⏳ Syncing…';
+    status.textContent = '';
+    try {
+      const r = await fetch('/api/refresh');
+      const data = await r.json();
+      if (data.status === 'ok') {
+        const n = data.synced ?? 0;
+        status.textContent = n > 0 ? `✓ ${n} new messages — reloading…` : '✓ Already up to date';
+        if (n > 0) setTimeout(() => location.reload(), 1400);
+      } else {
+        status.textContent = `✗ ${data.error}`;
+      }
+    } catch (e) {
+      status.textContent = `✗ ${e}`;
+    }
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh';
+  }
+  </script>
 </header>
 
 <main class="main-content">
@@ -392,13 +582,32 @@
   <!-- Movie cards with TMDB data -->
   {% if movie_cards %}
   <div class="section-heading">
-    <h2>&#127916; Matched Movies</h2>
+    <h2>&#127916; Movies by Mention Rank</h2>
     <span class="badge">{{ movie_cards | length }}</span>
+    <div class="sort-controls">
+      <span class="sort-label">Sort:</span>
+      <a href="?sort=mentions" class="sort-btn {% if sort_by == 'mentions' %}active{% endif %}">&#128293; Most Mentioned</a>
+      <a href="?sort=people" class="sort-btn {% if sort_by == 'people' %}active{% endif %}">&#128101; Most People</a>
+      <a href="?sort=recent" class="sort-btn {% if sort_by == 'recent' %}active{% endif %}">&#128336; Most Recent</a>
+    </div>
   </div>
 
   <div class="movies-grid">
     {% for card in movie_cards %}
-    <article class="movie-card">
+    {% set rank = loop.index %}
+    <article class="movie-card {% if rank == 1 %}rank-1{% elif rank == 2 %}rank-2{% elif rank == 3 %}rank-3{% endif %}">
+
+      <!-- Rank badge -->
+      <div class="rank-badge {% if rank == 1 %}rank-badge-1{% elif rank == 2 %}rank-badge-2{% elif rank == 3 %}rank-badge-3{% else %}rank-badge-other{% endif %}">
+        {% if rank == 1 %}&#127941;{% elif rank == 2 %}#2{% elif rank == 3 %}#3{% else %}#{{ rank }}{% endif %}
+      </div>
+
+      <!-- Mention count pill -->
+      <div class="mention-pill">
+        <span class="mention-pill-count">{{ card.mention_count }}</span>
+        mention{% if card.mention_count != 1 %}s{% endif %}
+      </div>
+
       <div class="movie-poster-area">
         {% if card.movie.poster_url %}
         <img class="movie-poster" src="{{ card.movie.poster_url }}" alt="{{ card.movie.title }} poster" loading="lazy">
@@ -422,28 +631,76 @@
         </div>
       </div>
 
-      <div class="quotes-area">
-        <!-- Primary quote -->
-        <div class="quote-block">
-          <p class="quote-text">"{{ card.quote }}"</p>
-          <div class="quote-meta">
-            <span class="quote-speaker">{{ card.speaker }}</span>
-            <span class="quote-sep">·</span>
-            <span class="quote-date">{{ card.date }}</span>
-            <span class="platform-badge platform-{{ card.platform }}">{{ card.platform }}</span>
-          </div>
+      <!-- Stats row -->
+      <div class="movie-stats">
+        <div class="movie-stat">
+          <span class="movie-stat-val">{{ card.mention_count }}</span>
+          <span class="movie-stat-lbl">Mentions</span>
         </div>
-        <!-- Extra quotes if same movie mentioned multiple times -->
-        {% for extra in card.get('extra_quotes', [])[:2] %}
-        <div class="quote-block">
-          <p class="quote-text">"{{ extra.quote }}"</p>
-          <div class="quote-meta">
-            <span class="quote-speaker">{{ extra.speaker }}</span>
-            <span class="quote-sep">·</span>
-            <span class="quote-date">{{ extra.date }}</span>
+        <div class="movie-stat">
+          <span class="movie-stat-val">{{ card.unique_people_count }}</span>
+          <span class="movie-stat-lbl">People</span>
+        </div>
+        <div class="movie-stat">
+          <span class="movie-stat-val">{{ card.first_seen }}</span>
+          <span class="movie-stat-lbl">First Seen</span>
+        </div>
+        <div class="movie-stat">
+          <span class="movie-stat-val">{{ card.last_seen }}</span>
+          <span class="movie-stat-lbl">Last Seen</span>
+        </div>
+      </div>
+
+      <!-- Quotes grouped by person -->
+      <div class="quotes-area">
+        {% set show_limit = 2 %}
+        {% for person in card.by_person[:show_limit] %}
+        <div class="person-group">
+          <div class="person-header">
+            <span class="person-name">{{ person.speaker }}</span>
+            {% if person.quotes | length > 1 %}
+            <span class="person-count">{{ person.quotes | length }}x</span>
+            {% endif %}
           </div>
+          {% for q in person.quotes[:2] %}
+          <div class="quote-block">
+            <p class="quote-text">"{{ q.quote[:200] }}{% if q.quote | length > 200 %}…{% endif %}"</p>
+            <div class="quote-meta">
+              <span class="quote-date">{{ q.date }}</span>
+              <span class="platform-badge platform-{{ q.platform }}">{{ q.platform }}</span>
+            </div>
+          </div>
+          {% endfor %}
         </div>
         {% endfor %}
+
+        {% if card.by_person | length > show_limit %}
+        {% set extra_count = (card.by_person | length) - show_limit %}
+        <div class="more-quotes-toggle" onclick="toggleExtra(this)">
+          &#43; {{ extra_count }} more person{% if extra_count != 1 %}s{% endif %} — click to expand
+        </div>
+        <div class="extra-quotes">
+          {% for person in card.by_person[show_limit:] %}
+          <div class="person-group">
+            <div class="person-header">
+              <span class="person-name">{{ person.speaker }}</span>
+              {% if person.quotes | length > 1 %}
+              <span class="person-count">{{ person.quotes | length }}x</span>
+              {% endif %}
+            </div>
+            {% for q in person.quotes[:2] %}
+            <div class="quote-block">
+              <p class="quote-text">"{{ q.quote[:200] }}{% if q.quote | length > 200 %}…{% endif %}"</p>
+              <div class="quote-meta">
+                <span class="quote-date">{{ q.date }}</span>
+                <span class="platform-badge platform-{{ q.platform }}">{{ q.platform }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </article>
     {% endfor %}
@@ -492,7 +749,22 @@
   DB: <code>{{ db_path }}</code>
   &nbsp;&bull;&nbsp;
   TMDB: {{ 'enabled' if has_tmdb else 'disabled' }}
+  &nbsp;&bull;&nbsp;
+  Sort: {{ sort_by }}
 </footer>
+
+<script>
+function toggleExtra(el) {
+  const extra = el.nextElementSibling;
+  if (extra.classList.contains('open')) {
+    extra.classList.remove('open');
+    el.textContent = el.textContent.replace('collapse', 'click to expand');
+  } else {
+    extra.classList.add('open');
+    el.textContent = el.textContent.replace('click to expand', 'collapse');
+  }
+}
+</script>
 
 </body>
 </html>

@@ -1,6 +1,6 @@
 # Memoreei — Build Progress
 
-Last updated: 2026-03-28 14:28 PDT
+Last updated: 2026-03-28 15:16 PDT
 
 ## Task Runner Results
 
@@ -25,4 +25,6 @@ Last updated: 2026-03-28 14:28 PDT
 | Nice-to-have: Movie Ring web app | ✅ Done |
 | Nice-to-have: Discord Memory Bot | ✅ Done |
 | Nice-to-have: Contact Dossier web app | ✅ Done |
+| Auto-sync: keep memory DB fresh without manual sync commands | ✅ Done |
+| Movie Ring: rank movies by mention frequency + stats | ✅ Done |
 | Final push with everything | ✅ Done |
