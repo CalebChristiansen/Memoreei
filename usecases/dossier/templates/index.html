@@ -93,6 +93,18 @@
     .people-list::-webkit-scrollbar { width: 4px; }
     .people-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 
+    .person-rank {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      min-width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .person-rank.rank-podium {
+      font-size: 0.9rem;
+    }
+
     .person-item {
       display: flex;
       align-items: center;
@@ -101,6 +113,18 @@
       cursor: pointer;
       transition: background 0.15s;
       border-left: 3px solid transparent;
+    }
+
+    .person-item.top-1 {
+      background: rgba(255, 215, 0, 0.06);
+    }
+
+    .person-item.top-2 {
+      background: rgba(192, 192, 192, 0.04);
+    }
+
+    .person-item.top-3 {
+      background: rgba(205, 127, 50, 0.04);
     }
 
     .person-item:hover {
@@ -607,9 +631,12 @@
       </div>
       <div class="people-list" id="people-list">
         {% for p in people %}
-        <div class="person-item"
+        <div class="person-item {% if loop.index <= 3 %}top-{{ loop.index }}{% endif %}"
              data-name="{{ p.name }}"
              onclick="loadDossier('{{ p.name | replace("'", "\\'") }}', this)">
+          <div class="person-rank {% if loop.index <= 3 %}rank-podium{% endif %}">
+            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}#{{ loop.index }}{% endif %}
+          </div>
           <div class="person-avatar">{{ p.name[0].upper() }}</div>
           <div class="person-info">
             <div class="person-name">{{ p.name }}</div>
@@ -713,6 +740,8 @@
       const initials = d.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
       const sourceKeys = Object.keys(d.sources);
       const maxCount = Math.max(...Object.values(d.sources));
+      const rankEmoji = d.rank === 1 ? '🥇' : d.rank === 2 ? '🥈' : d.rank === 3 ? '🥉' : '';
+      const rankText = d.rank ? `#${d.rank} of ${d.total_people}` : '';
 
       // Stats
       const stats = `
@@ -841,7 +870,7 @@
             <div class="dossier-title">
               <h1>${escHtml(d.name)}</h1>
               <div class="dossier-subtitle">
-                ${d.total_messages} messages · ${d.source_count} platform${d.source_count !== 1 ? 's' : ''} · ${d.first_seen} → ${d.last_seen}
+                ${rankEmoji ? rankEmoji + ' ' : ''}${rankText ? '<strong>' + rankText + '</strong> · ' : ''}${d.total_messages} messages · ${d.source_count} platform${d.source_count !== 1 ? 's' : ''} · ${d.first_seen} → ${d.last_seen}
               </div>
             </div>
           </div>

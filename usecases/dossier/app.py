@@ -308,7 +308,16 @@ def api_people():
 
 @app.route("/api/dossier/<path:name>")
 def api_dossier(name: str):
-    return jsonify(build_dossier(name))
+    dossier = build_dossier(name)
+    # Add rank info
+    if dossier.get("found"):
+        people = get_all_people()
+        for i, p in enumerate(people):
+            if p["name"] == name:
+                dossier["rank"] = i + 1
+                dossier["total_people"] = len(people)
+                break
+    return jsonify(dossier)
 
 
 @app.route("/api/refresh")

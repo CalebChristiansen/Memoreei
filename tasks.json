@@ -168,6 +168,14 @@
     "priority": "P1"
   },
   {
+    "id": "moviering-mention-fix",
+    "name": "Fix Movie Ring mention counting logic",
+    "prompt": "The Movie Ring app (usecases/moviering/app.py) is showing incorrect mention counts \u2014 capping at 3 even when movies have more mentions. Debug and fix:\n\n1. Read usecases/moviering/app.py and understand how it counts movie mentions\n2. Connect to memoreei.db and check actual message counts for movies like Inception (should have 6+), Project Hail Mary (3+), The Matrix (3+)\n3. The bug is likely in how messages are scanned for movie titles, or results are being deduplicated/capped incorrectly\n4. Fix the counting logic so it accurately reflects ALL mentions across all messages\n5. Make sure the ranking order is correct (Inception > Project Hail Mary > The Matrix based on actual mention counts)\n6. Restart the Movie Ring app after fixing (kill process on port 5050, relaunch with nohup .venv/bin/python usecases/moviering/app.py)\n7. Verify by hitting http://127.0.0.1:5050 and checking the counts\n\nThe DB path is ./memoreei.db. Venv is .venv/bin/python.",
+    "test": "curl -s http://127.0.0.1:5050/api/health 2>/dev/null | python3 -c \"import json,sys; d=json.load(sys.stdin); print(\"PASS\" if d.get(\"status\")==\"ok\" else \"FAIL\")\"",
+    "retries": 2,
+    "priority": "P0"
+  },
+  {
     "id": "final-push",
     "name": "Final push with everything",
     "prompt": "Stage all changes. Commit with message 'feat: use case apps + additional connectors'. Push to origin main. Update usecases/apps.md with final status of each app.",
