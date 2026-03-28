@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from memoreei.search.embeddings import get_provider
 from memoreei.storage.database import Database
+from memoreei.sync_manager import SyncManager
 from memoreei.tools.memory_tools import MemoryTools
 
 # Load .env from the project root (2 levels up from this file when installed)
@@ -18,11 +21,10 @@ for candidate in [_here.parent.parent.parent / ".env", Path(".env")]:
         load_dotenv(candidate)
         break
 
-mcp = FastMCP("memoreei")
-
 # Lazily initialized singletons
 _db: Database | None = None
 _tools: MemoryTools | None = None
+_sync_manager = SyncManager()
 
 
 async def _get_tools() -> MemoryTools:
@@ -36,6 +38,24 @@ async def _get_tools() -> MemoryTools:
     return _tools
 
 
+@asynccontextmanager
+async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[type-arg]
+    """Start background sync loop on server startup; cancel on shutdown."""
+    tools = await _get_tools()
+    task = asyncio.create_task(_sync_manager.background_loop(tools))
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+mcp = FastMCP("memoreei", lifespan=_lifespan)
+
+
 @mcp.tool()
 async def search_memory(
     query: str,
@@ -44,6 +64,7 @@ async def search_memory(
     participant: str | None = None,
     after: str | None = None,
     before: str | None = None,
+    skip_sync: bool = False,
 ) -> list[dict]:
     """Search your personal memories using hybrid keyword + semantic search.
 
@@ -54,8 +75,11 @@ async def search_memory(
         participant: Filter by participant name
         after: Only return memories after this date (ISO format, e.g. '2026-01-01')
         before: Only return memories before this date (ISO format, e.g. '2026-12-31')
+        skip_sync: Skip the automatic freshness sync before searching (default: False)
     """
     tools = await _get_tools()
+    if not skip_sync:
+        await _sync_manager.maybe_refresh(tools)
     return await tools.search_memory(
         query=query,
         limit=limit,
@@ -112,6 +136,27 @@ async def ingest_whatsapp(file_path: str) -> dict:
     """
     tools = await _get_tools()
     return await tools.ingest_whatsapp(file_path=file_path)
+
+
+@mcp.tool()
+async def refresh_memory() -> dict:
+    """Trigger an immediate sync of all configured sources and return new message count.
+
+    Syncs Discord (and any other configured connectors) right now. Respects a 30-second
+    minimum cooldown between syncs to avoid rate limiting. Returns the number of new
+    messages ingested, or -1 if the cooldown was still active.
+    """
+    tools = await _get_tools()
+    count = await _sync_manager.refresh_all(tools)
+    if count == -1:
+        import time
+        elapsed = time.monotonic() - _sync_manager.last_sync_time
+        return {
+            "status": "skipped",
+            "reason": f"Last sync was {elapsed:.0f}s ago (min 30s cooldown)",
+            "new_messages": 0,
+        }
+    return {"status": "ok", "new_messages": count}
 
 
 @mcp.tool()
