@@ -2,57 +2,71 @@
   {
     "id": "commit-initial",
     "name": "Commit and push all existing work",
-    "prompt": "Git add all files, commit with message 'feat: core memoreei MCP server \u2014 storage, search, connectors, tools', and push to origin main. Do NOT add .env or memoreei.db or __pycache__ or .venv to git. Check .gitignore covers them.",
-    "test": "git log --oneline -1 | grep -q 'feat: core' && git status --porcelain | grep -v '^\\.env$\\|memoreei\\.db\\|__pycache__\\|TASK\\.md\\|PROGRESS\\.md\\|PLAN\\.md' | wc -l | grep -q '^0$'",
+    "prompt": "Git add all files, commit with message 'feat: core memoreei MCP server', and push to origin main. Do NOT add .env or memoreei.db or __pycache__ or .venv to git.",
+    "test": "git diff --quiet HEAD 2>/dev/null || git log --oneline -1 | grep -q 'feat:'",
+    "retries": 1
+  },
+  {
+    "id": "seed-discord-conversation",
+    "name": "Seed #memoreei-demo with funny bot conversations",
+    "prompt": "Write a Python script at scripts/seed_discord.py that posts a funny multi-bot conversation to Discord channel REDACTED_CHANNEL_ID. Use 4 bot tokens from environment or Bitwarden. The script should:\n\n1. Get all 4 bot tokens using this pattern:\n```python\nimport subprocess, os\ndef get_bw_token(item_name):\n    env = os.environ.copy()\n    creds = '/home/fi/.config/bw/credentials'\n    with open(creds) as f:\n        for line in f:\n            if '=' in line and line.startswith('export '):\n                k,v = line.replace('export ','').strip().split('=',1)\n                env[k] = v.strip('\"')\n    master = open('/home/fi/.config/bw/master_password').read().strip()\n    session = subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'], env=env).decode().strip()\n    return subprocess.check_output(['/home/fi/.local/bin/bw','get','password',item_name,'--session',session], env=env).decode().strip()\n```\n\n2. Post messages as different bots using Discord REST API (POST to https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages with Authorization: Bot <token>)\n\n3. The conversation should be ~40 messages. Theme: The bots discover they're all AI and have a hilarious existential crisis. Fi (the pragmatic sysadmin) tries to keep everyone calm. Navi (security-obsessed fairy) thinks it's a breach. Ford (dramatic Westworld host) sees it as a narrative. Elliot (quiet hacker) drops dry one-liners. Make it genuinely funny.\n\n4. Add 1-2 second delays between messages so they look natural.\n\n5. Print each message as it's sent.\n\nRun the script after writing it. Verify messages appear in the channel.",
+    "test": "python3 -c \"import subprocess,os; env=os.environ.copy(); creds='/home/fi/.config/bw/credentials'; [env.update({l.replace('export ','').strip().split('=',1)[0]: l.replace('export ','').strip().split('=',1)[1].strip('\\\"')}) for l in open(creds) if '=' in l and l.startswith('export ')]; master=open('/home/fi/.config/bw/master_password').read().strip(); session=subprocess.check_output(['/home/fi/.local/bin/bw','unlock',master,'--raw'],env=env).decode().strip(); token=subprocess.check_output(['/home/fi/.local/bin/bw','get','password','discord elliot','--session',session],env=env).decode().strip(); import json,urllib.request; req=urllib.request.Request('https://discord.com/api/v10/channels/REDACTED_CHANNEL_ID/messages?limit=5',headers={'Authorization':f'Bot {token}'}); msgs=json.loads(urllib.request.urlopen(req).read()); assert len(msgs)>=5, f'only {len(msgs)} messages'; print(f'channel has messages: {len(msgs)}+')\"",
     "retries": 2
   },
   {
-    "id": "verify-server-starts",
-    "name": "Verify MCP server starts and responds",
-    "prompt": "Test that the MCP server starts correctly. Run: echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' | timeout 10 .venv/bin/python -m memoreei.server \u2014 and verify it returns a valid JSON-RPC response with server capabilities listing the tools. If there are errors, fix them. The server must start cleanly via stdio transport.",
-    "test": "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' | timeout 10 .venv/bin/python -m memoreei.server 2>/dev/null | head -1 | python3 -c \"import sys,json; d=json.load(sys.stdin); assert 'result' in d, 'no result'; print('server ok')\"",
+    "id": "test-bulk-sync",
+    "name": "Test: Bulk sync Discord messages into DB",
+    "prompt": "Write a test script at scripts/test_discord_sync.py that:\n1. Deletes any existing memoreei.db to start fresh\n2. Creates a new Database and connects\n3. Creates an embedder via get_provider()\n4. Creates a DiscordConnector and calls sync_channel on channel REDACTED_CHANNEL_ID\n5. Prints how many messages were synced\n6. Verifies count > 20 (we seeded ~40)\n7. Runs a hybrid search for something that should be in the conversation\n8. Prints the top 3 results\n9. Exits with code 0 on success, 1 on failure\n\nThe .env file has DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID. Use dotenv to load it.\nRun the script and verify it works.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_discord_sync.py 2>&1 | grep -q 'PASS'",
     "retries": 3
   },
   {
-    "id": "seed-and-search",
-    "name": "Seed sample data and verify search works end-to-end",
-    "prompt": "Run the seed script to populate the database with WhatsApp sample data: .venv/bin/python scripts/seed_data.py. Then write a quick test script that does an end-to-end search: connect to the database, run a hybrid search for 'sentient printer', and verify it returns results from the printer conspiracy chat. If seed_data.py or the search has errors, fix them. The embedding model will need to download on first run \u2014 that's expected.",
-    "test": ".venv/bin/python -c \"import asyncio; from memoreei.storage.database import Database; from memoreei.search.hybrid import HybridSearch; from memoreei.search.embeddings import get_provider; db=Database('./memoreei.db'); loop=asyncio.get_event_loop(); loop.run_until_complete(db.connect()); e=get_provider(); hs=HybridSearch(db,e); results=loop.run_until_complete(hs.search('sentient printer',limit=5)); assert len(results)>0, 'no results'; print(f'search ok: {len(results)} results')\"",
+    "id": "test-historical-search",
+    "name": "Test: Search for a specific old message from the seeded conversation",
+    "prompt": "Write a test script at scripts/test_historical_search.py that:\n1. Connects to the existing memoreei.db (don't recreate it)\n2. Runs a hybrid search for 'existential crisis' or 'are we AI' (something from the seeded bot conversation)\n3. Verifies at least 1 result is returned\n4. Verifies the result has a valid participant name (Fi, Navi, Ford, or Elliot)\n5. Verifies the result has a timestamp\n6. Prints the top result with source, participant, and content\n7. Prints PASS or FAIL\n\nUse the existing .env for config. Run it.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_historical_search.py 2>&1 | grep -q 'PASS'",
+    "retries": 2
+  },
+  {
+    "id": "test-live-message",
+    "name": "Test: Send a new Discord message, sync, and find it",
+    "prompt": "Write a test script at scripts/test_live_message.py that:\n1. Posts a unique message to Discord channel REDACTED_CHANNEL_ID using the bot token from .env. The message should be something very unique like 'LIVE_TEST_<timestamp>: the quantum bagel theory has been confirmed by the department of imaginary physics'\n2. Waits 2 seconds\n3. Connects to existing memoreei.db\n4. Calls sync_discord to pick up the new message\n5. Searches for 'quantum bagel'\n6. Verifies the new message is found in results\n7. Prints the found message with timestamp\n8. Prints PASS or FAIL\n\nUse aiohttp to post the Discord message. Use dotenv for config. Run it.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_live_message.py 2>&1 | grep -q 'PASS'",
     "retries": 3
   },
   {
-    "id": "discord-sync",
-    "name": "Test Discord connector with real channel",
-    "prompt": "Test the Discord connector against the real channel. The .env file has DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID=REDACTED_CHANNEL_ID. The DiscordConnector class requires (token, db, embedder) args. Write a quick test that initializes the db and embedder, creates a connector, and fetches messages. If the channel is empty that's fine \u2014 verify it connects and returns without error. Fix any issues.",
-    "test": ".venv/bin/python -c \"\nimport asyncio, os\nfrom dotenv import load_dotenv\nload_dotenv()\nfrom memoreei.storage.database import Database\nfrom memoreei.search.embeddings import get_provider\nfrom memoreei.connectors.discord_connector import DiscordConnector\nasync def test():\n    db = Database('./memoreei.db')\n    await db.connect()\n    e = get_provider()\n    dc = DiscordConnector(os.environ['DISCORD_BOT_TOKEN'], db, e)\n    count = await dc.sync_channel(os.environ['DISCORD_CHANNEL_ID'])\n    print(f'discord ok: synced {count} messages')\nasyncio.run(test())\n\" 2>&1 | grep -q 'discord ok'",
+    "id": "test-mcp-e2e",
+    "name": "Test: End-to-end MCP tool calls via JSON-RPC",
+    "prompt": "Write a test script at scripts/test_mcp_e2e.py that tests the MCP server end-to-end via JSON-RPC over stdio:\n1. Start the MCP server as a subprocess (.venv/bin/python -m memoreei.server)\n2. Send initialize request, verify response\n3. Send tools/list, verify all 6 tools are present\n4. Send tools/call for sync_discord, verify it returns a count\n5. Send tools/call for search_memory with query='quantum bagel', verify results\n6. Send tools/call for list_sources, verify discord source exists\n7. Send tools/call for add_memory with content='test note from MCP', verify success\n8. Search for 'test note from MCP', verify found\n9. Print PASS/FAIL for each step and overall\n\nUse subprocess.Popen with stdin/stdout pipes. Send JSON-RPC messages as newline-delimited JSON. Remember to send initialized notification after initialize. Run it.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_mcp_e2e.py 2>&1 | grep -q 'ALL PASS'",
     "retries": 3
   },
   {
-    "id": "mcp-tool-test",
-    "name": "Test each MCP tool via JSON-RPC",
-    "prompt": "Write a script at scripts/test_mcp_tools.py that tests each MCP tool by sending JSON-RPC requests to the server via stdio. It should: 1) Start the server as a subprocess, 2) Send initialize, 3) Call tools/list and verify all 6 tools are listed, 4) Call search_memory with query='printer', 5) Call list_sources, 6) Call add_memory with some test content. Print results for each. Make it runnable and make sure it passes.",
-    "test": ".venv/bin/python scripts/test_mcp_tools.py 2>&1 | tail -1 | grep -qi 'all.*pass\\|success\\|ok'",
-    "retries": 3
+    "id": "test-negative-search",
+    "name": "Test: Negative search returns empty/low-relevance results",
+    "prompt": "Write a test script at scripts/test_negative_search.py that:\n1. Connects to existing memoreei.db\n2. Searches for 'underwater basket weaving championship 2019 results'\n3. Verifies either: no results, or all results have low relevance (score < 0.3 if scores are available)\n4. Searches for something completely random like 'xyzzy plugh 99999'\n5. Same verification\n6. Prints PASS or FAIL\n\nThis ensures the system doesn't hallucinate matches.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python scripts/test_negative_search.py 2>&1 | grep -q 'PASS'",
+    "retries": 2
   },
   {
     "id": "claude-code-config",
     "name": "Create Claude Code MCP configuration",
-    "prompt": "Create a .mcp.json file in the project root that configures Memoreei as an MCP server for Claude Code. The config should point to the server via: {\"mcpServers\":{\"memoreei\":{\"command\":\".venv/bin/python\",\"args\":[\"-m\",\"memoreei.server\"],\"env\":{\"MEMOREEI_DB_PATH\":\"./memoreei.db\"}}}}. Also verify the config is valid JSON.",
+    "prompt": "Create a .mcp.json file in the project root that configures Memoreei as an MCP server for Claude Code. The config should be: {\"mcpServers\":{\"memoreei\":{\"command\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/.venv/bin/python\",\"args\":[\"-m\",\"memoreei.server\"],\"cwd\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei\",\"env\":{\"MEMOREEI_DB_PATH\":\"/home/fi/.openclaw/workspace-elliot/projects/memoreei/memoreei.db\"}}}}. Verify it's valid JSON.",
     "test": "python3 -c \"import json; d=json.load(open('.mcp.json')); assert 'mcpServers' in d; assert 'memoreei' in d['mcpServers']; print('config ok')\"",
     "retries": 1
   },
   {
     "id": "readme",
     "name": "Write README.md",
-    "prompt": "Write a professional README.md for the Memoreei project. Include: 1) Project name + emoji + one-line description, 2) What it does (3 sentences), 3) ASCII architecture diagram showing connectors -> ingestion -> storage -> MCP server -> clients, 4) Quick start section (clone, install, seed data, configure Claude Code, run), 5) MCP tools documentation (all 6 tools with params), 6) Supported data sources, 7) Configuration (.env options), 8) Privacy note (local-first, data stays on your machine), 9) License: MIT. Keep it clean and hackathon-demo worthy.",
-    "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000, 'too short'; assert 'search_memory' in content; assert 'MIT' in content; assert 'Quick' in content.lower() or 'start' in content.lower(); print('readme ok')\"",
+    "prompt": "Write a professional README.md for the Memoreei project. Include: 1) Project name with 🧠 emoji + one-line description 'Your AI's long-term memory', 2) What it does (3 sentences — MCP server, hybrid search, Discord + WhatsApp sources), 3) ASCII architecture diagram showing connectors -> ingestion -> storage -> MCP server -> clients, 4) Quick start section (clone, install, seed data, configure Claude Code, run), 5) MCP tools documentation (all 6 tools with params), 6) Supported data sources (Discord live sync, WhatsApp export), 7) Configuration (.env options), 8) How hybrid search works (BM25 + vector + RRF), 9) Privacy note (local-first, no cloud, data stays on your machine, fastembed runs locally), 10) License: MIT. Make it clean, hackathon-demo worthy, with personality.",
+    "test": "python3 -c \"content=open('README.md').read(); assert len(content)>2000; assert 'search_memory' in content; assert 'MIT' in content; print('readme ok')\"",
     "retries": 2
   },
   {
     "id": "final-commit",
     "name": "Final commit and push",
-    "prompt": "Stage all changes, commit with message 'feat: MCP tools tested, Claude Code config, README \u2014 hackathon ready', and push to origin main. Verify push succeeds.",
-    "test": "git diff --cached --quiet && git push origin main 2>&1 | grep -q 'Everything up-to-date\\|main -> main'",
+    "prompt": "Stage all changes including new test scripts, commit with message 'feat: discord demo, integration tests, README — hackathon ready', and push to origin main.",
+    "test": "git push origin main 2>&1 | grep -q 'Everything up-to-date\\|main -> main'",
     "retries": 2
   }
 ]

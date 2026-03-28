@@ -12,6 +12,7 @@ LOG_DIR="$PROJECT_DIR/logs"
 DEADLINE="2026-03-28T15:25:00"  # 3:25 PM PDT
 MAX_CONSECUTIVE_FAILURES=3
 NOTIFY_CMD="openclaw system event --text"
+DISCORD_POST="$PROJECT_DIR/scripts/discord_post.sh"
 
 cd "$PROJECT_DIR"
 mkdir -p "$LOG_DIR"
@@ -19,6 +20,7 @@ mkdir -p "$LOG_DIR"
 # --- helpers ---
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG_DIR/runner.log"; }
+live() { bash "$DISCORD_POST" "$1" 2>/dev/null || true; }
 
 past_deadline() {
   local now deadline_epoch now_epoch
@@ -84,6 +86,7 @@ for i in $(seq 0 $((total - 1))); do
 
   log "START $task_id: $task_name"
   notify "🔨 Starting task: $task_name"
+  live "🔨 **Task: $task_name** (attempt 1)"
 
   success=false
   for attempt in $(seq 1 $((task_retries + 1))); do
@@ -107,8 +110,17 @@ $task_test
 If the test fails, fix the issue and try again. Do not move on until the test passes."
 
     # Run Claude Code with clean context
+    live "🤖 Claude Code running... (task: $task_id, attempt $attempt)"
     claude --permission-mode bypassPermissions --print "$full_prompt" \
       > "$LOG_DIR/${task_id}_attempt${attempt}.log" 2>&1 || true
+
+    # Post tail of output to live channel
+    tail_output=$(tail -30 "$LOG_DIR/${task_id}_attempt${attempt}.log" 2>/dev/null | head -30)
+    if [ -n "$tail_output" ]; then
+      live "\`\`\`
+$tail_output
+\`\`\`"
+    fi
 
     # Verify with test
     if run_test "$task_test"; then
@@ -182,9 +194,11 @@ If you can't fix it, explain why in $LOG_DIR/${task_id}.skip"
   if [ "$success" = true ]; then
     log "DONE $task_id ✅"
     notify "✅ Completed: $task_name"
+    live "✅ **$task_name** — passed"
   else
     log "FAILED $task_id ❌"
     notify "❌ Failed: $task_name — moving on"
+    live "❌ **$task_name** — failed after all attempts"
     consecutive_failures=$((consecutive_failures + 1))
 
     if [ "$consecutive_failures" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
