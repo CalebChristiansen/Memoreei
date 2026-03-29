@@ -54,6 +54,8 @@ KNOWN_SINGLE_WORD_MOVIES = {
     "psycho", "vertigo", "halloween", "scream", "coco", "frozen",
     "ratatouille", "shrek", "moana", "encanto", "parasite",
     "joker", "dunkirk", "tenet", "memento", "rocky", "creed",
+    "dune", "her", "lucy", "fury", "babel", "troy", "heat",
+    "drive", "taken", "hugo", "blitz", "tusk",
 }
 
 # Additional false-positive movie titles to filter out after TMDB lookup
