@@ -10,6 +10,7 @@ from ulid import ULID
 from memoreei.connectors.discord_connector import sync_discord
 from memoreei.connectors.discord_package_connector import import_discord_package as _import_discord_package
 from memoreei.connectors.imessage_connector import sync_imessage
+from memoreei.connectors.signal_connector import sync_signal
 from memoreei.connectors.email_connector import sync_email
 from memoreei.connectors.mastodon_connector import sync_mastodon
 from memoreei.connectors.matrix_connector import sync_matrix
@@ -137,6 +138,9 @@ class MemoryTools:
 
     async def sync_imessage_tool(self, chat_name: str | None = None) -> dict[str, Any]:
         return await sync_imessage(db=self.db, embedder=self.embedder, chat_name=chat_name)
+
+    async def sync_signal_tool(self, conversation_id: str | None = None) -> dict[str, Any]:
+        return await sync_signal(db=self.db, embedder=self.embedder, conversation_id=conversation_id)
 
     async def import_sms_backup(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)
