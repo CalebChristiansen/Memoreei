@@ -17,6 +17,7 @@ from memoreei.connectors.matrix_connector import sync_matrix
 from memoreei.connectors.slack_connector import sync_slack
 from memoreei.connectors.telegram_connector import sync_telegram
 from memoreei.connectors.instagram_connector import parse_instagram_export
+from memoreei.connectors.messenger_connector import parse_messenger_export
 from memoreei.connectors.sms_connector import parse_sms_backup
 from memoreei.connectors.whatsapp import parse_whatsapp_export
 from memoreei.search.embeddings import EmbeddingProvider

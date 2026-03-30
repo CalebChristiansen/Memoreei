@@ -338,6 +338,17 @@ async def import_discord_package(package_path: str) -> dict:
 
 
 @mcp.tool()
+async def import_messenger(data_path: str) -> dict:
+    """Import Facebook Messenger messages from a data download (GDPR export, JSON format).
+    Download from: Facebook Settings > Your Information > Download Your Information.
+    Args:
+        data_path: Path to the extracted Messenger data folder (containing messages/inbox/)
+    """
+    tools = await _get_tools()
+    return await tools.import_messenger(data_path=data_path)
+
+
+@mcp.tool()
 async def import_instagram(data_path: str) -> dict:
     """Import Instagram DMs from a data download (GDPR export, JSON format).
     Download at: Instagram Settings > Accounts Center > Your Information > Download Your Information.

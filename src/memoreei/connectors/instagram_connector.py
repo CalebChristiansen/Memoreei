@@ -6,6 +6,8 @@ from pathlib import Path
 
 from ulid import ULID
 
+from memoreei.search.embeddings import EmbeddingProvider
+from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
 
@@ -117,3 +119,71 @@ def parse_instagram_export(data_path: str | Path) -> list[MemoryItem]:
         items.extend(conv_items)
 
     return items
+
+
+async def import_instagram(
+    data_path: str,
+    db: Database,
+    embedder: EmbeddingProvider,
+    *,
+    batch_size: int = 100,
+) -> dict:
+    """Import an Instagram data download into the memory database.
+
+    Args:
+        data_path:  Path to extracted Instagram data folder
+                    (the folder containing your_instagram_activity/)
+        db:         Open Database instance
+        embedder:   Embedding provider for semantic search
+        batch_size: Number of messages to embed and insert per batch
+    """
+    path = Path(data_path)
+    if not path.exists():
+        return {"error": f"Path not found: {data_path}", "ingested": 0}
+    if not path.is_dir():
+        return {"error": f"Expected a directory, got: {data_path}", "ingested": 0}
+
+    inbox = path / "your_instagram_activity" / "messages" / "inbox"
+    if not inbox.exists():
+        return {
+            "error": (
+                f"No inbox found at {inbox}. "
+                "Point data_path at the root of the Instagram export "
+                "(the folder that contains your_instagram_activity/)."
+            ),
+            "ingested": 0,
+        }
+
+    before_sources = await db.list_sources()
+    before_total = sum(before_sources.values())
+
+    all_items = parse_instagram_export(path)
+
+    errors: list[str] = []
+    conversations_seen: set[str] = set()
+
+    for i in range(0, len(all_items), batch_size):
+        batch = all_items[i : i + batch_size]
+        texts = [item.content for item in batch]
+        try:
+            embeddings = await embedder.embed(texts)
+            for mem, emb in zip(batch, embeddings):
+                mem.embedding = emb
+            await db.bulk_insert(batch)
+            for mem in batch:
+                conversations_seen.add(mem.source)
+        except Exception as e:
+            errors.append(str(e))
+
+    after_sources = await db.list_sources()
+    after_total = sum(after_sources.values())
+    newly_inserted = after_total - before_total
+
+    result: dict = {
+        "ingested": newly_inserted,
+        "data_path": str(path),
+        "conversations": len(conversations_seen),
+    }
+    if errors:
+        result["errors"] = errors
+    return result
