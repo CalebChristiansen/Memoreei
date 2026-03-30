@@ -49,6 +49,9 @@ class Config:
     mastodon_hashtag: str | None = None
     mastodon_access_token: str | None = None
 
+    # iMessage (macOS only)
+    imessage_db_path: str | None = None
+
     def configured_connectors(self) -> list[str]:
         """Return names of connectors that have sufficient config to operate."""
         connectors: list[str] = []
@@ -94,5 +97,6 @@ def get_config() -> Config:
             mastodon_instance=os.environ.get("MASTODON_INSTANCE") or None,
             mastodon_hashtag=os.environ.get("MASTODON_HASHTAG") or None,
             mastodon_access_token=os.environ.get("MASTODON_ACCESS_TOKEN") or None,
+            imessage_db_path=os.environ.get("IMESSAGE_DB_PATH") or None,
         )
     return _config
