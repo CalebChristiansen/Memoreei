@@ -270,6 +270,26 @@ async def sync_mastodon(
     )
 
 
+@mcp.tool()
+async def sync_imessage(chat_name: str | None = None) -> dict:
+    """Sync iMessage/SMS conversations from the local macOS Messages database.
+
+    Reads ~/Library/Messages/chat.db in read-only mode. macOS only — returns
+    an error dict on other platforms without raising.
+
+    Requires Full Disk Access granted to Terminal (or the app running this server)
+    in System Settings → Privacy & Security → Full Disk Access.
+
+    The path to chat.db can be overridden with the IMESSAGE_DB_PATH env var.
+
+    Args:
+        chat_name: Optional filter — only sync messages from this chat/contact.
+                   Matches against chat_identifier (e.g. '+1234567890') or display name.
+    """
+    tools = await _get_tools()
+    return await tools.sync_imessage_tool(chat_name=chat_name)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

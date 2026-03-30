@@ -8,6 +8,7 @@ from typing import Any
 from ulid import ULID
 
 from memoreei.connectors.discord_connector import sync_discord
+from memoreei.connectors.imessage_connector import sync_imessage
 from memoreei.connectors.email_connector import sync_email
 from memoreei.connectors.mastodon_connector import sync_mastodon
 from memoreei.connectors.matrix_connector import sync_matrix
@@ -131,3 +132,6 @@ class MemoryTools:
             hashtag=hashtag,
             access_token=access_token,
         )
+
+    async def sync_imessage_tool(self, chat_name: str | None = None) -> dict[str, Any]:
+        return await sync_imessage(db=self.db, embedder=self.embedder, chat_name=chat_name)

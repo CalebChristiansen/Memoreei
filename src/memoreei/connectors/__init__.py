@@ -14,5 +14,10 @@ def get_connector_registry() -> dict[str, type[BaseConnector]]:
         registry["telegram"] = TelegramConnector
     except ImportError:
         pass
+    try:
+        from memoreei.connectors.imessage_connector import IMessageConnector
+        registry["imessage"] = IMessageConnector
+    except ImportError:
+        pass
     # Add others as they're refactored
     return registry
