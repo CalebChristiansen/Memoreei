@@ -7,6 +7,8 @@ from typing import Optional
 import typer
 
 app = typer.Typer(help="Memoreei — personal memory MCP server CLI")
+import_app = typer.Typer(help="Import data from various sources")
+app.add_typer(import_app, name="import")
 
 
 @app.command()
@@ -133,7 +135,7 @@ def search(
     asyncio.run(_run())
 
 
-@app.command(name="import")
+@import_app.command(name="whatsapp")
 def import_whatsapp(
     file: str = typer.Argument(..., help="Path to WhatsApp .txt export file"),
 ) -> None:
@@ -152,6 +154,34 @@ def import_whatsapp(
         tools = MemoryTools(db=db, embedder=embedder)
 
         result = await tools.ingest_whatsapp(file_path=file)
+        typer.echo(json.dumps(result, indent=2))
+        await db.close()
+
+    asyncio.run(_run())
+
+
+@import_app.command(name="discord-package")
+def import_discord_package(
+    path: str = typer.Argument(..., help="Path to extracted Discord data package folder or ZIP file"),
+) -> None:
+    """Import a Discord Data Package (GDPR export) — all channels, DMs, servers.
+
+    Request your data at Discord Settings > Privacy & Safety > Request All of My Data.
+    """
+
+    async def _run() -> None:
+        from memoreei.config import get_config
+        from memoreei.search.embeddings import get_provider
+        from memoreei.storage.database import Database
+        from memoreei.tools.memory_tools import MemoryTools
+
+        cfg = get_config()
+        db = Database(db_path=cfg.db_path)
+        await db.connect()
+        embedder = get_provider()
+        tools = MemoryTools(db=db, embedder=embedder)
+
+        result = await tools.import_discord_package_tool(package_path=path)
         typer.echo(json.dumps(result, indent=2))
         await db.close()
 

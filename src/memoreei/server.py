@@ -290,6 +290,20 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
     return await tools.sync_imessage_tool(chat_name=chat_name)
 
 
+@mcp.tool()
+async def import_discord_package(package_path: str) -> dict:
+    """Import a Discord Data Package (GDPR export). Imports all messages from all channels and DMs.
+
+    Request your data at Discord Settings > Privacy & Safety > Request All of My Data.
+    Once downloaded, extract the ZIP or pass it directly — both are supported.
+
+    Args:
+        package_path: Path to extracted data package folder or ZIP file
+    """
+    tools = await _get_tools()
+    return await tools.import_discord_package_tool(package_path=package_path)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
