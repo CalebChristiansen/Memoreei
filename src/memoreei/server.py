@@ -337,6 +337,17 @@ async def import_discord_package(package_path: str) -> dict:
     return await tools.import_discord_package_tool(package_path=package_path)
 
 
+@mcp.tool()
+async def import_instagram(data_path: str) -> dict:
+    """Import Instagram DMs from a data download (GDPR export, JSON format).
+    Download at: Instagram Settings > Accounts Center > Your Information > Download Your Information.
+    Args:
+        data_path: Path to the extracted Instagram data folder (containing your_instagram_activity/)
+    """
+    tools = await _get_tools()
+    return await tools.import_instagram(data_path=data_path)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

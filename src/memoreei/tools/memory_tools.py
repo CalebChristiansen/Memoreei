@@ -16,6 +16,7 @@ from memoreei.connectors.mastodon_connector import sync_mastodon
 from memoreei.connectors.matrix_connector import sync_matrix
 from memoreei.connectors.slack_connector import sync_slack
 from memoreei.connectors.telegram_connector import sync_telegram
+from memoreei.connectors.instagram_connector import parse_instagram_export
 from memoreei.connectors.sms_connector import parse_sms_backup
 from memoreei.connectors.whatsapp import parse_whatsapp_export
 from memoreei.search.embeddings import EmbeddingProvider
@@ -168,3 +169,25 @@ class MemoryTools:
 
     async def import_discord_package_tool(self, package_path: str) -> dict[str, Any]:
         return await _import_discord_package(package_path=package_path, db=self.db, embedder=self.embedder)
+
+    async def import_instagram(self, data_path: str) -> dict[str, Any]:
+        path = Path(data_path)
+        if not path.exists():
+            return {"error": f"Path not found: {data_path}", "ingested": 0}
+
+        items = parse_instagram_export(path)
+        if not items:
+            return {"error": "No messages parsed from export", "ingested": 0}
+
+        texts = [item.content for item in items]
+        embeddings = await self.embedder.embed(texts)
+        for item, emb in zip(items, embeddings):
+            item.embedding = emb
+
+        count = await self.db.bulk_insert(items)
+        sources = list({item.source for item in items})
+        return {
+            "ingested": count,
+            "path": str(path),
+            "sources": sources,
+        }
