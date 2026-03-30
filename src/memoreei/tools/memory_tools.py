@@ -8,6 +8,7 @@ from typing import Any
 from ulid import ULID
 
 from memoreei.connectors.discord_connector import sync_discord
+from memoreei.connectors.generic_connector import import_json, import_csv
 from memoreei.connectors.discord_package_connector import import_discord_package as _import_discord_package
 from memoreei.connectors.imessage_connector import sync_imessage
 from memoreei.connectors.signal_connector import sync_signal
@@ -192,6 +193,64 @@ class MemoryTools:
             "path": str(path),
             "sources": sources,
         }
+
+    async def import_json_file(
+        self,
+        file_path: str,
+        content_field: str,
+        sender_field: str = "",
+        timestamp_field: str = "",
+        source_label: str = "json-import",
+    ) -> dict[str, Any]:
+        field_mapping: dict[str, str] = {"content": content_field}
+        if sender_field:
+            field_mapping["sender"] = sender_field
+        if timestamp_field:
+            field_mapping["timestamp"] = timestamp_field
+
+        items, errors = import_json(file_path, field_mapping, source_label)
+        if not items:
+            return {"error": errors[0] if errors else "No messages parsed", "ingested": 0, "errors": errors}
+
+        texts = [item.content for item in items]
+        embeddings = await self.embedder.embed(texts)
+        for item, emb in zip(items, embeddings):
+            item.embedding = emb
+
+        count = await self.db.bulk_insert(items)
+        result: dict[str, Any] = {"ingested": count, "file": str(file_path), "source": source_label}
+        if errors:
+            result["parse_errors"] = errors
+        return result
+
+    async def import_csv_file(
+        self,
+        file_path: str,
+        content_column: str,
+        sender_column: str = "",
+        timestamp_column: str = "",
+        source_label: str = "csv-import",
+    ) -> dict[str, Any]:
+        field_mapping: dict[str, str] = {"content": content_column}
+        if sender_column:
+            field_mapping["sender"] = sender_column
+        if timestamp_column:
+            field_mapping["timestamp"] = timestamp_column
+
+        items, errors = import_csv(file_path, field_mapping, source_label)
+        if not items:
+            return {"error": errors[0] if errors else "No messages parsed", "ingested": 0, "errors": errors}
+
+        texts = [item.content for item in items]
+        embeddings = await self.embedder.embed(texts)
+        for item, emb in zip(items, embeddings):
+            item.embedding = emb
+
+        count = await self.db.bulk_insert(items)
+        result: dict[str, Any] = {"ingested": count, "file": str(file_path), "source": source_label}
+        if errors:
+            result["parse_errors"] = errors
+        return result
 
     async def import_messenger(self, data_path: str) -> dict[str, Any]:
         path = Path(data_path)
