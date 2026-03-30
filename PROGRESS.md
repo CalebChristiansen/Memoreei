@@ -1,31 +1,32 @@
-# Memoreei — Build Progress
+# Build Progress
 
-Last updated: 2026-03-28 15:52 PDT — **DEADLINE REACHED (3:25 PM PDT) — BUILD FINALIZED**
-
-## Task Runner Results
+Last updated: 2026-03-29 19:05 PDT
 
 | Task | Status |
 |------|--------|
-| Commit and push all existing work | ✅ Done |
-| Seed #memoreei-demo with funny bot conversations | ✅ Done |
-| Test: Bulk sync Discord messages into DB | ✅ Done |
-| Test: Search for a specific old message | ✅ Done |
-| Test: Send new Discord message, sync, find it | ✅ Done |
-| Test: MCP tools via JSON-RPC | ✅ Done |
-| Test: Negative search returns no false matches | ✅ Done |
-| Create Claude Code MCP configuration | ✅ Done |
-| Write README.md | ✅ Done |
-| Write demo script | ✅ Done |
-| DONE commit — core complete | ✅ Done |
-| Nice-to-have: Telegram connector | ✅ Done |
-| Nice-to-have: Matrix/Element connector | ✅ Done |
-| Nice-to-have: Slack connector | ✅ Done |
-| Nice-to-have: Gmail IMAP connector | ✅ Done |
-| Nice-to-have: 5th chat service | ✅ Done |
-| Nice-to-have: Movie Ring web app | ✅ Done |
-| Nice-to-have: Discord Memory Bot | ✅ Done |
-| Nice-to-have: Contact Dossier web app | ✅ Done |
-| Auto-sync: keep memory DB fresh without manual sync commands | ✅ Done |
-| Movie Ring: rank movies by mention frequency + stats | ✅ Done |
-| Fix Movie Ring mention counting logic | ❌ Not completed |
-| Final push with everything | ✅ Done |
+| Full local backup + test baseline | ✅ Done |
+| Create .internal/ directory structure | ✅ Done |
+| Remove hackathon files from git tracking | ✅ Done |
+| Remove hardcoded personal data from source files | ✅ Done |
+| Scrub sensitive strings from git history | ✅ Done |
+| Post-scrub verification + test suite | ✅ Done |
+| Create BaseConnector and connector registry | ✅ Done |
+| Create centralized config module | ✅ Done |
+| Overhaul sync strategy — on-demand only | ✅ Done |
+| Add CLI with typer | ✅ Done |
+| Improve test infrastructure | ✅ Done |
+| Create CONTRIBUTING.md and docs/ | ✅ Done |
+| iMessage connector (macOS local DB read) | ✅ Done |
+| Discord Data Package import connector | ✅ Done |
+| SMS Backup & Restore XML import connector | ✅ Done |
+| Signal Desktop connector (SQLCipher local DB) | ✅ Done |
+| Instagram Data Download import connector | ✅ Done |
+| Facebook Messenger Data Download import connector | ✅ Done |
+| Generic JSON and CSV file importers | ✅ Done |
+| Complete README rewrite for open source | ✅ Done |
+| Update .env.example with all connectors | ✅ Done |
+| Update pyproject.toml for PyPI readiness | ✅ Done |
+| Extract Movie Ring to separate repo | ✅ Done |
+| Extract Contact Dossier to separate repo | ✅ Done |
+| Remove usecases/ from main repo, add examples/ | ✅ Done |
+| Final verification pass | ✅ Done |
