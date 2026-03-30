@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  memoreei:
+    build: .
+    volumes:
+      - ./data:/data
+      - ./.env:/app/.env:ro
+    environment:
+      - MEMOREEI_DB_PATH=/data/memoreei.db
