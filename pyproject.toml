@@ -20,6 +20,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "numpy>=1.24.0",
     "python-ulid>=2.0.0",
+    "typer>=0.9.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +30,8 @@ dev = [
 ]
 
 [project.scripts]
-memoreei = "memoreei.server:main"
+memoreei = "memoreei.cli:app"
+memoreei-server = "memoreei.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memoreei"]
