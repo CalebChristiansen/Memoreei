@@ -291,6 +291,27 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def sync_signal(conversation_id: str | None = None) -> dict:
+    """Sync Signal Desktop messages from the local encrypted database.
+    Requires Signal Desktop to be installed and pysqlcipher3 package.
+
+    Reads the Signal SQLCipher database at the default OS location:
+        Linux:   ~/.config/Signal/sql/db.sqlite
+        macOS:   ~/Library/Application Support/Signal/sql/db.sqlite
+        Windows: %APPDATA%\\Signal\\sql\\db.sqlite
+
+    The encryption key is read from config.json in the same Signal directory.
+    Override paths with SIGNAL_DB_PATH and SIGNAL_CONFIG_PATH env vars.
+
+    Args:
+        conversation_id: Optional filter for a specific conversation (ID, name,
+                         phone number, or profile name).
+    """
+    tools = await _get_tools()
+    return await tools.sync_signal_tool(conversation_id=conversation_id)
+
+
+@mcp.tool()
 async def import_sms_backup(file_path: str) -> dict:
     """Import SMS/MMS messages from an Android SMS Backup & Restore XML file.
     Works with the 'SMS Backup & Restore' app (most popular on Google Play).

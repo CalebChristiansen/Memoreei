@@ -52,6 +52,10 @@ class Config:
     # iMessage (macOS only)
     imessage_db_path: str | None = None
 
+    # Signal Desktop (local encrypted DB)
+    signal_db_path: str | None = None
+    signal_config_path: str | None = None
+
     def configured_connectors(self) -> list[str]:
         """Return names of connectors that have sufficient config to operate."""
         connectors: list[str] = []
@@ -98,5 +102,7 @@ def get_config() -> Config:
             mastodon_hashtag=os.environ.get("MASTODON_HASHTAG") or None,
             mastodon_access_token=os.environ.get("MASTODON_ACCESS_TOKEN") or None,
             imessage_db_path=os.environ.get("IMESSAGE_DB_PATH") or None,
+            signal_db_path=os.environ.get("SIGNAL_DB_PATH") or None,
+            signal_config_path=os.environ.get("SIGNAL_CONFIG_PATH") or None,
         )
     return _config

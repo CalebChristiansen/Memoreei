@@ -29,6 +29,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
 ]
+signal = ["pysqlcipher3>=1.0.0"]
 
 [project.scripts]
 memoreei = "memoreei.cli:app"

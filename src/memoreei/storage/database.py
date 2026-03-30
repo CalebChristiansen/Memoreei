@@ -71,6 +71,12 @@ CREATE TABLE IF NOT EXISTS imessage_checkpoint (
     last_rowid INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS signal_checkpoint (
+    conversation_id TEXT PRIMARY KEY,
+    last_rowid INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 """
 
 FTS_TRIGGER_INSERT = """
@@ -415,5 +421,28 @@ class Database:
                 updated_at = excluded.updated_at
             """,
             (chat_id, last_rowid, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_signal_checkpoint(self, conversation_id: str) -> int | None:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT last_rowid FROM signal_checkpoint WHERE conversation_id = ?",
+            (conversation_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["last_rowid"] if row else None
+
+    async def set_signal_checkpoint(self, conversation_id: str, last_rowid: int) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            """
+            INSERT INTO signal_checkpoint (conversation_id, last_rowid, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(conversation_id) DO UPDATE SET
+                last_rowid = excluded.last_rowid,
+                updated_at = excluded.updated_at
+            """,
+            (conversation_id, last_rowid, int(time.time())),
         )
         await self._db.commit()
