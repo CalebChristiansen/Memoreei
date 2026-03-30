@@ -192,3 +192,25 @@ class MemoryTools:
             "path": str(path),
             "sources": sources,
         }
+
+    async def import_messenger(self, data_path: str) -> dict[str, Any]:
+        path = Path(data_path)
+        if not path.exists():
+            return {"error": f"Path not found: {data_path}", "ingested": 0}
+
+        items = parse_messenger_export(path)
+        if not items:
+            return {"error": "No messages parsed from export", "ingested": 0}
+
+        texts = [item.content for item in items]
+        embeddings = await self.embedder.embed(texts)
+        for item, emb in zip(items, embeddings):
+            item.embedding = emb
+
+        count = await self.db.bulk_insert(items)
+        sources = list({item.source for item in items})
+        return {
+            "ingested": count,
+            "path": str(path),
+            "sources": sources,
+        }
