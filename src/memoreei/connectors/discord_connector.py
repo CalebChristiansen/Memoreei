@@ -14,7 +14,6 @@ from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
-DEFAULT_CHANNEL_ID = "REDACTED_CHANNEL_ID"
 SOURCE_PREFIX = "discord"
 FETCH_LIMIT = 100  # Discord max per request
 _MIN_REQUEST_INTERVAL: float = 1.0  # Never more than 1 req/sec
@@ -195,7 +194,9 @@ async def sync_discord(
     if not token:
         return {"error": "DISCORD_BOT_TOKEN not set in environment", "synced": 0}
 
-    target_channel = channel_id or os.environ.get("DISCORD_CHANNEL_ID", DEFAULT_CHANNEL_ID)
+    target_channel = channel_id or os.environ.get("DISCORD_CHANNEL_ID", "")
+    if not target_channel:
+        return {"error": "No channel_id provided and DISCORD_CHANNEL_ID not set in environment", "synced": 0}
 
     connector = DiscordConnector(token=token, db=db, embedder=embedder)
     try:

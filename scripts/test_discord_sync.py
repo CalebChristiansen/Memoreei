@@ -15,7 +15,7 @@ from memoreei.search.embeddings import get_provider
 from memoreei.connectors.discord_connector import DiscordConnector
 from memoreei.search.hybrid import HybridSearch
 
-CHANNEL_ID = "REDACTED_CHANNEL_ID"
+CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID", "")
 DB_PATH = os.environ.get("MEMOREEI_DB_PATH", "./memoreei.db")
 
 
