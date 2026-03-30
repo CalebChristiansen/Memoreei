@@ -18,3 +18,7 @@ build/
 node_modules/
 .DS_Store
 logs/
+.internal/
+.mcp.json
+ralph.env
+REFACTOR_PLAN.md

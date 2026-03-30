@@ -75,10 +75,8 @@ STOP_TITLES = {
     "when", "where", "why", "how", "all", "both", "each", "every", "few", "more",
     "most", "other", "some", "such", "no", "not", "only", "own", "same", "so",
     "than", "too", "very", "just", "but", "if", "we", "they", "he", "she",
-    "we are", "she's not", "navi that", "elliot that",
-    # Bot names and common false positives
-    "fi", "navi", "ford", "elliot", "caleb", "sci",
-    "dr. robert ford", "robert ford", "dr robert ford",
+    "we are", "she's not",
+    # Common false positives
     "joseph gordon", "joseph gordon-levitt", "gordon-levitt",
     "cillian murphy", "amy adams", "ralph fiennes", "daniel craig",
     "ryan gosling", "andy weir", "wes anderson", "hans zimmer",

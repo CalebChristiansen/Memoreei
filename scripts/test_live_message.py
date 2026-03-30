@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-CHANNEL_ID = "REDACTED_CHANNEL_ID"
+CHANNEL_ID = os.environ.get("DISCORD_CHANNEL_ID", "")
 TEST_MESSAGE = "LIVE_TEST: the quantum bagel theory has been confirmed by the department of imaginary physics"
 DISCORD_API_BASE = "https://discord.com/api/v10"
 

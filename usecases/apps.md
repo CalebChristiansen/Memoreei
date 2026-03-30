@@ -11,7 +11,7 @@ Each app is standalone — no imports from the main memoreei package. They conne
 ### 1. 🎬 Movie Ring
 **What:** Web app that scans your conversations for movie mentions, shows them with posters, friend quotes, and links. "What movies are my friends talking about?"
 **Tech:** Python (Flask), TMDB API for posters, Pico CSS, self-hosted via systemd
-**URL:** http://REDACTED_IP:5050 (Tailscale)
+**URL:** http://localhost:5050
 **Status:** ✅ Done
 
 **Files:** `usecases/moviering/`
@@ -34,7 +34,7 @@ cp usecases/moviering/moviering.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now moviering
 
-# 4. Access at http://REDACTED_IP:5050 on Tailscale
+# 4. Access at http://localhost:5050
 ```
 
 ### 2. 🤖 Memory Bot (Discord)
@@ -74,7 +74,7 @@ python usecases/memorybot/bot.py
 ### 5. 🕵️ Contact Dossier
 **What:** Pick any person and get a full dossier — every conversation across all platforms, key topics, timeline, sentiment. A CRM for your actual relationships.
 **Tech:** Python (Flask), Pico CSS dark, self-hosted via systemd
-**URL:** http://REDACTED_IP:5051 (Tailscale)
+**URL:** http://localhost:5051
 **Status:** ✅ Done
 
 **Files:** `usecases/dossier/`
@@ -102,7 +102,7 @@ cp usecases/dossier/dossier.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now dossier
 
-# 3. Access at http://REDACTED_IP:5051 on Tailscale
+# 3. Access at http://localhost:5051
 # Or run directly:
 .venv/bin/python usecases/dossier/app.py
 ```
@@ -110,6 +110,5 @@ systemctl --user enable --now dossier
 ---
 
 ## Hosting Notes
-- Self-hosted on karamja via Caddy reverse proxy (like Jellyfin)
-- Tailscale for access: REDACTED_IP
+- Self-hosted on your-server via Caddy reverse proxy (like Jellyfin)
 - Apps run as systemd services or just background processes for the demo
