@@ -291,6 +291,18 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def import_sms_backup(file_path: str) -> dict:
+    """Import SMS/MMS messages from an Android SMS Backup & Restore XML file.
+    Works with the 'SMS Backup & Restore' app (most popular on Google Play).
+
+    Args:
+        file_path: Path to the XML backup file
+    """
+    tools = await _get_tools()
+    return await tools.import_sms_backup(file_path=file_path)
+
+
+@mcp.tool()
 async def import_discord_package(package_path: str) -> dict:
     """Import a Discord Data Package (GDPR export). Imports all messages from all channels and DMs.
 

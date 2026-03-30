@@ -160,6 +160,31 @@ def import_whatsapp(
     asyncio.run(_run())
 
 
+@import_app.command(name="sms")
+def import_sms(
+    file: str = typer.Argument(..., help="Path to SMS Backup & Restore .xml file"),
+) -> None:
+    """Import SMS/MMS messages from an Android SMS Backup & Restore XML file."""
+
+    async def _run() -> None:
+        from memoreei.config import get_config
+        from memoreei.search.embeddings import get_provider
+        from memoreei.storage.database import Database
+        from memoreei.tools.memory_tools import MemoryTools
+
+        cfg = get_config()
+        db = Database(db_path=cfg.db_path)
+        await db.connect()
+        embedder = get_provider()
+        tools = MemoryTools(db=db, embedder=embedder)
+
+        result = await tools.import_sms_backup(file_path=file)
+        typer.echo(json.dumps(result, indent=2))
+        await db.close()
+
+    asyncio.run(_run())
+
+
 @import_app.command(name="discord-package")
 def import_discord_package(
     path: str = typer.Argument(..., help="Path to extracted Discord data package folder or ZIP file"),
