@@ -544,6 +544,17 @@ memoreei/
 
 ---
 
+## Example Apps
+
+These standalone apps are built on Memoreei and show what you can build with it:
+
+- [Movie Ring](https://github.com/CalebChristiansen/memoreei-movie-ring) — Discover what movies your friends are talking about
+- [Contact Dossier](https://github.com/CalebChristiansen/memoreei-contact-dossier) — CRM for your real relationships
+
+For simpler code examples (direct search, Discord bot), see the [`examples/`](examples/) directory.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on adding new connectors, running tests, and submitting pull requests.
