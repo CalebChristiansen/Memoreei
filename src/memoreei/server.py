@@ -349,6 +349,66 @@ async def import_messenger(data_path: str) -> dict:
 
 
 @mcp.tool()
+async def import_json_file(
+    file_path: str,
+    content_field: str,
+    sender_field: str = "",
+    timestamp_field: str = "",
+    source_label: str = "json-import",
+) -> dict:
+    """Import messages from any JSON file. Provide field names for your data format.
+
+    Supports JSON arrays, JSON-lines format, and wrapped objects. Covers Google Chat
+    takeout, Google Hangouts exports, LinkedIn data, and any custom JSON format.
+
+    Args:
+        file_path: Path to the JSON or JSON-lines file
+        content_field: Field name containing the message text (required)
+        sender_field: Field name containing the sender name (optional)
+        timestamp_field: Field name containing the timestamp (optional, auto-detects format)
+        source_label: Label to tag imported messages with (default: 'json-import')
+    """
+    tools = await _get_tools()
+    return await tools.import_json_file(
+        file_path=file_path,
+        content_field=content_field,
+        sender_field=sender_field,
+        timestamp_field=timestamp_field,
+        source_label=source_label,
+    )
+
+
+@mcp.tool()
+async def import_csv_file(
+    file_path: str,
+    content_column: str,
+    sender_column: str = "",
+    timestamp_column: str = "",
+    source_label: str = "csv-import",
+) -> dict:
+    """Import messages from any CSV file. Provide column names for your data format.
+
+    Auto-detects delimiter (comma, tab, semicolon). Supports header rows.
+    Covers LinkedIn exports, any spreadsheet or custom CSV format.
+
+    Args:
+        file_path: Path to the CSV, TSV, or delimited file
+        content_column: Column name containing the message text (required)
+        sender_column: Column name containing the sender name (optional)
+        timestamp_column: Column name containing the timestamp (optional, auto-detects format)
+        source_label: Label to tag imported messages with (default: 'csv-import')
+    """
+    tools = await _get_tools()
+    return await tools.import_csv_file(
+        file_path=file_path,
+        content_column=content_column,
+        sender_column=sender_column,
+        timestamp_column=timestamp_column,
+        source_label=source_label,
+    )
+
+
+@mcp.tool()
 async def import_instagram(data_path: str) -> dict:
     """Import Instagram DMs from a data download (GDPR export, JSON format).
     Download at: Instagram Settings > Accounts Center > Your Information > Download Your Information.
