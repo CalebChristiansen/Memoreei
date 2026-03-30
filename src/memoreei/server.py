@@ -1,25 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import AsyncIterator
 
-from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
+from memoreei.config import get_config
 from memoreei.search.embeddings import get_provider
 from memoreei.storage.database import Database
 from memoreei.sync_manager import SyncManager
 from memoreei.tools.memory_tools import MemoryTools
-
-# Load .env from the project root (2 levels up from this file when installed)
-_here = Path(__file__).parent
-for candidate in [_here.parent.parent.parent / ".env", Path(".env")]:
-    if candidate.exists():
-        load_dotenv(candidate)
-        break
 
 # Lazily initialized singletons
 _db: Database | None = None
@@ -30,8 +21,8 @@ _sync_manager = SyncManager()
 async def _get_tools() -> MemoryTools:
     global _db, _tools
     if _tools is None:
-        db_path = os.environ.get("MEMOREEI_DB_PATH", "./memoreei.db")
-        _db = Database(db_path=db_path)
+        cfg = get_config()
+        _db = Database(db_path=cfg.db_path)
         await _db.connect()
         embedder = get_provider()
         _tools = MemoryTools(db=_db, embedder=embedder)
