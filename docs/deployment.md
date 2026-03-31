@@ -10,27 +10,37 @@
 ### Install
 
 ```bash
-git clone https://github.com/yourname/memoreei
-cd memoreei
-pip install .
+pip install memoreei
 ```
 
-Or install in a virtualenv:
+Or from source:
 
 ```bash
+git clone https://github.com/CalebChristiansen/Memoreei.git
+cd Memoreei
 python -m venv .venv
 source .venv/bin/activate
-pip install .
+pip install -e .
 ```
 
 ### Configure
 
-Copy `.env.example` to `.env` and fill in the credentials for the sources you want:
+Run the interactive setup to configure your connectors:
 
 ```bash
-cp .env.example .env
-$EDITOR .env
+memoreei setup
 ```
+
+This walks you through selecting connectors, entering credentials, and choosing a database location. Writes everything to `.env`.
+
+You can also configure a single connector directly:
+
+```bash
+memoreei setup gmail
+memoreei setup discord
+```
+
+Or edit `.env` manually (see `.env.example` for all variables).
 
 ### Run as MCP Server
 
@@ -51,6 +61,7 @@ The primary use case is running as an MCP server over stdio, configured in Claud
 ### Run CLI
 
 ```bash
+memoreei setup    # interactive connector setup (first time)
 memoreei serve    # start MCP server (stdio)
 memoreei sync     # one-shot sync of all configured sources
 memoreei search "what did alice say about the meeting"

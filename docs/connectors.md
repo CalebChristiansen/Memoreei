@@ -175,6 +175,20 @@ Also document the new vars in `.env.example`:
 # IRC_NICK=memoreei_bot
 ```
 
+And add the connector to the `_CONNECTORS` dict in `cli.py` so `memoreei setup` supports it:
+
+```python
+"irc": {
+    "name": "IRC",
+    "icon": "💬",
+    "vars": [
+        ("IRC_SERVER", "Server", False, "e.g. irc.libera.chat"),
+        ("IRC_CHANNEL", "Channel", False, "e.g. #mychannel"),
+        ("IRC_NICK", "Bot nick", False, "e.g. memoreei_bot"),
+    ],
+},
+```
+
 ## 4. Register in connectors/__init__.py
 
 ```python
