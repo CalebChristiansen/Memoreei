@@ -1,0 +1,9 @@
+All done. Here's the summary:
+
+- **Commits pushed** to `origin main` (up to `365b6e7`)
+- **Tag `v0.2.1` pushed** to origin
+- **Secret removed**: `ralph-v021.env` (Discord bot token) was stripped from git history via `filter-branch` before pushing — GitHub push protection had blocked the initial attempt
+- **`.gitignore` updated** to prevent re-committing that file
+- **Verification: PASS**
+
+**Note:** The Discord bot token in `ralph-v021.env` was exposed in the local git history. Even though it was removed before pushing to GitHub, you should **rotate that Discord bot token** as a precaution.
