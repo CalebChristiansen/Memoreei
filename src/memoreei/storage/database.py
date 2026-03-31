@@ -185,8 +185,14 @@ class Database:
 
     async def search_fts(self, query: str, limit: int = 10) -> list[MemoryItem]:
         assert self._db is not None
-        # Sanitize query for FTS5
-        safe_query = query.replace('"', '""')
+        # Sanitize query for FTS5 — strip characters that break the parser
+        import re as _re
+        # Remove apostrophes, quotes, and other FTS5 syntax chars
+        safe_query = _re.sub(r"[\"'()*^{}~]", " ", query)
+        # Collapse whitespace
+        safe_query = " ".join(safe_query.split())
+        if not safe_query.strip():
+            return []
         async with self._db.execute(
             """
             SELECT m.*, memories_fts.rank as fts_rank
