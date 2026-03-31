@@ -6,9 +6,16 @@ from typing import Optional
 
 import typer
 
-app = typer.Typer(help="Memoreei — personal memory MCP server CLI")
+app = typer.Typer(help="Memoreei — personal memory MCP server CLI", invoke_without_command=True)
 import_app = typer.Typer(help="Import data from various sources")
 app.add_typer(import_app, name="import")
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context) -> None:
+    """Memoreei — personal memory MCP server CLI."""
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
 
 
 @app.command()
@@ -64,6 +71,20 @@ def sync(
     source: Optional[str] = typer.Argument(None, help="Source to sync (discord, telegram, matrix, slack, email, mastodon). Omit for all."),
 ) -> None:
     """Sync a specific source or all configured sources."""
+    import time as _time
+
+    async def _sync_one(manager: "SyncManager", src: str, tools: "MemoryTools") -> tuple[int, float]:
+        typer.echo(f"  Syncing {src}...", nl=False)
+        t0 = _time.monotonic()
+        try:
+            count = await manager.sync_source(src, tools)
+        except Exception as exc:
+            elapsed = _time.monotonic() - t0
+            typer.echo(f"\r  ✗ {src}: error ({elapsed:.1f}s) — {exc}")
+            return 0, elapsed
+        elapsed = _time.monotonic() - t0
+        typer.echo(f"\r  ✓ {src}: {count} messages ({elapsed:.1f}s)")
+        return count, elapsed
 
     async def _run() -> None:
         from memoreei.config import get_config
@@ -80,19 +101,24 @@ def sync(
         manager = SyncManager()
 
         if source:
+            typer.echo(f"Syncing {source}...")
+            t0 = _time.monotonic()
             count = await manager.sync_source(source, tools)
-            typer.echo(f"Synced {count} new messages from {source}")
+            elapsed = _time.monotonic() - t0
+            typer.echo(f"✓ {source}: {count} messages ({elapsed:.1f}s)")
         else:
             configured = cfg.configured_connectors()
             if not configured:
-                typer.echo("No connectors configured.")
+                typer.echo("No connectors configured. Run: memoreei setup")
                 return
+            typer.echo(f"Syncing {len(configured)} connector(s): {', '.join(configured)}\n")
             total = 0
+            total_time = 0.0
             for src in configured:
-                count = await manager.sync_source(src, tools)
-                typer.echo(f"  {src}: {count} new messages")
+                count, elapsed = await _sync_one(manager, src, tools)
                 total += count
-            typer.echo(f"Total: {total} new messages")
+                total_time += elapsed
+            typer.echo(f"\nDone: {total} messages from {len(configured)} source(s) ({total_time:.1f}s)")
 
         await db.close()
 
@@ -305,6 +331,28 @@ def _read_env_lines(env_path: "Path") -> list[str]:
     return []
 
 
+def _parse_env_vars(env_lines: list[str]) -> dict[str, str]:
+    """Parse .env lines into a dict of KEY -> VALUE (non-commented, non-empty)."""
+    result: dict[str, str] = {}
+    for line in env_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "=" in stripped:
+            key, _, value = stripped.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key and value:
+                result[key] = value
+    return result
+
+
+def _is_connector_configured(key: str, env_vars: dict[str, str]) -> bool:
+    """Check if all vars for a connector have non-empty values in env_vars."""
+    info = _CONNECTORS[key]
+    return all(var_name in env_vars for var_name, *_ in info["vars"])
+
+
 def _write_env_updates(
     env_path: "Path", env_lines: list[str], updates: list[tuple[str, str]]
 ) -> None:
@@ -351,6 +399,7 @@ def setup(
         None,
         help="Connector to configure (gmail, discord, telegram, slack, matrix, mastodon, signal, imessage). Omit to choose interactively.",
     ),
+    reset: bool = typer.Option(False, "--reset", help="Clear existing values before reconfiguring"),
 ) -> None:
     """Interactive setup — configure connectors and write credentials to .env."""
     import questionary
@@ -395,9 +444,11 @@ def setup(
         selected_keys = [key]
     else:
         # Interactive multi-select with spacebar
+        env_vars = _parse_env_vars(env_lines)
         choices = [
             questionary.Choice(
-                title=f"{info['icon']}  {info['name']}",
+                title=f"{info['icon']}  {info['name']}"
+                + (" ✓" if _is_connector_configured(key, env_vars) else ""),
                 value=key,
             )
             for key, info in _CONNECTORS.items()
@@ -410,6 +461,20 @@ def setup(
         if not selected_keys:
             typer.echo("\nNothing selected.")
             raise typer.Exit(0)
+
+    # If --reset, remove existing vars for selected connectors from env_lines
+    if reset:
+        vars_to_clear = set()
+        for key in selected_keys:
+            for var_name, *_ in _CONNECTORS[key]["vars"]:
+                vars_to_clear.add(var_name)
+        env_lines = [
+            line for line in env_lines
+            if not any(
+                line.strip().startswith(f"{v}=") or line.strip().startswith(f"{v} =")
+                for v in vars_to_clear
+            )
+        ]
 
     # Prompt for each selected connector
     all_updates: list[tuple[str, str]] = []
