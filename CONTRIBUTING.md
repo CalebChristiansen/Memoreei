@@ -5,14 +5,20 @@ Welcome! Memoreei is a personal memory search server that ingests messages from 
 ## Dev Environment Setup
 
 ```bash
-git clone https://github.com/your-fork/memoreei.git
-cd memoreei
+git clone https://github.com/CalebChristiansen/Memoreei.git
+cd Memoreei
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-Copy `.env.example` to `.env` and fill in any credentials you want to test with:
+Configure connectors interactively:
+
+```bash
+memoreei setup
+```
+
+Or copy `.env.example` to `.env` and edit manually:
 
 ```bash
 cp .env.example .env
