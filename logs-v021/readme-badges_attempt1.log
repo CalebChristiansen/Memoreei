@@ -1,0 +1,1 @@
+Done. Added the CI badge after the Python badge. PyPI badge was already present, so no duplication. Badge order is now: Python, CI, License, PyPI, Codecov.

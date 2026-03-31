@@ -1,0 +1,7 @@
+All 5 tests pass. The test file covers all requested scenarios:
+
+1. **`memoreei setup gmail`** — single connector mode, verifies .env has correct Gmail keys
+2. **`memoreei setup`** (no arg) — interactive mode with checkbox returning `['gmail', 'discord']`, verifies all keys written
+3. **`memoreei setup nonexistent`** — exits with code 1 and error message
+4. **First-time setup** — prompts for DB path, verifies `MEMOREEI_DB_PATH` written and parent dir created
+5. **Preserves existing .env** — pre-populates .env, verifies old values survive adding new connector

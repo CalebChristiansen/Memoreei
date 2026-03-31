@@ -1,0 +1,5 @@
+All 212 tests pass. The changes add:
+
+1. **`_parse_env_vars()`** — parses `.env` lines into a `{KEY: VALUE}` dict, skipping comments and empty values
+2. **`_is_connector_configured()`** — checks if all vars for a connector have non-empty values
+3. **Modified checkbox choices** — appends ` ✓` to the display title for fully configured connectors

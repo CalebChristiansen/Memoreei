@@ -3,8 +3,10 @@
 **One stop memory shop for all your AIs**
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![CI](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml/badge.svg)](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/memoreei)](https://pypi.org/project/memoreei/)
+[![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)
 
 Memoreei is a local-first MCP server that gives Claude (and any MCP-compatible AI) persistent, searchable memory across your conversations, chats, and notes.
 

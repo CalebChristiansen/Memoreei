@@ -1,0 +1,20 @@
+All 213 tests pass. Here's what changed in the `sync` command:
+
+**Single source** (`memoreei sync discord`):
+```
+Syncing discord...
+✓ discord: 142 messages (3.2s)
+```
+
+**All sources** (`memoreei sync`):
+```
+Syncing 3 connector(s): discord, telegram, email
+
+  ✓ discord: 142 messages (3.2s)
+  ✓ telegram: 58 messages (1.8s)
+  ✓ email: 23 messages (2.1s)
+
+Done: 223 messages from 3 source(s) (7.1s)
+```
+
+The `\r` carriage return overwrites the "Syncing..." line with the result, so each connector shows a single clean status line. Errors are caught and displayed with a ✗ marker without stopping the remaining syncs.

@@ -1,0 +1,7 @@
+All 213 tests pass. Here's what I did:
+
+1. **Added `--reset` flag** to `setup()` in `cli.py` — a `typer.Option(False, '--reset')` parameter.
+
+2. **Reset logic** — when `--reset` is passed, the connector's env vars (e.g. `GMAIL_EMAIL`, `GMAIL_APP_PASSWORD`) are stripped from `env_lines` before prompting. This means `_write_env_updates` will append fresh values instead of finding/replacing old ones.
+
+3. **Added test** `TestSetupResetFlag` — pre-populates `.env` with `old@test.com`, runs `setup gmail --reset` with mocked questionary returning `new@test.com`, and verifies old values are gone and new values are present.

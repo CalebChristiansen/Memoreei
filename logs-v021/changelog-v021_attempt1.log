@@ -1,0 +1,1 @@
+Done. CHANGELOG.md now has an empty `[Unreleased]` section at the top, followed by `[0.2.1] - 2026-03-31` with all the ralph loop changes, and existing v0.2.0/v0.1.0 entries intact. Link references are updated too.

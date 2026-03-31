@@ -4,3 +4,51 @@
 [23:17:43] Deadline: none
 [23:17:43] START commit-baseline: Commit baseline before v0.2.1 work
 [23:17:43]   attempt 1/2
+[23:18:56]   PASS ✅
+[23:18:56] DONE commit-baseline ✅
+[23:18:57] START version-bump: Bump version to 0.2.1
+[23:18:57]   attempt 1/2
+[23:19:32]   PASS ✅
+[23:19:32] DONE version-bump ✅
+[23:19:32] START fts5-sanitizer-tests: Add FTS5 sanitizer edge case tests
+[23:19:32]   attempt 1/3
+[23:20:13]   PASS ✅
+[23:20:13] DONE fts5-sanitizer-tests ✅
+[23:20:13] START setup-cli-tests: Add tests for setup CLI command
+[23:20:14]   attempt 1/3
+[23:21:02]   PASS ✅
+[23:21:02] DONE setup-cli-tests ✅
+[23:21:02] START setup-fresh-env: Verify memoreei setup on fresh .env
+[23:21:02]   attempt 1/3
+[23:21:45]   PASS ✅
+[23:21:45] DONE setup-fresh-env ✅
+[23:21:46] START cli-no-subcommand: Show help when memoreei called with no subcommand
+[23:21:46]   attempt 1/3
+[23:22:20]   PASS ✅
+[23:22:20] DONE cli-no-subcommand ✅
+[23:22:21] START setup-configured-marker: Show ✓ for already-configured connectors in setup
+[23:22:21]   attempt 1/3
+[23:23:01]   PASS ✅
+[23:23:01] DONE setup-configured-marker ✅
+[23:23:01] START setup-reset-flag: Add --reset flag to memoreei setup
+[23:23:01]   attempt 1/3
+[23:24:02]   PASS ✅
+[23:24:02] DONE setup-reset-flag ✅
+[23:24:03] START sync-progress: Add progress output to memoreei sync
+[23:24:03]   attempt 1/3
+[23:24:56]   PASS ✅
+[23:24:56] DONE sync-progress ✅
+[23:24:56] START ci-coverage: Add pytest-cov and coverage reporting to CI
+[23:24:56]   attempt 1/3
+[23:25:50]   PASS ✅
+[23:25:50] DONE ci-coverage ✅
+[23:25:50] START readme-badges: Add GitHub Actions CI badge to README
+[23:25:51]   attempt 1/2
+[23:26:11]   PASS ✅
+[23:26:11] DONE readme-badges ✅
+[23:26:11] START changelog-v021: Update CHANGELOG for v0.2.1
+[23:26:12]   attempt 1/2
+[23:26:34]   PASS ✅
+[23:26:34] DONE changelog-v021 ✅
+[23:26:35] START done-commit: Commit all v0.2.1 changes
+[23:26:35]   attempt 1/3

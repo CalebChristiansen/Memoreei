@@ -1,0 +1,1 @@
+Test passes. It verifies that `memoreei setup gmail` with no existing `.env` file creates one from scratch containing `MEMOREEI_DB_PATH`, `GMAIL_EMAIL`, and `GMAIL_APP_PASSWORD`, and validates every line follows proper `KEY=VALUE` format.

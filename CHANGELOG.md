@@ -7,12 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-31
+
 ### Added
 - `memoreei setup` — interactive CLI for configuring connectors (checkbox multi-select)
 - First-run DB path prompt with sensible default (`~/.memoreei/memoreei.db`)
 - GitHub Actions CI (tests on push/PR, Python 3.11–3.13)
 - GitHub Actions release workflow (auto-publish to PyPI on tag)
+- Tests for FTS5 query sanitizer edge cases (apostrophes, quotes, parens, wildcards)
+- Tests for `memoreei setup` CLI command (single connector, interactive, fresh env)
+- `--reset` flag for `memoreei setup` to clear and reconfigure connectors
+- Configured connector markers (✓) in interactive setup mode
+- Progress output for `memoreei sync` command
+- pytest-cov for test coverage reporting
+- Coverage reporting in CI workflow
+- GitHub Actions CI badge in README
+- Codecov badge in README
 - This changelog
+
+### Changed
+- `memoreei` with no subcommand now shows help instead of erroring
+- Version bump to 0.2.1
 
 ### Fixed
 - FTS5 syntax error on queries containing apostrophes or special characters
@@ -49,6 +64,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CalebChristiansen/Memoreei/releases/tag/v0.1.0

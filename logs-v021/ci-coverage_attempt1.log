@@ -1,0 +1,8 @@
+All done. Here's what was changed:
+
+1. **pyproject.toml** — `pytest-cov` was already present in dev dependencies, no change needed.
+2. **`.github/workflows/ci.yml`** — Updated pytest to run with `--cov=memoreei --cov-report=xml --cov-report=term`, added `upload-artifact@v4` for coverage XML, and added `codecov/codecov-action@v4` with `continue-on-error: true`.
+3. **README.md** — Added codecov badge after the PyPI badge.
+4. **Local install** — `pytest-cov` installed in `.venv`.
+
+Tests pass: 213 passed, 4 skipped, 51% coverage.

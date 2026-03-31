@@ -1,0 +1,1 @@
+All done. Added a `@app.callback(invoke_without_command=True)` that prints help text when `memoreei` is run with no subcommand. All 212 tests pass, `serve --help` still works, and the verification check passes.
