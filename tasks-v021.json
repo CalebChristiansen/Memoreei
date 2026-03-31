@@ -1,0 +1,114 @@
+[
+  {
+    "id": "commit-baseline",
+    "name": "Commit baseline before v0.2.1 work",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nCommit any uncommitted changes with message 'chore: baseline before v0.2.1 ralph loop'. If working tree is clean, just print 'Already clean'.\n\nThen run: .venv/bin/python -m pytest tests/ -x -q\nReport the results. All 197+ tests should pass.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q 2>&1 | tail -1 | grep -q 'passed'",
+    "retries": 1,
+    "priority": "P0"
+  },
+  {
+    "id": "version-bump",
+    "name": "Bump version to 0.2.1",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\n\nBump the version from 0.2.0 to 0.2.1:\n1. Edit pyproject.toml: change version = '0.2.0' to version = '0.2.1'\n2. Reinstall the package in dev mode: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/pip install -e '.[dev]' -q\n3. Verify: .venv/bin/python -c \"import importlib.metadata; v = importlib.metadata.version('memoreei'); assert v == '0.2.1', f'Got {v}'; print(f'Version: {v}')\"",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -c \"import importlib.metadata; v = importlib.metadata.version('memoreei'); assert v == '0.2.1', f'Got {v}'\"",
+    "retries": 1,
+    "priority": "P0"
+  },
+  {
+    "id": "fts5-sanitizer-tests",
+    "name": "Add FTS5 sanitizer edge case tests",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nThe FTS5 sanitizer is in src/memoreei/storage/database.py in the search_fts method (around line 188). It strips characters like quotes, apostrophes, parens, etc. from queries before passing to SQLite FTS5.\n\nCreate a new test file: tests/test_fts5_sanitizer.py\n\nTest these edge cases against actual FTS5 queries (use the Database class from memoreei.storage.database):\n1. Query with apostrophe: \"caleb's messages\" — should not crash, should return results if matching\n2. Query with double quotes: '\"exact phrase\"' — should not crash\n3. Query with parentheses: '(hello) world' — should not crash\n4. Query with asterisk/wildcards: 'test*' — should not crash\n5. Query with curly braces: '{test}' — should not crash\n6. Query that is ALL special chars: '\"\\'\\'(){}*^~' — should return empty, not crash\n7. Query with mixed normal + special: \"what's up (yo)\" — should work and search for 'what s up yo'\n8. Empty query after sanitization — should return empty list\n9. Normal query (no special chars) — should work fine\n\nFor each test:\n- Create a temp DB, insert a few test messages, then run search_fts with the edge case query\n- Assert no exceptions are raised\n- Assert return type is list\n\nUse pytest + asyncio. Import pattern:\n```python\nimport pytest\nfrom memoreei.storage.database import Database\n```\n\nUse tmp_path fixture for temp DB files. Make sure to call await db.connect() and create tables.\n\nRun: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_fts5_sanitizer.py -v",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_fts5_sanitizer.py -v 2>&1 | tail -3 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P0"
+  },
+  {
+    "id": "setup-cli-tests",
+    "name": "Add tests for setup CLI command",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nAdd tests for the `memoreei setup` CLI command. The command is defined in src/memoreei/cli.py at the `setup` function (line ~349). It uses the `questionary` library for interactive prompts.\n\nCreate: tests/test_setup_cli.py\n\nTest scenarios (mock questionary prompts with monkeypatch or unittest.mock):\n1. `memoreei setup gmail` — single connector mode. Mock questionary.text to return test values for GMAIL_EMAIL and GMAIL_APP_PASSWORD. Verify .env file is written with correct keys.\n2. `memoreei setup` with no arg — interactive mode. Mock questionary.checkbox to return ['gmail', 'discord']. Mock questionary.text for each connector's vars. Verify .env has all expected keys.\n3. `memoreei setup nonexistent` — should exit with error message about unknown connector.\n4. First-time setup (no existing MEMOREEI_DB_PATH in .env) — should prompt for DB path. Mock questionary.text to return a test path.\n5. Verify existing .env values are preserved when adding new connectors.\n\nUse typer's CliRunner for invoking commands:\n```python\nfrom typer.testing import CliRunner\nfrom memoreei.cli import app\nrunner = CliRunner()\n```\n\nFor mocking questionary, patch 'memoreei.cli.questionary' since it's imported inside the function. Or better: since questionary is imported inside the setup function via `import questionary`, you need to patch it where it's used. Try:\n```python\nfrom unittest.mock import patch, MagicMock\n```\n\nUse tmp_path and monkeypatch to change working directory so .env operations don't affect real config.\n\nIMPORTANT: The setup function does `from pathlib import Path` and looks for `.env` in the current directory. Use monkeypatch.chdir(tmp_path) to isolate.\n\nRun: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_setup_cli.py -v",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_setup_cli.py -v 2>&1 | tail -3 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P0"
+  },
+  {
+    "id": "setup-fresh-env",
+    "name": "Verify memoreei setup on fresh .env",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nWrite a test in tests/test_setup_fresh.py that verifies `memoreei setup` works cleanly when there's NO existing .env file at all.\n\nScenario:\n1. cd to a temp directory (no .env exists)\n2. Run `memoreei setup gmail` with mocked questionary responses\n3. Verify a .env file is created from scratch\n4. Verify it contains MEMOREEI_DB_PATH (first-time setup prompt) and GMAIL_EMAIL and GMAIL_APP_PASSWORD\n5. Verify the .env file is valid (no corruption, proper KEY=VALUE format)\n\nUse typer CliRunner, monkeypatch.chdir(tmp_path), mock questionary.\n\nRun: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_setup_fresh.py -v",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/test_setup_fresh.py -v 2>&1 | tail -3 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "cli-no-subcommand",
+    "name": "Show help when memoreei called with no subcommand",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nCurrently `memoreei` with no arguments may error or show nothing useful. Fix it so running `memoreei` with no subcommand shows the help text.\n\nThe CLI is defined in src/memoreei/cli.py using typer:\n```python\napp = typer.Typer(help='Memoreei — personal memory MCP server CLI')\n```\n\nTyper supports `invoke_without_command=True` with a callback. Add:\n```python\n@app.callback(invoke_without_command=True)\ndef main(ctx: typer.Context):\n    if ctx.invoked_subcommand is None:\n        typer.echo(ctx.get_help())\n```\n\nOr simply set: `app = typer.Typer(help=..., invoke_without_command=True)` and add the callback.\n\nVerify:\n1. `.venv/bin/memoreei` shows help text (contains 'serve', 'setup', 'search', etc.)\n2. `.venv/bin/memoreei serve --help` still works\n3. Existing tests still pass: .venv/bin/python -m pytest tests/ -x -q",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/memoreei 2>&1 | grep -q 'serve' && .venv/bin/memoreei 2>&1 | grep -q 'setup'",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "setup-configured-marker",
+    "name": "Show ✓ for already-configured connectors in setup",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nModify the `memoreei setup` interactive mode to show which connectors are already configured.\n\nIn src/memoreei/cli.py, the setup function builds choices from _CONNECTORS dict for questionary.checkbox. Currently it shows:\n```\n📧  Gmail (IMAP)\n🎮  Discord (Bot API)\n```\n\nChange it so connectors with ALL required vars already set in .env show a ✓:\n```\n📧  Gmail (IMAP) ✓\n🎮  Discord (Bot API)\n```\n\nLogic:\n1. Read the current .env file\n2. For each connector, check if all its non-optional vars are set (non-empty) in .env\n3. Append ' ✓' to the display title if configured\n4. Still allow selecting already-configured connectors (to reconfigure them)\n\nTo check if a var is set, parse the .env lines. The _read_env_lines function already exists. Parse each line for KEY=VALUE and check if the connector's required vars have non-empty values.\n\nA var's 'optional' status isn't explicitly stored, but vars with hints containing 'optional' in the description tuple are optional. For simplicity, just check if ALL vars for that connector have non-empty values in .env.\n\nTest manually: create a temp .env with GMAIL_EMAIL=test@test.com and GMAIL_APP_PASSWORD=abc, cd there, and verify `memoreei setup` shows Gmail with ✓.\n\nRun existing tests: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q 2>&1 | tail -1 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "setup-reset-flag",
+    "name": "Add --reset flag to memoreei setup",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nAdd a `--reset` flag to `memoreei setup` that clears existing values for the selected connectors before prompting.\n\nIn src/memoreei/cli.py, the setup function signature is:\n```python\ndef setup(\n    connector: Optional[str] = typer.Argument(None, help='...'),\n) -> None:\n```\n\nAdd:\n```python\ndef setup(\n    connector: Optional[str] = typer.Argument(None, help='...'),\n    reset: bool = typer.Option(False, '--reset', help='Clear existing values before reconfiguring'),\n) -> None:\n```\n\nBehavior when --reset is passed:\n- For each selected connector, remove its vars from .env before prompting\n- This means questionary prompts will show empty defaults instead of existing values\n- Useful when credentials have changed\n\nThe _prompt_connector_vars function (if it reads existing .env values as defaults) should be aware of reset mode. If it doesn't currently show defaults, that's fine — just ensure the old values are cleared from the .env file before writing new ones.\n\nAlso add a test in tests/test_setup_cli.py (or a new file) that:\n1. Creates .env with GMAIL_EMAIL=old@test.com\n2. Runs `memoreei setup gmail --reset` with mocked questionary returning new@test.com\n3. Verifies .env now has GMAIL_EMAIL=new@test.com (not old@test.com)\n\nRun: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q 2>&1 | tail -1 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "sync-progress",
+    "name": "Add progress output to memoreei sync",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\nImprove the `memoreei sync` command to show progress. Currently it just runs and prints results at the end.\n\nThe sync command is in src/memoreei/cli.py. It calls sync methods on connectors which pull messages.\n\nAdd a simple spinner or status output using typer.echo / rich.console. Since the project already has typer, use typer's built-in progress:\n\n```python\nimport typer\nwith typer.progressbar(length=100, label='Syncing...') as progress:\n    ...\n```\n\nOr simpler: just print status lines as sync progresses:\n- 'Syncing Discord...' then 'Discord: 142 messages synced'\n- 'Syncing Gmail...' then 'Gmail: 58 messages synced'\n- etc.\n\nLook at how the sync command currently works. It likely calls sync_manager.sync_all() or individual connector sync methods. Add print statements before and after each connector sync.\n\nIf the sync_manager returns per-connector results, use those. If not, add timing info:\n- Show which connectors will be synced\n- Show 'Syncing [connector]...' before each\n- Show '✓ [connector]: N messages (Xs)' after each\n- Show total at the end\n\nIMPORTANT: Don't break existing functionality. The sync should still work the same — just with better output.\n\nRun tests: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q 2>&1 | tail -1 | grep -q 'passed'",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "ci-coverage",
+    "name": "Add pytest-cov and coverage reporting to CI",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\n1. Add pytest-cov to dev dependencies in pyproject.toml under [project.optional-dependencies] dev section.\n\n2. Update .github/workflows/ci.yml to:\n   - Run pytest with coverage: `pytest -x -q --cov=memoreei --cov-report=xml --cov-report=term`\n   - Upload coverage report as artifact (use actions/upload-artifact@v4)\n   - Optionally add codecov upload step (use codecov/codecov-action@v4) — but make it continue-on-error since they may not have a codecov token yet\n\n3. Install pytest-cov locally: .venv/bin/pip install pytest-cov -q\n\n4. Run locally to verify: cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q --cov=memoreei --cov-report=term\n\n5. Add a coverage badge placeholder to README.md after the existing Python badge (first few lines). Use: [![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && .venv/bin/python -m pytest tests/ -x -q --cov=memoreei 2>&1 | tail -3 | grep -q 'passed' && grep -q 'codecov' README.md && grep -q 'pytest-cov' pyproject.toml",
+    "retries": 2,
+    "priority": "P1"
+  },
+  {
+    "id": "readme-badges",
+    "name": "Add GitHub Actions CI badge to README",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\n\nAdd a GitHub Actions CI status badge to README.md. The workflow file is .github/workflows/ci.yml and the repo is CalebChristiansen/Memoreei.\n\nAdd this badge after the existing Python badge on the same line (badges should all be on consecutive lines at the top of the README, after the # Memoreei header and tagline):\n\n[![CI](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml/badge.svg)](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml)\n\nAlso check if there's already a PyPI badge. If not, add one:\n[![PyPI](https://img.shields.io/pypi/v/memoreei)](https://pypi.org/project/memoreei/)\n\nMake sure all badges are on separate lines, one after another, right after the tagline. Don't duplicate existing badges.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && grep -q 'actions/workflows/ci.yml/badge' README.md",
+    "retries": 1,
+    "priority": "P2"
+  },
+  {
+    "id": "changelog-v021",
+    "name": "Update CHANGELOG for v0.2.1",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\n\nUpdate CHANGELOG.md. There should be an [Unreleased] section at the top.\n\nChange [Unreleased] to [0.2.1] with today's date (2026-03-31). Add all the changes from this ralph loop under appropriate categories:\n\n### Added\n- Tests for FTS5 query sanitizer edge cases (apostrophes, quotes, parens, wildcards)\n- Tests for `memoreei setup` CLI command (single connector, interactive, fresh env)\n- `--reset` flag for `memoreei setup` to clear and reconfigure connectors\n- Configured connector markers (✓) in interactive setup mode\n- Progress output for `memoreei sync` command\n- pytest-cov for test coverage reporting\n- Coverage reporting in CI workflow\n- GitHub Actions CI badge in README\n- Codecov badge in README\n\n### Changed\n- `memoreei` with no subcommand now shows help instead of erroring\n- Version bump to 0.2.1\n\n### Fixed\n- (nothing unless bugs were found during testing)\n\nAlso add a new empty [Unreleased] section above [0.2.1].\n\nKeep existing entries for v0.2.0 and v0.1.0 intact.",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && grep -q '0.2.1' CHANGELOG.md && grep -q 'Unreleased' CHANGELOG.md",
+    "retries": 1,
+    "priority": "P1"
+  },
+  {
+    "id": "done-commit",
+    "name": "Commit all v0.2.1 changes",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\nVenv: .venv/bin/python\n\n1. Run the full test suite first: .venv/bin/python -m pytest tests/ -x -q\n   All tests must pass.\n\n2. Stage all changes: git add -A\n3. Commit with message: 'feat: v0.2.1 — setup CLI improvements, FTS5 tests, CI coverage'\n4. Tag: git tag v0.2.1\n5. Show: git log --oneline -3",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && git log --oneline -1 | grep -q 'v0.2.1' && git tag | grep -q 'v0.2.1'",
+    "retries": 2,
+    "priority": "P0"
+  },
+  {
+    "id": "final-push",
+    "name": "Push everything to GitHub",
+    "prompt": "You are working on the Memoreei project at /home/fi/.openclaw/workspace-elliot/projects/memoreei/\n\n1. Push all commits: git push origin main\n2. Push the tag: git push origin v0.2.1\n3. Show final status: git log --oneline -5 && git status",
+    "test": "cd /home/fi/.openclaw/workspace-elliot/projects/memoreei && git log --oneline -1 | grep -q 'v0.2.1'",
+    "retries": 2,
+    "priority": "P0"
+  }
+]
