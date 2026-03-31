@@ -213,6 +213,228 @@ def import_discord_package(
     asyncio.run(_run())
 
 
+_CONNECTORS = {
+    "gmail": {
+        "name": "Gmail (IMAP)",
+        "icon": "📧",
+        "vars": [
+            ("GMAIL_EMAIL", "Gmail address", False, "e.g. you@gmail.com"),
+            ("GMAIL_APP_PASSWORD", "App Password", True,
+             "Generate at https://myaccount.google.com/apppasswords (requires 2FA)"),
+        ],
+        "sync_name": "email",
+    },
+    "discord": {
+        "name": "Discord (Bot API)",
+        "icon": "🎮",
+        "vars": [
+            ("DISCORD_BOT_TOKEN", "Bot token", True, "From https://discord.com/developers/applications"),
+            ("DISCORD_CHANNEL_ID", "Channel ID", False, "Right-click channel → Copy ID (enable Developer Mode)"),
+        ],
+    },
+    "telegram": {
+        "name": "Telegram",
+        "icon": "✈️",
+        "vars": [
+            ("TELEGRAM_BOT_TOKEN", "Bot token", True, "From @BotFather on Telegram"),
+            ("TELEGRAM_CHAT_ID", "Chat ID", False, "Use @userinfobot or check API updates"),
+        ],
+    },
+    "slack": {
+        "name": "Slack",
+        "icon": "💬",
+        "vars": [
+            ("SLACK_BOT_TOKEN", "Bot token", True, "From https://api.slack.com/apps → OAuth & Permissions"),
+            ("SLACK_CHANNEL_ID", "Channel ID", False, "Right-click channel → View channel details → copy ID"),
+        ],
+    },
+    "matrix": {
+        "name": "Matrix",
+        "icon": "🟩",
+        "vars": [
+            ("MATRIX_HOMESERVER", "Homeserver URL", False, "e.g. https://matrix.org"),
+            ("MATRIX_ACCESS_TOKEN", "Access token", True, "Settings → Help & About → Access Token in Element"),
+            ("MATRIX_ROOM_ID", "Room ID", False, "e.g. !abc123:matrix.org"),
+        ],
+    },
+    "mastodon": {
+        "name": "Mastodon",
+        "icon": "🐘",
+        "vars": [
+            ("MASTODON_INSTANCE", "Instance URL", False, "e.g. https://mastodon.social"),
+            ("MASTODON_HASHTAG", "Hashtag to track (optional)", False, "Without the # sign"),
+            ("MASTODON_ACCESS_TOKEN", "Access token", True,
+             "Preferences → Development → New Application → copy token"),
+        ],
+    },
+    "signal": {
+        "name": "Signal Desktop",
+        "icon": "🔒",
+        "vars": [
+            ("SIGNAL_DB_PATH", "Signal DB path (optional)", False,
+             "Leave blank for auto-detect (~/.config/Signal/sql/db.sqlite)"),
+            ("SIGNAL_CONFIG_PATH", "Signal config path (optional)", False,
+             "Leave blank for auto-detect (~/.config/Signal/config.json)"),
+        ],
+    },
+    "imessage": {
+        "name": "iMessage (macOS only)",
+        "icon": "🍎",
+        "vars": [
+            ("IMESSAGE_DB_PATH", "Messages DB path", False,
+             "Default: ~/Library/Messages/chat.db"),
+        ],
+    },
+}
+
+
+def _find_env_path() -> "Path":
+    from pathlib import Path
+
+    env_path = Path(".env")
+    if not env_path.exists():
+        candidate = Path(__file__).parent.parent.parent.parent / ".env"
+        if candidate.exists():
+            env_path = candidate
+    return env_path
+
+
+def _read_env_lines(env_path: "Path") -> list[str]:
+    if env_path.exists():
+        return env_path.read_text().splitlines()
+    return []
+
+
+def _write_env_updates(
+    env_path: "Path", env_lines: list[str], updates: list[tuple[str, str]]
+) -> None:
+    for var_name, value in updates:
+        found = False
+        for i, line in enumerate(env_lines):
+            stripped = line.lstrip("# ").strip()
+            if stripped.startswith(f"{var_name}=") or stripped.startswith(f"{var_name} ="):
+                env_lines[i] = f"{var_name}={value}"
+                found = True
+                break
+        if not found:
+            env_lines.append(f"{var_name}={value}")
+    env_path.write_text("\n".join(env_lines) + "\n")
+
+
+def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
+    """Prompt the user for a single connector's variables. Returns list of (var, value)."""
+    import questionary
+
+    info = _CONNECTORS[key]
+    typer.echo(f"\n  {info['icon']}  {info['name']}\n")
+    updates: list[tuple[str, str]] = []
+
+    for var_name, label, is_secret, hint in info["vars"]:
+        typer.echo(f"  {typer.style(hint, dim=True)}")
+        if is_secret:
+            value = questionary.password(f"  {label}:").ask()
+        else:
+            value = questionary.text(f"  {label}:").ask()
+        if value is None:
+            # User pressed Ctrl-C
+            raise typer.Exit(1)
+        if value.strip():
+            updates.append((var_name, value.strip()))
+        typer.echo("")
+
+    return updates
+
+
+@app.command()
+def setup(
+    connector: Optional[str] = typer.Argument(
+        None,
+        help="Connector to configure (gmail, discord, telegram, slack, matrix, mastodon, signal, imessage). Omit to choose interactively.",
+    ),
+) -> None:
+    """Interactive setup — configure connectors and write credentials to .env."""
+    import questionary
+    from pathlib import Path
+
+    env_path = _find_env_path()
+    env_lines = _read_env_lines(env_path)
+
+    # Check if this is first-time setup (no .env or no DB path configured)
+    existing_db_path = None
+    for line in env_lines:
+        stripped = line.strip()
+        if stripped.startswith("MEMOREEI_DB_PATH=") and not stripped.startswith("#"):
+            existing_db_path = stripped.split("=", 1)[1].strip()
+            break
+
+    if not existing_db_path:
+        typer.echo("\n  🗄️  Database setup\n")
+        default_path = str(Path.home() / ".memoreei" / "memoreei.db")
+        db_path = questionary.text(
+            "  Where should Memoreei store its database?",
+            default=default_path,
+        ).ask()
+        if db_path is None:
+            raise typer.Exit(1)
+        db_path = db_path.strip() or default_path
+        # Ensure parent directory exists
+        db_dir = Path(db_path).expanduser().parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        # Prepend to env updates
+        _write_env_updates(env_path, env_lines, [("MEMOREEI_DB_PATH", db_path)])
+        env_lines = _read_env_lines(env_path)  # reload after write
+        typer.echo(f"  ✓ Database: {db_path}\n")
+
+    if connector:
+        # Single connector mode
+        key = connector.lower().replace("-", "").replace("_", "")
+        if key not in _CONNECTORS:
+            typer.echo(f"Unknown connector: {connector}")
+            typer.echo(f"Available: {', '.join(_CONNECTORS.keys())}")
+            raise typer.Exit(1)
+        selected_keys = [key]
+    else:
+        # Interactive multi-select with spacebar
+        choices = [
+            questionary.Choice(
+                title=f"{info['icon']}  {info['name']}",
+                value=key,
+            )
+            for key, info in _CONNECTORS.items()
+        ]
+        selected_keys = questionary.checkbox(
+            "Select connectors to configure (space to toggle, enter to confirm):",
+            choices=choices,
+            instruction="",
+        ).ask()
+        if not selected_keys:
+            typer.echo("\nNothing selected.")
+            raise typer.Exit(0)
+
+    # Prompt for each selected connector
+    all_updates: list[tuple[str, str]] = []
+    configured: list[str] = []
+
+    for key in selected_keys:
+        updates = _prompt_connector_vars(key)
+        if updates:
+            all_updates.extend(updates)
+            configured.append(key)
+
+    if not all_updates:
+        typer.echo("\n  Nothing to save.")
+        raise typer.Exit(0)
+
+    _write_env_updates(env_path, env_lines, all_updates)
+
+    typer.echo(f"\n  ✓ Saved to {env_path.resolve()}\n")
+    for key in configured:
+        sync_name = _CONNECTORS[key].get("sync_name", key)
+        icon = _CONNECTORS[key]["icon"]
+        typer.echo(f"  {icon}  Test: memoreei sync {sync_name}")
+    typer.echo(f"\n  Check all: memoreei config\n")
+
+
 @app.command()
 def config() -> None:
     """Show current configuration and connector readiness."""

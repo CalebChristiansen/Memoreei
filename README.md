@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![PyPI](https://img.shields.io/badge/pypi-coming%20soon-lightgrey)](https://pypi.org/)
+[![PyPI](https://img.shields.io/pypi/v/memoreei)](https://pypi.org/project/memoreei/)
 
 Memoreei is a local-first MCP server that gives Claude (and any MCP-compatible AI) persistent, searchable memory across your conversations, chats, and notes.
 
@@ -57,12 +57,19 @@ Claude can answer these. Without Memoreei, it can't.
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/memoreei.git
-cd memoreei
+pip install memoreei
+memoreei setup           # interactive — pick connectors, enter credentials
+memoreei sync            # pull messages from configured sources
+memoreei serve           # start the MCP server
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/CalebChristiansen/Memoreei.git
+cd Memoreei
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env   # edit with your tokens
-memoreei serve
 ```
 
 ### Connect to Claude Code
@@ -298,6 +305,10 @@ Sync every configured connector and return counts per source.
 ## CLI Reference
 
 ```bash
+# Interactive setup — configure connectors, writes to .env
+memoreei setup             # pick from a list (spacebar to select, enter to confirm)
+memoreei setup gmail       # configure a specific connector directly
+
 # Start the MCP server (stdio transport, default)
 memoreei serve
 
