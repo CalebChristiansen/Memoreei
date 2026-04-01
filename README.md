@@ -1,6 +1,6 @@
 # Memoreei
 
-**Your AI's memory. All of it.**
+**Remember every conversation you've ever had.**
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml/badge.svg)](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml)
