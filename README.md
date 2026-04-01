@@ -26,10 +26,8 @@ Your AI can answer these now. Without Memoreei, it can't.
 
 Memoreei isn't just a memory server — any app can be built on top of it. Two of our favorites:
 
-- **[Movie Ring](https://github.com/CalebChristiansen/memoreei-movie-ring)** — Ranks movies based on what your friends are actually talking about in the group chat that never shuts up.
-- **[Contact Dossier](https://github.com/CalebChristiansen/memoreei-contact-dossier)** — A personal CRM that builds itself from your conversations. No data entry required.
-
-For simpler code examples (direct search, Discord bot), see the [`examples/`](examples/) directory.
+- **Movie Ring** — Ranks movies based on what your friends are actually talking about in the group chat that never shuts up.
+- **Contact Dossier** — A personal CRM that builds itself from your conversations. No data entry required.
 
 ---
 
