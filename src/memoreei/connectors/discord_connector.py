@@ -6,7 +6,10 @@ import sys
 import time
 from typing import Any
 
-import aiohttp
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]
 
 from ulid import ULID
 
@@ -65,6 +68,11 @@ class DiscordConnector:
     """One-shot Discord channel sync via REST API. No persistent gateway connection."""
 
     def __init__(self, token: str, db: Database, embedder: Any) -> None:
+        if aiohttp is None:
+            raise ImportError(
+                "aiohttp is required for the Discord connector. "
+                "Install it with: pip install memoreei[discord-live]"
+            )
         self.token = token
         self.db = db
         self.embedder = embedder
