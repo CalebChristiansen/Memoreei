@@ -1,6 +1,6 @@
 # Memoreei
 
-**One stop memory shop for all your AIs**
+**Your AI's memory. All of it.**
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml/badge.svg)](https://github.com/CalebChristiansen/Memoreei/actions/workflows/ci.yml)
@@ -8,48 +8,62 @@
 [![PyPI](https://img.shields.io/pypi/v/memoreei)](https://pypi.org/project/memoreei/)
 [![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)
 
-Memoreei is a local-first MCP server that gives Claude (and any MCP-compatible AI) persistent, searchable memory across your conversations, chats, and notes.
+Memoreei is an open-source MCP server that gives AI assistants a searchable memory of your entire personal communication history. It connects to 13 platforms so far — Discord, WhatsApp, Telegram, Signal, iMessage, Gmail, Slack, Instagram, and more — ingests your messages, and indexes them with a hybrid search engine combining keyword and semantic vector search. Any AI client that supports the [Model Context Protocol](https://modelcontextprotocol.io/) can then query your memories as naturally as asking a question.
+
+**The problem it solves:** every AI assistant starts each conversation with no knowledge of who you are, what you've discussed, or what matters to you. Memoreei changes that by turning years of your personal conversations into a living, searchable knowledge base — surfaced exactly when your AI needs it.
 
 ```
-"What did I say about the API redesign last month?"
-"Find everything from that Telegram thread about the deployment issue."
-"What were my notes on the React migration?"
+"What's my friend's favorite restaurant?"
+"What did my sister say she wanted for her birthday?"
+"How many times have I asked Jake to send that link again?"
 ```
 
-Claude can answer these. Without Memoreei, it can't.
+Your AI can answer these now. Without Memoreei, it can't.
+
+---
+
+## It's Also a Platform
+
+Memoreei isn't just a memory server — any app can be built on top of it. Two of our favorites:
+
+- **[Movie Ring](https://github.com/CalebChristiansen/memoreei-movie-ring)** — Ranks movies based on what your friends are actually talking about in the group chat that never shuts up.
+- **[Contact Dossier](https://github.com/CalebChristiansen/memoreei-contact-dossier)** — A personal CRM that builds itself from your conversations. No data entry required.
+
+For simpler code examples (direct search, Discord bot), see the [`examples/`](examples/) directory.
 
 ---
 
 ## Key Features
 
 - **Local-first** — all data stays in a single SQLite file on your machine
-- **Multi-source** — WhatsApp, Discord, Telegram, Slack, Matrix, iMessage, Signal, Gmail, and more
-- **MCP-native** — 21 tools exposed via the Model Context Protocol, usable by any MCP client
+- **13 sources and counting** — WhatsApp, Discord, Telegram, Slack, Matrix, iMessage, Signal, Gmail, Instagram, Mastodon, and more
+- **MCP-native** — 19 tools exposed via the Model Context Protocol, usable by any MCP client
 - **Hybrid search** — BM25 keyword search + vector semantic search, fused with Reciprocal Rank Fusion
 - **No mandatory cloud** — default embedding model runs fully offline via ONNX
+- **CLI + Docker** — `pip install memoreei` and you're running in under a minute
 
 ---
 
 ## Supported Sources
 
-| Source | Type | Status | Tests |
-|--------|------|--------|-------|
-| WhatsApp (`.txt` export) | File import | ✅ Stable | tested |
-| Discord (bot API) | Live sync | ✅ Stable | tested |
-| Discord Data Package (GDPR export) | File import | ✅ Stable | tested |
-| Telegram (bot API) | Live sync | ✅ Stable | tested |
-| Slack (Web API) | Live sync | ✅ Stable | needs testing |
-| Matrix (Client-Server API) | Live sync | ✅ Stable | needs testing |
-| Mastodon (REST API) | Live sync | ✅ Stable | needs testing |
-| Gmail (IMAP) | Live sync | ✅ Stable | needs testing |
-| Instagram DMs (GDPR export) | File import | ✅ Stable | tested |
-| Facebook Messenger (GDPR export) | File import | ✅ Stable | tested |
-| SMS Backup & Restore XML | File import | ✅ Stable | tested |
-| Generic JSON / JSON-lines | File import | ✅ Stable | tested |
-| Generic CSV / TSV | File import | ✅ Stable | tested |
-| iMessage (macOS) | Live sync | 🧪 Beta | tested |
-| Signal Desktop | Live sync | 🧪 Beta | tested |
-| Manual notes (`add_memory`) | MCP tool | ✅ Stable | tested |
+| Source | Type | Status |
+|--------|------|--------|
+| WhatsApp (`.txt` export) | File import | ✅ Stable |
+| Discord (bot API) | Live sync | ✅ Stable |
+| Discord Data Package (GDPR export) | File import | ✅ Stable |
+| Telegram (bot API) | Live sync | ✅ Stable |
+| Slack (Web API) | Live sync | ✅ Stable |
+| Matrix (Client-Server API) | Live sync | ✅ Stable |
+| Mastodon (REST API) | Live sync | ✅ Stable |
+| Gmail (IMAP) | Live sync | ✅ Stable |
+| Instagram DMs (GDPR export) | File import | ✅ Stable |
+| Facebook Messenger (GDPR export) | File import | ✅ Stable |
+| SMS Backup & Restore XML | File import | ✅ Stable |
+| Generic JSON / JSON-lines | File import | ✅ Stable |
+| Generic CSV / TSV | File import | ✅ Stable |
+| iMessage (macOS) | Live sync | 🧪 Beta |
+| Signal Desktop | Live sync | 🧪 Beta |
+| Manual notes (`add_memory`) | MCP tool | ✅ Stable |
 
 **File import** — one-time or repeated ingest from an exported file.
 **Live sync** — incremental sync via API, checkpoint-based (only fetches new messages).
@@ -74,9 +88,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-### Connect to Claude Code
+### Connect to Your AI
 
-Add to `.mcp.json` in your project (or `~/.claude/settings.json` for global):
+Add to your MCP client config (e.g. `.mcp.json`, `claude_desktop_config.json`, or wherever your client reads MCP server definitions):
 
 ```json
 {
@@ -90,16 +104,13 @@ Add to `.mcp.json` in your project (or `~/.claude/settings.json` for global):
 }
 ```
 
-### Connect to Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+If you installed via `pip install memoreei`, the `memoreei-server` command is also available:
 
 ```json
 {
   "mcpServers": {
     "memoreei": {
-      "command": "/path/to/memoreei/.venv/bin/python",
-      "args": ["-m", "memoreei.server"]
+      "command": "memoreei-server"
     }
   }
 }
@@ -109,7 +120,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ## MCP Tools
 
-All 21 tools are available to any connected MCP client.
+All 19 tools are available to any connected MCP client.
 
 ### Search & Retrieval
 
@@ -367,36 +378,67 @@ memoreei config
  │  ┌────────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
  │  │    Connectors      │  │  Hybrid Search   │  │   MCP Tools     │  │
  │  │                    │  │                  │  │                 │  │
- │  │  whatsapp.py       │  │  FTS5 (BM25)     │  │  search_memory  │  │
- │  │  discord_*.py      │  │  + vector cosine │  │  get_context    │  │
- │  │  telegram_*.py     │  │  + RRF fusion    │  │  add_memory     │  │
- │  │  slack_*.py        │  │                  │  │  list_sources   │  │
- │  │  matrix_*.py       │  └────────┬─────────┘  │  ingest_*       │  │
- │  │  email_*.py        │           │            │  import_*       │  │
- │  │  mastodon_*.py     │           │            │  sync_*         │  │
- │  │  imessage_*.py     │  ┌────────▼──────────┐ │  refresh_memory │  │
- │  │  signal_*.py       │  │  SQLite Database  │ │  sync_all       │  │
- │  │  generic_*.py      │  │  memories + FTS5  │ └────────┬────────┘  │
+ │  │  13 sources        │  │  FTS5 (BM25)     │  │  search_memory  │  │
+ │  │  file + live sync  │  │  + vector cosine │  │  get_context    │  │
+ │  │  checkpoint-based  │  │  + RRF fusion    │  │  add_memory     │  │
+ │  │  dedup on import   │  │                  │  │  list_sources   │  │
+ │  │                    │  └────────┬─────────┘  │  ingest_*       │  │
+ │  │                    │           │            │  import_*       │  │
+ │  │                    │           │            │  sync_*         │  │
+ │  │                    │  ┌────────▼──────────┐ │  refresh_memory │  │
+ │  │                    │  │  SQLite Database  │ │  sync_all       │  │
+ │  │                    │  │  memories + FTS5  │ └────────┬────────┘  │
  │  └────────────────────┘  │  embeddings BLOB  │          │           │
  │                          │  sync checkpoints │          │           │
  │                          └───────────────────┘          │           │
  └────────────────────────────────────────────────────────┼────────────┘
-                                                          │ stdio / JSON-RPC
+ │                                                          │ stdio / SSE
                                                           ▼
                                                ┌─────────────────────┐
                                                │    MCP Clients      │
                                                │                     │
-                                               │  Claude Code        │
-                                               │  Claude Desktop     │
-                                               │  Any MCP client     │
+                                               │  Any AI assistant   │
+                                               │  that speaks MCP    │
                                                └─────────────────────┘
 ```
 
 ---
 
+## How Hybrid Search Works
+
+Memoreei runs two searches in parallel and fuses the results:
+
+```
+Query: "that weird API rate limit issue"
+         │
+         ├──▶ FTS5 BM25 keyword search
+         │    Matches "API", "rate", "limit" — fast, exact
+         │    Returns ranked list of IDs
+         │
+         └──▶ Vector search (cosine similarity)
+              Matches "throttling", "429 errors", "backoff"
+              Returns ranked list of IDs
+                  │
+                  ▼
+         Reciprocal Rank Fusion (RRF)
+         ─────────────────────────────
+         score(item) = Σ  1 / (60 + rank_i)
+                        i ∈ {keyword_rank, vector_rank}
+
+         Items in BOTH result sets are boosted.
+         Items in only one set still contribute.
+         Top N returned, then filtered by source/participant/date.
+```
+
+**Why RRF?** Rank-based fusion requires no score normalization across different scales. The constant `k=60` is the standard default from the original paper and empirically outperforms weighted linear combinations.
+
+**Default embedding model:** `BAAI/bge-small-en-v1.5` via FastEmbed — 384-dimensional vectors, ~23 MB ONNX model, runs fully offline.
+
+---
+
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the credentials for the sources you want to use. Unused connectors can be left blank.
+Copy `.env.example` to `.env` and fill in the credentials for the sources you want to use. Unused connectors can be left blank. Or just run `memoreei setup` and it'll walk you through it.
 
 ### Core
 
@@ -467,38 +509,6 @@ Copy `.env.example` to `.env` and fill in the credentials for the sources you wa
 
 ---
 
-## How Hybrid Search Works
-
-Memoreei runs two searches in parallel and fuses the results:
-
-```
-Query: "that weird API rate limit issue"
-         │
-         ├──▶ FTS5 BM25 keyword search
-         │    Matches "API", "rate", "limit" — fast, exact
-         │    Returns ranked list of IDs
-         │
-         └──▶ Vector search (cosine similarity)
-              Matches "throttling", "429 errors", "backoff"
-              Returns ranked list of IDs
-                  │
-                  ▼
-         Reciprocal Rank Fusion (RRF)
-         ─────────────────────────────
-         score(item) = Σ  1 / (60 + rank_i)
-                        i ∈ {keyword_rank, vector_rank}
-
-         Items in BOTH result sets are boosted.
-         Items in only one set still contribute.
-         Top N returned, then filtered by source/participant/date.
-```
-
-**Why RRF?** Rank-based fusion requires no score normalization across different scales. The constant `k=60` is the standard default from the original paper and empirically outperforms weighted linear combinations.
-
-**Default embedding model:** `BAAI/bge-small-en-v1.5` via FastEmbed — 384-dimensional vectors, ~23 MB ONNX model, runs fully offline.
-
----
-
 ## Privacy
 
 **Local-first by design.**
@@ -518,53 +528,18 @@ The `.env` file and `memoreei.db` are in `.gitignore`.
 
 ---
 
-## Project Structure
+## Docker
 
-```
-memoreei/
-├── src/memoreei/
-│   ├── server.py                    # MCP server, all 21 tool definitions
-│   ├── cli.py                       # Typer CLI (memoreei command)
-│   ├── config.py                    # Config loader (.env → dataclass)
-│   ├── sync_manager.py              # Background sync loop + per-source dispatch
-│   ├── storage/
-│   │   ├── database.py              # SQLite + FTS5 virtual table + vector storage
-│   │   └── models.py                # MemoryItem dataclass
-│   ├── search/
-│   │   ├── embeddings.py            # FastEmbed (local ONNX) + OpenAI providers
-│   │   └── hybrid.py                # RRF fusion of BM25 + vector results
-│   ├── connectors/
-│   │   ├── whatsapp.py              # WhatsApp .txt export parser
-│   │   ├── discord_connector.py     # Discord REST API + checkpoint sync
-│   │   ├── discord_package_connector.py  # Discord GDPR export importer
-│   │   ├── telegram_connector.py    # Telegram Bot API + checkpoint sync
-│   │   ├── slack_connector.py       # Slack Web API + checkpoint sync
-│   │   ├── matrix_connector.py      # Matrix Client-Server API
-│   │   ├── email_connector.py       # Gmail IMAP + UID checkpoint
-│   │   ├── mastodon_connector.py    # Mastodon REST API
-│   │   ├── imessage_connector.py    # macOS Messages chat.db (read-only)
-│   │   ├── signal_connector.py      # Signal Desktop SQLCipher DB
-│   │   ├── messenger_connector.py   # Facebook Messenger GDPR export
-│   │   ├── instagram_connector.py   # Instagram DMs GDPR export
-│   │   ├── sms_connector.py         # SMS Backup & Restore XML
-│   │   └── generic_connector.py     # Generic JSON/CSV importer
-│   └── tools/
-│       └── memory_tools.py          # MCP tool implementations
-├── tests/                           # Unit + integration tests
-├── .env.example                     # Config template
-└── pyproject.toml                   # Package metadata
+```bash
+docker build -t memoreei .
+docker run -v ./data:/data -e MEMOREEI_DB_PATH=/data/memoreei.db memoreei serve
 ```
 
----
+Or with docker-compose:
 
-## Example Apps
-
-These standalone apps are built on Memoreei and show what you can build with it:
-
-- [Movie Ring](https://github.com/CalebChristiansen/memoreei-movie-ring) — Discover what movies your friends are talking about
-- [Contact Dossier](https://github.com/CalebChristiansen/memoreei-contact-dossier) — CRM for your real relationships
-
-For simpler code examples (direct search, Discord bot), see the [`examples/`](examples/) directory.
+```bash
+docker-compose up
+```
 
 ---
 
@@ -577,25 +552,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on adding new connectors, 
 ## License
 
 MIT
-
-```
-Copyright (c) 2026 Memoreei Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
