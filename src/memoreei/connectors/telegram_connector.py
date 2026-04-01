@@ -4,7 +4,10 @@ import os
 import time
 from typing import Any
 
-import aiohttp
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]
 
 from ulid import ULID
 
