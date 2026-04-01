@@ -15,7 +15,7 @@ Memoreei is an open-source MCP server that gives AI assistants a searchable memo
 ```
 "What's my friend's favorite restaurant?"
 "What did my sister say she wanted for her birthday?"
-"How many times have I asked Kevin to send that link again?"
+"How many times have I asked Dory to send that link again?"
 ```
 
 Your AI can answer these now. Without Memoreei, it can't.
