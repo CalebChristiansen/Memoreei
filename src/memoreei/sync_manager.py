@@ -40,7 +40,7 @@ class SyncManager:
             return 0
 
     async def sync_source(self, source_name: str, tools: MemoryTools) -> int:
-        """Sync a specific connector by name. Returns new message count."""
+        """Sync a specific connector by name. Returns new message count. Raises on error."""
         lock = self._get_lock()
         async with lock:
             count = 0
@@ -76,6 +76,14 @@ class SyncManager:
                     count = result.get("synced", 0)
                 except Exception as e:
                     print(f"[sync_manager] Mastodon sync error: {e}", file=sys.stderr)
+            elif source_name == "imessage":
+                try:
+                    result = await tools.sync_imessage_tool()
+                    count = result.get("synced", 0)
+                    if "error" in result:
+                        print(f"[sync_manager] iMessage sync error: {result['error']}", file=sys.stderr)
+                except Exception as e:
+                    print(f"[sync_manager] iMessage sync error: {e}", file=sys.stderr)
             else:
                 print(f"[sync_manager] Unknown source: {source_name}", file=sys.stderr)
                 return 0

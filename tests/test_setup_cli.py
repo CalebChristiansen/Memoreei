@@ -12,11 +12,19 @@ from memoreei.cli import app
 runner = CliRunner()
 
 
-def _make_mock_questionary(text_values: list[str], password_values: list[str] | None = None, checkbox_values: list[str] | None = None):
+def _make_mock_questionary(
+    text_values: list[str],
+    password_values: list[str] | None = None,
+    checkbox_values: list[str] | None = None,
+    select_values: list[str] | None = None,
+    confirm_values: list[bool] | None = None,
+):
     """Build a mock questionary module that returns values in order."""
     mock_q = MagicMock()
     text_iter = iter(text_values)
     password_iter = iter(password_values or [])
+    select_iter = iter(select_values or [])
+    confirm_iter = iter(confirm_values or [])
 
     def _text_side_effect(prompt, **kwargs):
         m = MagicMock()
@@ -33,9 +41,21 @@ def _make_mock_questionary(text_values: list[str], password_values: list[str] | 
         m.ask.return_value = checkbox_values
         return m
 
+    def _select_side_effect(prompt, **kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_iter)
+        return m
+
+    def _confirm_side_effect(prompt, **kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(confirm_iter)
+        return m
+
     mock_q.text.side_effect = _text_side_effect
     mock_q.password.side_effect = _password_side_effect
     mock_q.checkbox.side_effect = _checkbox_side_effect
+    mock_q.select.side_effect = _select_side_effect
+    mock_q.confirm.side_effect = _confirm_side_effect
     mock_q.Choice = lambda **kw: kw  # just pass through
     return mock_q
 
@@ -45,10 +65,12 @@ class TestSetupGmail:
 
     def test_setup_gmail_writes_env(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # Gmail needs: text for DB path, text for GMAIL_EMAIL, password for GMAIL_APP_PASSWORD
+        # First-time setup: DB path, embedding provider (select), auto-sync (confirm=False), gmail vars
         mock_q = _make_mock_questionary(
             text_values=[str(tmp_path / "test.db"), "user@gmail.com"],
             password_values=["secret123"],
+            select_values=["fastembed"],
+            confirm_values=[False],
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail"])
@@ -64,11 +86,13 @@ class TestSetupInteractive:
 
     def test_setup_interactive_multi_connector(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # DB path prompt, then gmail vars (text + password), then discord vars (password + text)
+        # DB path, embedding provider (select), auto-sync (confirm=False), then connector vars
         mock_q = _make_mock_questionary(
             text_values=[str(tmp_path / "test.db"), "user@gmail.com", "chan123"],
             password_values=["gmailpass", "discordtoken"],
             checkbox_values=["gmail", "discord"],
+            select_values=["fastembed"],
+            confirm_values=[False],
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup"])
@@ -86,8 +110,12 @@ class TestSetupUnknownConnector:
 
     def test_unknown_connector_exits_error(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # Still need DB path prompt before connector check
-        mock_q = _make_mock_questionary(text_values=[str(tmp_path / "test.db")])
+        # DB path + embedding provider + auto-sync before connector check
+        mock_q = _make_mock_questionary(
+            text_values=[str(tmp_path / "test.db")],
+            select_values=["fastembed"],
+            confirm_values=[False],
+        )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "nonexistent"])
 
@@ -104,6 +132,8 @@ class TestSetupFirstTimeDbPath:
         mock_q = _make_mock_questionary(
             text_values=[custom_db, "user@gmail.com"],
             password_values=["pass"],
+            select_values=["fastembed"],
+            confirm_values=[False],
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail"])
@@ -111,6 +141,8 @@ class TestSetupFirstTimeDbPath:
         assert result.exit_code == 0
         env_content = (tmp_path / ".env").read_text()
         assert f"MEMOREEI_DB_PATH={custom_db}" in env_content
+        assert "EMBEDDING_PROVIDER=fastembed" in env_content
+        assert "AUTO_SYNC=false" in env_content
         # Parent dir should have been created
         assert (tmp_path / "custom").is_dir()
 

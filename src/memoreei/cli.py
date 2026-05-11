@@ -308,7 +308,8 @@ _CONNECTORS = {
         "icon": "🍎",
         "vars": [
             ("IMESSAGE_DB_PATH", "Messages DB path", False,
-             "Default: ~/Library/Messages/chat.db"),
+             "Press Enter to use the default macOS location.",
+             "~/Library/Messages/chat.db"),
         ],
     },
 }
@@ -377,12 +378,14 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     typer.echo(f"\n  {info['icon']}  {info['name']}\n")
     updates: list[tuple[str, str]] = []
 
-    for var_name, label, is_secret, hint in info["vars"]:
+    for var_info in info["vars"]:
+        var_name, label, is_secret, hint = var_info[:4]
+        var_default: str = var_info[4] if len(var_info) > 4 else ""
         typer.echo(f"  {typer.style(hint, dim=True)}")
         if is_secret:
             value = questionary.password(f"  {label}:").ask()
         else:
-            value = questionary.text(f"  {label}:").ask()
+            value = questionary.text(f"  {label}:", default=var_default).ask()
         if value is None:
             # User pressed Ctrl-C
             raise typer.Exit(1)
@@ -429,10 +432,49 @@ def setup(
         # Ensure parent directory exists
         db_dir = Path(db_path).expanduser().parent
         db_dir.mkdir(parents=True, exist_ok=True)
-        # Prepend to env updates
-        _write_env_updates(env_path, env_lines, [("MEMOREEI_DB_PATH", db_path)])
+
+        core_updates: list[tuple[str, str]] = [("MEMOREEI_DB_PATH", db_path)]
+
+        # Embedding provider
+        typer.echo("\n  🔍  Embedding provider\n")
+        typer.echo("  fastembed runs fully offline (recommended). openai requires an API key.")
+        provider = questionary.select(
+            "  Embedding provider:",
+            choices=["fastembed", "openai"],
+            default="fastembed",
+        ).ask()
+        if provider is None:
+            raise typer.Exit(1)
+        core_updates.append(("EMBEDDING_PROVIDER", provider))
+        if provider == "openai":
+            api_key = questionary.password("  OpenAI API key:").ask()
+            if api_key is None:
+                raise typer.Exit(1)
+            if api_key.strip():
+                core_updates.append(("OPENAI_API_KEY", api_key.strip()))
+
+        # Background auto-sync
+        typer.echo("\n  🔄  Background sync\n")
+        typer.echo("  Keeps your sources up to date automatically while the server runs.")
+        auto_sync = questionary.confirm(
+            "  Enable background auto-sync?",
+            default=True,
+        ).ask()
+        if auto_sync is None:
+            raise typer.Exit(1)
+        core_updates.append(("AUTO_SYNC", "true" if auto_sync else "false"))
+        if auto_sync:
+            interval_str = questionary.text(
+                "  Sync interval (seconds):",
+                default="300",
+            ).ask()
+            if interval_str is None:
+                raise typer.Exit(1)
+            core_updates.append(("AUTO_SYNC_INTERVAL", interval_str.strip() or "300"))
+
+        _write_env_updates(env_path, env_lines, core_updates)
         env_lines = _read_env_lines(env_path)  # reload after write
-        typer.echo(f"  ✓ Database: {db_path}\n")
+        typer.echo(f"\n  ✓ Database: {db_path}\n")
 
     if connector:
         # Single connector mode

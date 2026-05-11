@@ -29,7 +29,8 @@ def is_macos() -> bool:
 def _get_db_path() -> str:
     """Return the iMessage DB path from env var or the macOS default."""
     default = str(Path.home() / "Library" / "Messages" / "chat.db")
-    return os.environ.get("IMESSAGE_DB_PATH", default)
+    raw = os.environ.get("IMESSAGE_DB_PATH", default)
+    return str(Path(raw).expanduser())
 
 
 def _apple_date_to_unix(apple_date: int) -> int:
@@ -119,12 +120,15 @@ class IMessageConnector:
     async def _do_sync(
         self, conn: sqlite3.Connection, chat_filter: str | None
     ) -> int:
+        from tqdm import tqdm
         chats = self._list_chats(conn, chat_filter)
         if not chats:
             return 0
         total = 0
-        for chat_rowid, chat_identifier, chat_name in chats:
-            total += await self._sync_chat(conn, chat_rowid, chat_identifier, chat_name)
+        with tqdm(chats, desc="Chats", unit="chat", file=sys.stderr) as progress:
+            for chat_rowid, chat_identifier, chat_name in progress:
+                progress.set_postfix_str(chat_name[:40])
+                total += await self._sync_chat(conn, chat_rowid, chat_identifier, chat_name)
         return total
 
     def _list_chats(
@@ -146,6 +150,9 @@ class IMessageConnector:
         chat_identifier: str,
         chat_name: str,
     ) -> int:
+        from tqdm import tqdm
+
+        batch_size = 100
         checkpoint_key = str(chat_rowid)
         last_rowid = await self.db.get_imessage_checkpoint(checkpoint_key) or 0
 
@@ -154,29 +161,41 @@ class IMessageConnector:
         if not rows:
             return 0
 
-        items: list[MemoryItem] = []
-        newest_rowid = last_rowid
-        for row in rows:
-            rowid = int(row["rowid"])
-            if rowid > newest_rowid:
-                newest_rowid = rowid
-            item = self._to_memory_item(row, chat_identifier, chat_name)
-            if item is not None:
-                items.append(item)
+        total_stored = 0
+        with tqdm(
+            total=len(rows),
+            desc=f"  {chat_name[:40]}",
+            unit="msg",
+            file=sys.stderr,
+            leave=False,
+        ) as progress:
+            for i in range(0, len(rows), batch_size):
+                batch_rows = rows[i : i + batch_size]
+                newest_rowid = last_rowid
+                items: list[MemoryItem] = []
 
-        # Always advance checkpoint even if all messages were empty
-        await self.db.set_imessage_checkpoint(checkpoint_key, newest_rowid)
+                for row in batch_rows:
+                    rowid = int(row["rowid"])
+                    newest_rowid = max(newest_rowid, rowid)
+                    item = self._to_memory_item(row, chat_identifier, chat_name)
+                    if item is not None:
+                        items.append(item)
 
-        if not items:
-            return 0
+                if items:
+                    texts = [item.content for item in items]
+                    embeddings = await self.embedder.embed(texts)
+                    for item, emb in zip(items, embeddings):
+                        item.embedding = emb
+                    await self.db.bulk_insert(items)
+                    total_stored += len(items)
 
-        texts = [item.content for item in items]
-        embeddings = await self.embedder.embed(texts)
-        for item, emb in zip(items, embeddings):
-            item.embedding = emb
+                # Checkpoint advances after each successful batch insert —
+                # cancel/crash mid-sync resumes from here, not from scratch.
+                await self.db.set_imessage_checkpoint(checkpoint_key, newest_rowid)
+                last_rowid = newest_rowid
+                progress.update(len(batch_rows))
 
-        await self.db.bulk_insert(items)
-        return len(items)
+        return total_stored
 
     def _to_memory_item(
         self,

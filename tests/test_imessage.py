@@ -389,3 +389,89 @@ def test_get_db_path_from_env(tmp_path):
     custom = str(tmp_path / "custom.db")
     with patch.dict("os.environ", {"IMESSAGE_DB_PATH": custom}):
         assert _get_db_path() == custom
+
+
+def test_get_db_path_expands_tilde():
+    """Tilde in IMESSAGE_DB_PATH env var must be expanded to an absolute path."""
+    with patch.dict("os.environ", {"IMESSAGE_DB_PATH": "~/Library/Messages/chat.db"}):
+        path = _get_db_path()
+    assert "~" not in path
+    assert path.startswith("/")
+    assert path.endswith("Library/Messages/chat.db")
+
+
+# ---------------------------------------------------------------------------
+# Large-batch tests (>100 messages — exercises the batch loop)
+# ---------------------------------------------------------------------------
+
+
+def _make_large_chat_db(path: str, n: int = 200) -> None:
+    """Create a chat.db with n messages in a single conversation."""
+    conn = sqlite3.connect(path)
+    conn.executescript(_CHAT_DB_SCHEMA)
+    conn.execute("INSERT INTO handle VALUES (1, '+15550001234', 'US', 'iMessage', NULL)")
+    conn.execute(
+        "INSERT INTO chat VALUES (1, 'chat-guid-large', 45, 3, NULL, '+15550001234', 'iMessage', NULL, NULL)"
+    )
+    for i in range(1, n + 1):
+        conn.execute(
+            f"INSERT INTO message VALUES ({i}, 'msg-guid-{i}', 'Message {i}', 1, 'iMessage', NULL, {730000000 + i}, 0, 0, 0, 1, 0)"
+        )
+        conn.execute(f"INSERT INTO chat_message_join VALUES (1, {i}, {730000000 + i})")
+    conn.commit()
+    conn.close()
+
+
+@pytest.mark.asyncio
+async def test_sync_large_batch_all_stored(mem_db, embedder, tmp_path):
+    """200 messages across two 100-message batches must all be stored."""
+    db_path = str(tmp_path / "large.db")
+    _make_large_chat_db(db_path, n=200)
+
+    connector = IMessageConnector(db=mem_db, embedder=embedder, db_path=db_path)
+    with patch("memoreei.connectors.imessage_connector.is_macos", return_value=True):
+        count = await connector.sync()
+
+    assert count == 200
+    sources = await mem_db.list_sources()
+    assert sources.get("imessage:+15550001234") == 200
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_advances_per_batch_on_error(mem_db, embedder, tmp_path):
+    """If the embedder fails on batch 2, batch 1 messages and its checkpoint are preserved."""
+    db_path = str(tmp_path / "large.db")
+    _make_large_chat_db(db_path, n=200)
+
+    class FailsOnSecondBatch:
+        calls = 0
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("simulated interrupt")
+            return [[0.0] * 4 for _ in texts]
+
+        async def embed_query(self, text: str) -> list[float]:
+            return [0.0] * 4
+
+    connector = IMessageConnector(db=mem_db, embedder=FailsOnSecondBatch(), db_path=db_path)
+    with patch("memoreei.connectors.imessage_connector.is_macos", return_value=True):
+        with pytest.raises(RuntimeError, match="simulated interrupt"):
+            await connector.sync()
+
+    # First batch (rows 1-100) succeeded — checkpoint and DB entries must reflect this.
+    checkpoint = await mem_db.get_imessage_checkpoint("1")
+    assert checkpoint == 100
+
+    sources = await mem_db.list_sources()
+    assert sources.get("imessage:+15550001234") == 100
+
+    # Re-run with a working embedder — should pick up the remaining 100.
+    connector2 = IMessageConnector(db=mem_db, embedder=embedder, db_path=db_path)
+    with patch("memoreei.connectors.imessage_connector.is_macos", return_value=True):
+        second = await connector2.sync()
+
+    assert second == 100
+    sources = await mem_db.list_sources()
+    assert sources.get("imessage:+15550001234") == 200

@@ -1,6 +1,9 @@
 """Tests for the config module."""
 from __future__ import annotations
 
+import sys
+from unittest.mock import patch
+
 import pytest
 
 import memoreei.config as cfg_module
@@ -148,6 +151,37 @@ def test_configured_connectors_mastodon_instance():
 def test_configured_connectors_mastodon_hashtag():
     cfg = Config(mastodon_hashtag="rust")
     assert "mastodon" in cfg.configured_connectors()
+
+
+def test_env_var_auto_sync_interval(monkeypatch):
+    monkeypatch.setenv("AUTO_SYNC_INTERVAL", "120")
+    cfg = get_config()
+    assert cfg.sync_interval == 120
+
+
+def test_auto_sync_interval_takes_priority_over_sync_interval(monkeypatch):
+    monkeypatch.setenv("AUTO_SYNC_INTERVAL", "120")
+    monkeypatch.setenv("SYNC_INTERVAL", "999")
+    cfg = get_config()
+    assert cfg.sync_interval == 120
+
+
+def test_configured_connectors_imessage_on_macos():
+    with patch.object(sys, "platform", "darwin"):
+        cfg = Config(imessage_db_path="/some/path/chat.db")
+        assert "imessage" in cfg.configured_connectors()
+
+
+def test_configured_connectors_imessage_not_without_db_path():
+    with patch.object(sys, "platform", "darwin"):
+        cfg = Config()  # imessage_db_path defaults to None
+        assert "imessage" not in cfg.configured_connectors()
+
+
+def test_configured_connectors_imessage_not_on_non_macos():
+    with patch.object(sys, "platform", "linux"):
+        cfg = Config(imessage_db_path="/some/path/chat.db")
+        assert "imessage" not in cfg.configured_connectors()
 
 
 def test_configured_connectors_multiple():

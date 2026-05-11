@@ -116,6 +116,159 @@ If you installed via `pip install memoreei`, the `memoreei-server` command is al
 
 ---
 
+## Always-On Server on macOS (with Tailscale)
+
+Run Memoreei as a persistent background server on a Mac so you can query your memories from any device — phone, laptop, or another computer — over your private Tailscale network.
+
+### 1. Prerequisites
+
+- macOS 12+, Python 3.10+ (check with `python3 --version`; use `python3.11` if your default is older)
+- [Tailscale](https://tailscale.com) installed and logged in on both this Mac and your phone
+- For iMessage: Terminal must have **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access → add Terminal)
+
+### 2. Install
+
+Create a dedicated directory for the server's config and database, then install memoreei into a virtual environment:
+
+```bash
+mkdir ~/memoreei-server && cd ~/memoreei-server
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install memoreei
+```
+
+Verify:
+
+```bash
+memoreei --help
+```
+
+### 3. Configure
+
+Run the interactive setup wizard. It will ask where to store the database, which embedding provider to use, whether to enable background auto-sync, and which connectors to configure. Select **iMessage** when prompted.
+
+```bash
+cd ~/memoreei-server
+source .venv/bin/activate
+memoreei setup
+```
+
+The wizard writes everything to `.env` in the current directory — no manual editing needed.
+
+### 4. Test iMessage sync
+
+Make sure Terminal has Full Disk Access (step 1), then:
+
+```bash
+cd ~/memoreei-server
+source .venv/bin/activate
+memoreei sync imessage
+```
+
+You should see a message count. If you get a "Operation not permitted" error, Full Disk Access hasn't been granted yet.
+
+### 5. Start the SSE server
+
+The stdio transport only works for local clients. For remote access over Tailscale you need the SSE transport:
+
+```bash
+memoreei serve --sse --port 8080
+```
+
+Your Tailscale IP is shown by `tailscale ip --4`. Your phone can now reach the server at:
+
+```
+http://<your-mac-tailscale-ip>:8080
+```
+
+Test it: `curl http://<tailscale-ip>:8080/sse` should hold open a connection.
+
+### 6. Make it always-on with launchd
+
+Create a wrapper script so launchd can source your `.env`:
+
+```bash
+cat > ~/memoreei-server/start.sh << 'EOF'
+#!/bin/bash
+set -a
+source "$(dirname "$0")/.env"
+set +a
+exec "$(dirname "$0")/.venv/bin/memoreei" serve --sse --port 8080
+EOF
+chmod +x ~/memoreei-server/start.sh
+```
+
+Create the launchd plist:
+
+```bash
+cat > ~/Library/LaunchAgents/com.memoreei.server.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.memoreei.server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$HOME/memoreei-server/start.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$HOME/memoreei-server</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/memoreei-server/memoreei.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/memoreei-server/memoreei.log</string>
+</dict>
+</plist>
+EOF
+```
+
+Load and start it:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.memoreei.server.plist
+launchctl start com.memoreei.server
+```
+
+Check it's running:
+
+```bash
+tail -f ~/memoreei-server/memoreei.log
+```
+
+To stop or restart:
+
+```bash
+launchctl stop com.memoreei.server    # stop
+launchctl unload ~/Library/LaunchAgents/com.memoreei.server.plist  # remove from autostart
+```
+
+### 7. Connect your phone
+
+In your MCP client on iOS, add a remote server with the SSE URL:
+
+```
+http://<your-mac-tailscale-ip>:8080/sse
+```
+
+The `tailscale ip --4` command on your Mac gives you the IP.
+
+### Updating
+
+```bash
+cd ~/memoreei-server
+source .venv/bin/activate
+pip install --upgrade memoreei
+launchctl stop com.memoreei.server
+launchctl start com.memoreei.server
+```
+
+---
+
 ## MCP Tools
 
 All 19 tools are available to any connected MCP client.

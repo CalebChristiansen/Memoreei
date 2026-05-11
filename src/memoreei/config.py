@@ -58,6 +58,7 @@ class Config:
 
     def configured_connectors(self) -> list[str]:
         """Return names of connectors that have sufficient config to operate."""
+        import sys
         connectors: list[str] = []
         if self.discord_token and self.discord_channel_id:
             connectors.append("discord")
@@ -71,6 +72,8 @@ class Config:
             connectors.append("email")
         if self.mastodon_instance or self.mastodon_hashtag:
             connectors.append("mastodon")
+        if sys.platform == "darwin" and self.imessage_db_path:
+            connectors.append("imessage")
         return connectors
 
 
@@ -86,7 +89,7 @@ def get_config() -> Config:
             embedding_provider=os.environ.get("EMBEDDING_PROVIDER", "fastembed").lower(),
             openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
             auto_sync=os.environ.get("AUTO_SYNC", "").lower() in ("1", "true", "yes"),
-            sync_interval=int(os.environ.get("SYNC_INTERVAL", "300")),
+            sync_interval=int(os.environ.get("AUTO_SYNC_INTERVAL") or os.environ.get("SYNC_INTERVAL") or "300"),
             discord_token=os.environ.get("DISCORD_BOT_TOKEN") or None,
             discord_channel_id=os.environ.get("DISCORD_CHANNEL_ID") or None,
             telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,
