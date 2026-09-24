@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Database :: Database Engines/Servers",
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0",
+    "mcp[cli]>=1.26.0",  # Streamable HTTP, transport_security
     "fastembed>=0.3.0",
     "openai>=1.0.0",
     "aiosqlite>=0.20.0",
