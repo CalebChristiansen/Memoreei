@@ -28,3 +28,9 @@ TASK.md
 tasks.json
 ralph-v021.env
 .coverage
+:memory:
+logs-*/
+tasks-*.json
+run_tasks*.sh
+ralph*.env
+usecases/

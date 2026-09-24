@@ -58,6 +58,10 @@ memoreei-server = "memoreei.server:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/memoreei"]
 
+# The sdist ships the package, its tests and the docs, and nothing else from the checkout.
+[tool.hatch.build.targets.sdist]
+only-include = ["src/memoreei", "tests", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "pyproject.toml"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
