@@ -195,6 +195,13 @@ Change it with `--port` or `MEMOREEI_PORT`.
 On a Linux server with no desktop login, run `loginctl enable-linger $USER` once so
 the user service starts at boot rather than at your first SSH login.
 
+**macOS firewall:** if it's on (System Settings → Network → Firewall), other machines
+can't connect until you allow the Python that runs memoreei to accept incoming
+connections. macOS asks with a dialog on the Mac's screen the first time the server
+starts; click **Allow**. Missed it? Firewall → Options, add the `Python.app` your
+Python lives in, and set it to allow. The symptom is a client that times out while
+`curl http://127.0.0.1:3679/mcp` on the Mac itself answers `401`.
+
 **macOS and iMessage:** reading `~/Library/Messages/chat.db` needs **Full Disk Access**,
 granted in System Settings → Privacy & Security → Full Disk Access to the program that
 reads it. A grant to Terminal covers `memoreei sync` typed in Terminal, but not the
