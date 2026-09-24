@@ -121,9 +121,15 @@ def serve(
             store = KeyStore(await _get_db())
         return await store.verify(key)
 
+    # One plain line per event, for log files and grep. force=True replaces the Rich
+    # handler the SDK installs, which wraps lines to the terminal width.
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+        force=True,
     )
+    logging.getLogger("mcp").setLevel(logging.WARNING)  # per-request chatter
     scheme = "https" if tls_cert else "http"
     typer.echo(
         f"memoreei: serving {scheme}://{host}:{port}/mcp for {len(names)} key(s): {', '.join(names)}",
