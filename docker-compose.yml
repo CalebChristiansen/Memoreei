@@ -1,9 +1,15 @@
-version: '3.8'
+# First run: create a key before starting the server, which refuses to run without one.
+#   docker compose run --rm memoreei key create <name>
+#   docker compose up -d
 services:
   memoreei:
     build: .
+    ports:
+      - "3679:3679"
     volumes:
       - ./data:/data
-      - ./.env:/app/.env:ro
     environment:
-      - MEMOREEI_DB_PATH=/data/memoreei.db
+      # Inside a container memoreei can't see the host's addresses, so tell it the URL
+      # clients will use; `key create` prints it in the ready-to-paste config.
+      - MEMOREEI_PUBLIC_URL=http://<server-ip>:3679
+    restart: unless-stopped
