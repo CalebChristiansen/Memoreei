@@ -230,7 +230,7 @@ from memoreei.connectors.irc_connector import IrcConnector
 
 @pytest.mark.asyncio
 async def test_irc_sync_returns_results(temp_db):
-    raw = [{"id": "1", "nick": "alice", "text": "hello", "timestamp": 1700000000}]
+    raw = [{"id": "1", "nick": "zezima", "text": "hello", "timestamp": 1700000000}]
 
     with patch.object(IrcConnector, "_fetch_messages", new=AsyncMock(return_value=raw)):
         with patch("memoreei.connectors.irc_connector.get_config") as mock_cfg:
@@ -246,7 +246,7 @@ async def test_irc_sync_returns_results(temp_db):
 @pytest.mark.asyncio
 async def test_irc_dedup(temp_db):
     """Syncing same messages twice should not double-count."""
-    raw = [{"id": "1", "nick": "alice", "text": "hello", "timestamp": 1700000000}]
+    raw = [{"id": "1", "nick": "zezima", "text": "hello", "timestamp": 1700000000}]
 
     with patch.object(IrcConnector, "_fetch_messages", new=AsyncMock(return_value=raw)):
         with patch("memoreei.connectors.irc_connector.get_config") as mock_cfg:

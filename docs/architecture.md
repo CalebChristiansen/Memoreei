@@ -2,10 +2,10 @@
 
 ## Overview
 
-Memoreei is an MCP (Model Context Protocol) server that aggregates personal messages from multiple platforms into a single searchable database. It exposes search and sync tools over stdio, making it directly usable from Claude Code and Claude Desktop.
+Memoreei is an MCP (Model Context Protocol) server that aggregates personal messages from multiple platforms into a single searchable database. It exposes every tool over stdio to a client on the same machine, and a key-protected, read-only subset over Streamable HTTP (`memoreei serve --http`, `/mcp`) to clients elsewhere.
 
 ```
-┌─────────────────┐     stdio      ┌──────────────────────────────┐
+┌─────────────────┐  stdio / HTTP  ┌──────────────────────────────┐
 │   Claude Code   │ ◄────────────► │     MCP Server (FastMCP)     │
 │  Claude Desktop │                │     src/memoreei/server.py   │
 └─────────────────┘                └──────────────┬───────────────┘
@@ -61,7 +61,7 @@ CREATE TABLE memories (
     source_id   TEXT,               -- platform message ID (dedup key)
     content     TEXT NOT NULL,      -- full message text
     summary     TEXT,               -- optional short summary
-    participants TEXT,              -- JSON array ["Alice", "Bob"]
+    participants TEXT,              -- JSON array ["Zezima", "Hans"]
     ts          INTEGER NOT NULL,   -- unix timestamp (message time)
     ingested_at INTEGER NOT NULL,   -- when added to DB
     metadata    TEXT,               -- JSON object (custom fields per source)
@@ -128,7 +128,7 @@ The connector registry in `connectors/__init__.py` maps connector names to class
 ## MCP Tool Flow
 
 ```
-Claude calls search_memory("what did Alice say about the meeting")
+Claude calls search_memory("what did Zezima say about the meeting")
         │
         ▼
 server.py: _get_tools() → lazy-init Database + HybridSearch

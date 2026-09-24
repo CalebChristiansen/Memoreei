@@ -35,10 +35,10 @@ Memoreei isn't just a memory server — any app can be built on top of it. Two o
 
 - **Local-first** — all data stays in a single SQLite file on your machine
 - **13 sources and counting** — WhatsApp, Discord, Telegram, Slack, Matrix, iMessage, Signal, Gmail, Instagram, Mastodon, and more
-- **MCP-native** — 19 tools exposed via the Model Context Protocol, usable by any MCP client
+- **MCP-native** — every tool over stdio for a local client; a key-protected, read-only surface over the network for everything else
 - **Hybrid search** — BM25 keyword search + vector semantic search, fused with Reciprocal Rank Fusion
 - **No mandatory cloud** — default embedding model runs fully offline via ONNX
-- **CLI + Docker** — `pip install memoreei` and you're running in under a minute
+- **Runs anywhere** — `pip install memoreei` on a laptop, a home server or in Docker; reach it from any machine on your network
 
 ---
 
@@ -74,7 +74,6 @@ Memoreei isn't just a memory server — any app can be built on top of it. Two o
 pip install memoreei
 memoreei setup           # interactive — pick connectors, enter credentials
 memoreei sync            # pull messages from configured sources
-memoreei serve           # start the MCP server
 ```
 
 Or from source:
@@ -83,150 +82,225 @@ Or from source:
 git clone https://github.com/CalebChristiansen/Memoreei.git
 cd Memoreei
 python -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install -e '.[dev]'
 ```
 
-### Connect to Your AI
+Everything memoreei knows lives in one directory, `~/.memoreei/`: `config.env` for
+settings and credentials, `memoreei.db` for the memories. Every command finds it from
+wherever you run it. Point it elsewhere with `--home <dir>` or `MEMOREEI_HOME`.
 
-Add to your MCP client config (e.g. `.mcp.json`, `claude_desktop_config.json`, or wherever your client reads MCP server definitions):
+Then connect an AI client, either on the same machine or over the network.
+
+### On the same machine (stdio)
+
+The client starts memoreei itself and talks to it over stdio. No network, no key,
+and every tool, including the ones that import files. Add to your MCP client config
+(`.mcp.json`, `claude_desktop_config.json`, or wherever your client keeps them):
 
 ```json
 {
   "mcpServers": {
     "memoreei": {
-      "command": "/path/to/memoreei/.venv/bin/python",
-      "args": ["-m", "memoreei.server"],
-      "cwd": "/path/to/memoreei"
+      "command": "memoreei",
+      "args": ["serve"]
     }
   }
 }
 ```
 
-If you installed via `pip install memoreei`, the `memoreei-server` command is also available:
+Use the full path to `memoreei` (`which memoreei`) if it's installed in a virtualenv
+your client doesn't know about. For Claude Code:
+`claude mcp add memoreei -- memoreei serve`.
 
-```json
-{
-  "mcpServers": {
-    "memoreei": {
-      "command": "memoreei-server"
-    }
-  }
-}
-```
+### From other machines (network server)
+
+See [Run it as a network server](#run-it-as-a-network-server), next.
 
 ---
 
-## Always-On Server on macOS (with Tailscale)
+## Run it as a network server
 
-Run Memoreei as a persistent background server on a Mac so you can query your memories from any device — phone, laptop, or another computer — over your private Tailscale network.
+Run memoreei on one always-on machine (a home server, a desktop, a Mac that never
+sleeps) and query your memories from every other one. It serves MCP's Streamable HTTP
+transport at `/mcp`, and every request needs an API key.
 
-### 1. Prerequisites
-
-- macOS 12+, Python 3.10+ (check with `python3 --version`; use `python3.11` if your default is older)
-- [Tailscale](https://tailscale.com) installed and logged in on both this Mac and your phone
-- For iMessage: Terminal must have **Full Disk Access** (System Settings → Privacy & Security → Full Disk Access → add Terminal)
-
-### 2. Install
-
-Create a dedicated directory for the server's config and database, then install memoreei into a virtual environment:
+### 1. Install
 
 ```bash
-mkdir ~/memoreei-server && cd ~/memoreei-server
-python3.11 -m venv .venv
-source .venv/bin/activate
+python3 -m venv ~/memoreei-venv
+source ~/memoreei-venv/bin/activate
 pip install memoreei
 ```
 
-Verify:
+Python 3.10 or newer. On macOS, `python3 --version` first; the system Python may be older.
+To try a release candidate, `pip install --pre memoreei`.
+
+### 2. Configure
 
 ```bash
-memoreei --help
-```
-
-### 3. Configure
-
-Run the interactive setup wizard. It will ask where to store the database, which embedding provider to use, whether to enable background auto-sync, and which connectors to configure. Select **iMessage** when prompted.
-
-```bash
-cd ~/memoreei-server
-source .venv/bin/activate
 memoreei setup
 ```
 
-The wizard writes everything to `.env` in the current directory — no manual editing needed.
+The wizard asks which embedding provider to use, whether to sync in the background,
+and which connectors to configure. It writes `~/.memoreei/config.env` (readable only by
+you), then offers to create the first API key. Say yes, and name it after the machine
+that will use it.
 
-### 4. Test iMessage sync
-
-Make sure Terminal has Full Disk Access (step 1), then:
-
-```bash
-cd ~/memoreei-server
-source .venv/bin/activate
-memoreei sync imessage
-```
-
-You should see a message count. If you get a "Operation not permitted" error, Full Disk Access hasn't been granted yet.
-
-### 5. Start the SSE server
-
-The stdio transport only works for local clients. For remote access over Tailscale you need the SSE transport:
+Pull in what you have:
 
 ```bash
-memoreei serve --sse --port 8080
+memoreei sync                          # every connector you configured
+memoreei import whatsapp chat.txt      # and any exports you have lying around
 ```
 
-Your Tailscale IP is shown by `tailscale ip --4`. Your phone can now reach the server at:
+### 3. Create a key per client
 
+```bash
+memoreei key create laptop
 ```
-http://<your-mac-tailscale-ip>:8080
-```
 
-Test it: `curl http://<tailscale-ip>:8080/sse` should hold open a connection.
+The key is printed once and never again; memoreei keeps only a hash of it. Alongside it
+you get ready-to-paste client config with this machine's address filled in: a
+`claude mcp add` command and a `.mcp.json` snippet. If the machine has several
+addresses (Wi-Fi, Ethernet, a VPN), you get one URL per address; use whichever the
+client can reach.
 
-### 6. Make it always-on
+One key per client means that losing a laptop costs you one `memoreei key revoke
+laptop`, not a round of changing every other client. `memoreei key list` shows when
+each key was last used.
 
-One command registers Memoreei as a launchd service that starts on login and restarts automatically if it crashes:
+### 4. Start it, and keep it running
 
 ```bash
 memoreei service install
 ```
 
-That's it. To check on it later:
+This registers a background service (launchd on macOS, a systemd user unit on Linux)
+that starts at login, restarts if it crashes, and runs `memoreei serve --http` on port
+3679. To look after it:
 
 ```bash
-memoreei service status   # is it running?
-memoreei service logs     # tail the log
+memoreei service status     # is it running?
+memoreei service logs       # tail the log; each request is logged with its key's name
 memoreei service uninstall  # remove it
 ```
 
-### 7. Connect your phone
+To run it in the foreground instead: `memoreei serve --http`. It refuses to start until
+at least one key exists; there is no way to run the network server open.
 
-In your MCP client on iOS, add a remote server with the SSE URL:
+Port 3679 spells DORY on a phone keypad. It is officially registered to the Apple
+Newton's dock sync, a device discontinued in 1998, which is not expected to object.
+Change it with `--port` or `MEMOREEI_PORT`.
+
+On a Linux server with no desktop login, run `loginctl enable-linger $USER` once so
+the user service starts at boot rather than at your first SSH login.
+
+**macOS and iMessage:** reading `~/Library/Messages/chat.db` needs **Full Disk Access**,
+granted in System Settings → Privacy & Security → Full Disk Access to the program that
+reads it. A grant to Terminal covers `memoreei sync` typed in Terminal, but not the
+background service, which is launched differently and may need its own. If
+`memoreei service logs` shows `Operation not permitted`, that grant is missing. It can
+only be given in person, on the Mac itself.
+
+### 5. Connect a client
+
+**Claude Code** — paste the command `key create` printed:
+
+```bash
+claude mcp add --transport http memoreei http://<server-ip>:3679/mcp \
+  --header "Authorization: Bearer <key>"
+```
+
+**A project `.mcp.json`** — keep the key out of the file and in an environment variable,
+which Claude Code expands:
+
+```json
+{
+  "mcpServers": {
+    "memoreei": {
+      "type": "http",
+      "url": "http://<server-ip>:3679/mcp",
+      "headers": { "Authorization": "Bearer ${MEMOREEI_KEY}" }
+    }
+  }
+}
+```
+
+**claude.ai** (custom connectors) — these call your server from Anthropic's servers,
+not from your browser, so they can't reach an address on your home network or VPN.
+They need a public HTTPS URL (see below). Add the connector with that URL, and put the
+key in an `Authorization: Bearer <key>` request header in the connector's settings.
+
+Any other MCP client that supports Streamable HTTP and custom headers works the same
+way: URL, plus that header.
+
+### HTTPS
+
+memoreei speaks plain HTTP by default, like Jellyfin, the *arr apps and Home Assistant.
+That's fine on a home network or a VPN, where the network is the thing keeping
+strangers out and the key is the thing keeping everyone else out. For anything
+public, put HTTPS in front.
+
+**A reverse proxy (recommended for a public URL).** [Caddy](https://caddyserver.com)
+gets and renews a certificate by itself:
 
 ```
-http://<your-mac-tailscale-ip>:8080/sse
+memories.example.com {
+    reverse_proxy <server-ip>:3679
+}
 ```
 
-The `tailscale ip --4` command on your Mac gives you the IP.
+Then tell memoreei the URL clients should use, so `key create` prints it:
+`MEMOREEI_PUBLIC_URL=https://memories.example.com` in `~/.memoreei/config.env`.
+
+**Or let memoreei do it**, if you already have a certificate:
+
+```bash
+memoreei serve --http --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem
+```
+
+or set `MEMOREEI_TLS_CERT` and `MEMOREEI_TLS_KEY` in `config.env`, which the service
+picks up.
+
+### What the network can do
+
+Over the network memoreei is **read-only, plus one refresh button**. It offers
+`search_memory`, `get_context`, `list_sources` and `sync`, and nothing else. It can't
+be told to import a file, fetch from a new account or store a note; several local tools
+take a path on the server, and a key holder shouldn't be able to point one at your SSH
+keys and search them back out. Filling the database is a local job: `memoreei setup`,
+`memoreei import …`, or a stdio client on the server itself.
+
+`sync` takes no arguments. It runs the connectors configured on the server and
+re-reads any import files registered there (see `memoreei import list`) that changed
+since the last read.
 
 ### Updating
 
 ```bash
-cd ~/memoreei-server
-source .venv/bin/activate
+source ~/memoreei-venv/bin/activate
 pip install --upgrade memoreei
-memoreei service install   # reinstalls with the new binary
+memoreei service install   # rewrites the service for the new version and restarts it
 ```
 
 ---
 
 ## MCP Tools
 
-All 19 tools are available to any connected MCP client.
+A local (stdio) client gets every tool below. A network client gets only the four
+marked **network**: see [What the network can do](#what-the-network-can-do).
+
+| Tool | Local | Network |
+|------|:-----:|:-------:|
+| `search_memory`, `get_context`, `list_sources` | ✅ | ✅ |
+| `sync` | ✅ | ✅ |
+| `add_memory` | ✅ | — |
+| `ingest_whatsapp`, `import_*` | ✅ | — |
+| `sync_<source>`, `sync_all`, `refresh_memory`, `sync_contacts` | ✅ | — |
 
 ### Search & Retrieval
 
-#### `search_memory`
+#### `search_memory` · network
 Hybrid keyword + semantic search across all ingested memories.
 
 | Parameter | Type | Default | Description |
@@ -238,7 +312,7 @@ Hybrid keyword + semantic search across all ingested memories.
 | `after` | string | — | ISO date lower bound, e.g. `2026-01-01` |
 | `before` | string | — | ISO date upper bound |
 
-#### `get_context`
+#### `get_context` · network
 Fetch surrounding messages for a specific memory — essential for understanding the conversation around a result.
 
 | Parameter | Type | Default | Description |
@@ -256,7 +330,7 @@ Manually store a note, fact, or anything worth remembering. Auto-embeds content 
 | `source` | string | `"manual"` | Source label |
 | `metadata` | dict | — | Optional key-value pairs |
 
-#### `list_sources`
+#### `list_sources` · network
 Inventory all ingested sources with message counts.
 
 ```json
@@ -409,6 +483,11 @@ Default paths: `~/.config/Signal/sql/db.sqlite` (Linux), `~/Library/Application 
 
 ### Utility Tools
 
+#### `sync` · network
+Refresh from everything configured on the server: every connector in `config.env`, plus
+registered import files that changed since they were last read. Takes no arguments.
+Returns counts per connector and per import file.
+
 #### `refresh_memory`
 Trigger an immediate sync of all configured sources. Returns count of new messages.
 
@@ -420,38 +499,56 @@ Sync every configured connector and return counts per source.
 ## CLI Reference
 
 ```bash
-# Interactive setup — configure connectors, writes to .env
+# Every command takes --home to use a different home directory
+memoreei --home /srv/memoreei status
+
+# Interactive setup — writes ~/.memoreei/config.env, offers the first API key
 memoreei setup             # pick from a list (spacebar to select, enter to confirm)
 memoreei setup gmail       # configure a specific connector directly
 
-# Start the MCP server (stdio transport, default)
+# Start the MCP server for a local client (stdio)
 memoreei serve
 
-# Start with SSE transport (for HTTP clients)
-memoreei serve --sse --port 8080
+# Start the network server (Streamable HTTP at /mcp, port 3679, key required)
+memoreei serve --http
+memoreei serve --http --host 0.0.0.0 --port 3679
+memoreei serve --http --tls-cert cert.pem --tls-key key.pem
 
-# Show DB stats: message counts, sources, last sync times
+# API keys for network clients: one per client, shown once
+memoreei key create laptop
+memoreei key list
+memoreei key revoke laptop
+
+# Run the network server in the background (launchd / systemd)
+memoreei service install [--port 3679]
+memoreei service status | logs | uninstall
+
+# Show DB stats: message counts, sources
 memoreei status
 
-# Sync all configured sources
+# Sync everything: configured connectors, plus changed registered import files
 memoreei sync
 
-# Sync a specific source
-memoreei sync discord
-memoreei sync telegram
-memoreei sync matrix
-memoreei sync slack
-memoreei sync email
-memoreei sync mastodon
+# Sync one connector
+memoreei sync discord        # telegram, matrix, slack, email, mastodon, imessage
 
 # Search from the terminal
 memoreei search "API redesign notes"
 memoreei search "printer issue" --limit 5 --source whatsapp:friends
 
-# Import files
-memoreei import-whatsapp /path/to/WhatsApp\ Chat.txt
-memoreei import-sms /path/to/sms-backup.xml
-memoreei import-discord-package /path/to/discord-package.zip
+# Import files (each one is remembered, and re-read by `memoreei sync` when it changes)
+memoreei import whatsapp "WhatsApp Chat.txt"
+memoreei import sms sms-backup.xml
+memoreei import discord-package discord-package.zip
+memoreei import messenger ~/Downloads/facebook-export/messages
+memoreei import instagram ~/Downloads/instagram-export
+memoreei import json chat.json --content-field text --sender-field from --timestamp-field ts
+memoreei import csv chat.csv --content-column body --sender-column who
+memoreei import contacts contacts.vcf
+
+# The remembered import files
+memoreei import list
+memoreei import forget 3     # stop re-reading it; what was imported stays
 
 # Show current configuration (tokens masked)
 memoreei config
@@ -494,7 +591,7 @@ memoreei config
  │                          │  sync checkpoints │          │           │
  │                          └───────────────────┘          │           │
  └────────────────────────────────────────────────────────┼────────────┘
- │                                                          │ stdio / SSE
+ │                                                          │ stdio / HTTP
                                                           ▼
                                                ┌─────────────────────┐
                                                │    MCP Clients      │
@@ -540,17 +637,36 @@ Query: "that weird API rate limit issue"
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the credentials for the sources you want to use. Unused connectors can be left blank. Or just run `memoreei setup` and it'll walk you through it.
+`memoreei setup` writes `~/.memoreei/config.env` and is the easy way. To edit it by hand,
+[`.env.example`](.env.example) lists every setting. Settings are read from, in order of
+precedence:
+
+1. the environment
+2. a `.env` in the current directory (handy when developing memoreei itself)
+3. `config.env` in memoreei's home directory
 
 ### Core
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MEMOREEI_HOME` | `~/.memoreei` | Home directory, holding `config.env` and `memoreei.db`; `--home` overrides it |
+| `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | SQLite database path |
 | `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local ONNX, no API key) or `openai` |
 | `OPENAI_API_KEY` | — | Required only if `EMBEDDING_PROVIDER=openai` |
-| `MEMOREEI_DB_PATH` | `./memoreei.db` | SQLite database path |
-| `AUTO_SYNC` | `false` | Enable background sync loop on server start |
-| `AUTO_SYNC_INTERVAL` | `3600` | Background sync interval in seconds |
+| `AUTO_SYNC` | `false` | Run `sync` in the background while the server runs |
+| `AUTO_SYNC_INTERVAL` | `300` | Background sync interval in seconds |
+
+### Network server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEMOREEI_HOST` | `0.0.0.0` | Address `serve --http` binds to |
+| `MEMOREEI_PORT` | `3679` | Port `serve --http` listens on |
+| `MEMOREEI_PUBLIC_URL` | — | The URL clients use, e.g. behind a reverse proxy. Only used to print client config |
+| `MEMOREEI_TLS_CERT` | — | TLS certificate (PEM), to serve HTTPS directly |
+| `MEMOREEI_TLS_KEY` | — | TLS private key (PEM) |
+
+API keys aren't settings: they live, hashed, in the database. See `memoreei key`.
 
 ### Discord
 
@@ -620,28 +736,33 @@ Copy `.env.example` to `.env` and fill in the credentials for the sources you wa
 - OpenAI embeddings are strictly opt-in (`EMBEDDING_PROVIDER=openai`)
 - No telemetry, no analytics, no cloud sync
 - Your messages never leave your machine in the default configuration
+- The network server is off unless you start it, never runs without an API key, and
+  stores only hashes of its keys. Over the network it can search what is stored, not
+  add to it or read files
 
 **What requires network access:**
 
 - Live sync connectors (Discord, Telegram, Slack, Matrix, Gmail, Mastodon) make outbound API calls to those services
 - `EMBEDDING_PROVIDER=openai` sends message text to OpenAI's API for embedding
 
-The `.env` file and `memoreei.db` are in `.gitignore`.
+`~/.memoreei/` is created readable only by you, and `config.env` is written mode 600.
 
 ---
 
 ## Docker
 
-```bash
-docker build -t memoreei .
-docker run -v ./data:/data -e MEMOREEI_DB_PATH=/data/memoreei.db memoreei serve
-```
-
-Or with docker-compose:
+The image keeps everything in `/data` (`MEMOREEI_HOME=/data`) and runs the network
+server on port 3679. The server won't start without a key, so make one first:
 
 ```bash
-docker-compose up
+docker compose run --rm memoreei setup              # optional: connectors, into ./data/config.env
+docker compose run --rm memoreei key create laptop
+docker compose up -d
 ```
+
+Inside a container memoreei can't see the host's addresses, so set
+`MEMOREEI_PUBLIC_URL` in `docker-compose.yml` to the URL clients will use; `key create`
+then prints config with that URL in it.
 
 ---
 

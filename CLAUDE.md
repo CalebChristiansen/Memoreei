@@ -17,18 +17,20 @@ You have these tools via the `memoreei` MCP server:
 
 ## How to Use
 - **To search:** Use `search_memory` with a natural language query. It does hybrid BM25 + vector search with RRF fusion.
-- **To sync Discord:** Use `sync_discord` — it reads the bot token and channel from .env automatically.
+- **To sync Discord:** Use `sync_discord` — it reads the bot token and channel from the config automatically.
 - **To get context around a result:** Use `get_context` with the memory ID from search results.
 - **To see what's ingested:** Use `list_sources`.
 
 ## DO NOT
 - Do NOT try to access Discord APIs directly or unlock Bitwarden — the MCP tools handle everything.
-- Do NOT use `bw` commands. The server has its own credentials in `.env`.
+- Do NOT use `bw` commands. The server has its own credentials in its config.
 
 ## Project Structure
 ```
 src/memoreei/
-├── server.py              # MCP server (FastMCP, stdio)
+├── server.py              # MCP servers: local (stdio, every tool), network (HTTP, 4 tools)
+├── auth.py                # API keys, bearer-auth middleware, client config printout
+├── imports.py             # registered import files, re-read by `sync`
 ├── storage/database.py    # SQLite + FTS5 + vector search
 ├── search/hybrid.py       # Hybrid search with RRF fusion
 ├── connectors/            # Discord, WhatsApp, Telegram, Matrix, Slack, Email
@@ -36,7 +38,6 @@ src/memoreei/
 ```
 
 ## Key Paths
-- **DB:** `./memoreei.db` (SQLite + FTS5)
-- **Venv:** `.venv/bin/python`
-- **Config:** `.env` (tokens, channel IDs)
-- **MCP config:** `.mcp.json` (also in `~/.claude/settings.json`)
+- **Home:** `~/.memoreei/` (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
+- **Dev config:** a `.env` in the checkout overrides `config.env` while you work here
+- **Venv:** `.venv/bin/python`, with memoreei installed editable (`pip install -e '.[dev]'`)

@@ -18,7 +18,8 @@ Configure connectors interactively:
 memoreei setup
 ```
 
-Or copy `.env.example` to `.env` and edit manually:
+That writes `~/.memoreei/config.env`. For development you can instead keep a `.env` in
+the checkout, which overrides it while you work from that directory:
 
 ```bash
 cp .env.example .env
