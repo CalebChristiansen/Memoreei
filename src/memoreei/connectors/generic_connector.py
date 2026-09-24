@@ -5,6 +5,8 @@ Covers LinkedIn exports, Google Chat/Hangouts takeouts, and custom formats.
 """
 from __future__ import annotations
 
+import hashlib
+
 import csv
 import io
 import json
@@ -130,7 +132,12 @@ def _build_memory_item(
         source = source_label
 
     formatted_content = f"{sender}: {content}" if sender else content
-    source_id = f"{source}:{index}"
+    # Identify the row by what it says, not where it sits, so re-importing a file that
+    # was re-exported in another order (or grew rows anywhere) adds only the new ones.
+    # The raw timestamp is used rather than ts, which is "now" when there's no column.
+    raw_ts = str(row.get(timestamp_field, "")) if timestamp_field else ""
+    fingerprint = hashlib.sha256(f"{raw_ts}\x1f{sender}\x1f{content}".encode()).hexdigest()[:24]
+    source_id = f"{source}:{fingerprint}"
 
     return MemoryItem(
         id=str(ULID()),
