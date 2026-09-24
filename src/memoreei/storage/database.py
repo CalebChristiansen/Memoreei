@@ -77,6 +77,13 @@ CREATE TABLE IF NOT EXISTS signal_checkpoint (
     last_rowid INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS contacts (
+    identifier TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    updated_at INTEGER NOT NULL
+);
 """
 
 FTS_TRIGGER_INSERT = """
@@ -452,3 +459,37 @@ class Database:
             (conversation_id, last_rowid, int(time.time())),
         )
         await self._db.commit()
+
+    async def upsert_contacts(self, contacts: list[tuple[str, str, str]]) -> int:
+        """Upsert a batch of (identifier, display_name, source) tuples. Returns count written."""
+        assert self._db is not None
+        now = int(time.time())
+        await self._db.executemany(
+            """
+            INSERT INTO contacts (identifier, display_name, source, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(identifier) DO UPDATE SET
+                display_name = excluded.display_name,
+                source = excluded.source,
+                updated_at = excluded.updated_at
+            """,
+            [(ident, name, src, now) for ident, name, src in contacts],
+        )
+        await self._db.commit()
+        return len(contacts)
+
+    async def get_contacts(self) -> dict[str, str]:
+        """Return mapping of identifier → display_name for all contacts."""
+        assert self._db is not None
+        async with self._db.execute("SELECT identifier, display_name FROM contacts") as cursor:
+            rows = await cursor.fetchall()
+        return {row["identifier"]: row["display_name"] for row in rows}
+
+    async def resolve_identifier(self, identifier: str) -> str | None:
+        """Look up a single identifier, return display_name or None."""
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT display_name FROM contacts WHERE identifier = ?", (identifier,)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["display_name"] if row else None

@@ -7,6 +7,7 @@ from typing import Any
 
 from ulid import ULID
 
+from memoreei.connectors.contacts_connector import import_vcf, sync_contacts
 from memoreei.connectors.discord_connector import sync_discord
 from memoreei.connectors.generic_connector import import_json, import_csv
 from memoreei.connectors.discord_package_connector import import_discord_package as _import_discord_package
@@ -27,6 +28,14 @@ from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
 
+def _resolve_source_name(source: str, contacts: dict[str, str]) -> str | None:
+    """Given a source like 'imessage:+12025550142', return the contact name if known."""
+    if ":" not in source:
+        return None
+    _, _, identifier = source.partition(":")
+    return contacts.get(identifier)
+
+
 class MemoryTools:
     def __init__(self, db: Database, embedder: EmbeddingProvider) -> None:
         self.db = db
@@ -42,7 +51,7 @@ class MemoryTools:
         after: str | None = None,
         before: str | None = None,
     ) -> list[dict[str, Any]]:
-        return await self.search.search(
+        results = await self.search.search(
             query=query,
             limit=limit,
             source=source,
@@ -50,6 +59,13 @@ class MemoryTools:
             after=after,
             before=before,
         )
+        contacts = await self.db.get_contacts()
+        for r in results:
+            src = r.get("source", "")
+            contact_name = _resolve_source_name(src, contacts)
+            if contact_name:
+                r["contact_name"] = contact_name
+        return results
 
     async def get_context(
         self, memory_id: str, before: int = 5, after: int = 5
@@ -81,8 +97,18 @@ class MemoryTools:
 
     async def list_sources(self) -> dict[str, Any]:
         sources = await self.db.list_sources()
+        contacts = await self.db.get_contacts()
         total = sum(sources.values())
-        return {"sources": sources, "total": total}
+        resolved = {}
+        for src, count in sources.items():
+            contact_name = _resolve_source_name(src, contacts)
+            key = f"{contact_name} ({src})" if contact_name else src
+            resolved[key] = count
+        return {"sources": resolved, "total": total}
+
+    async def sync_contacts_tool(self) -> dict[str, Any]:
+        """Sync contacts from macOS AddressBook into the contacts table."""
+        return await sync_contacts(self.db)
 
     async def ingest_whatsapp(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)
@@ -140,7 +166,14 @@ class MemoryTools:
         )
 
     async def sync_imessage_tool(self, chat_name: str | None = None) -> dict[str, Any]:
+        await sync_contacts(self.db)  # refresh contacts before syncing messages
         return await sync_imessage(db=self.db, embedder=self.embedder, chat_name=chat_name)
+
+    async def import_contacts_vcf(self, file_path: str) -> dict[str, Any]:
+        path = Path(file_path)
+        if not path.exists():
+            return {"error": f"File not found: {file_path}", "synced": 0}
+        return await import_vcf(self.db, path)
 
     async def sync_signal_tool(self, conversation_id: str | None = None) -> dict[str, Any]:
         return await sync_signal(db=self.db, embedder=self.embedder, conversation_id=conversation_id)

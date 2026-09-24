@@ -8,7 +8,9 @@ import typer
 
 app = typer.Typer(help="Memoreei — personal memory MCP server CLI", invoke_without_command=True)
 import_app = typer.Typer(help="Import data from various sources")
+service_app = typer.Typer(help="Manage the Memoreei background service (macOS launchd)")
 app.add_typer(import_app, name="import")
+app.add_typer(service_app, name="service")
 
 
 @app.callback(invoke_without_command=True)
@@ -27,7 +29,8 @@ def serve(
     from memoreei.server import mcp
 
     if sse:
-        mcp.run(transport="sse", port=port)
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     else:
         mcp.run(transport="stdio")
 
@@ -161,6 +164,53 @@ def search(
     asyncio.run(_run())
 
 
+@service_app.command(name="install")
+def service_install(
+    port: int = typer.Option(8080, "--port", help="Port for the SSE server"),
+) -> None:
+    """Install and start Memoreei as a background service (macOS launchd, Linux systemd)."""
+    import sys
+    from pathlib import Path
+    from memoreei.service._detect import get_backend
+
+    backend = get_backend()  # platform guard — exits early on unsupported OS
+
+    env_path = _find_env_path().resolve()
+    if not env_path.exists():
+        typer.echo("No .env found. Run 'memoreei setup' first.")
+        raise typer.Exit(1)
+
+    memoreei_bin = str(Path(sys.executable).parent / "memoreei")
+    backend.install(memoreei_bin, env_path, port)
+
+
+@service_app.command(name="uninstall")
+def service_uninstall() -> None:
+    """Stop and remove the Memoreei background service."""
+    from memoreei.service._detect import get_backend
+
+    get_backend().uninstall()
+
+
+@service_app.command(name="status")
+def service_status() -> None:
+    """Show whether the Memoreei service is running."""
+    from memoreei.service._detect import get_backend
+
+    get_backend().status()
+
+
+@service_app.command(name="logs")
+def service_logs(
+    follow: bool = typer.Option(True, "--follow/--no-follow", help="Follow the log"),
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
+) -> None:
+    """Tail the service log (macOS) or stream journald (Linux)."""
+    from memoreei.service._detect import get_backend
+
+    get_backend().logs(follow=follow, lines=lines)
+
+
 @import_app.command(name="whatsapp")
 def import_whatsapp(
     file: str = typer.Argument(..., help="Path to WhatsApp .txt export file"),
@@ -233,6 +283,35 @@ def import_discord_package(
         tools = MemoryTools(db=db, embedder=embedder)
 
         result = await tools.import_discord_package_tool(package_path=path)
+        typer.echo(json.dumps(result, indent=2))
+        await db.close()
+
+    asyncio.run(_run())
+
+
+@import_app.command(name="contacts")
+def import_contacts(
+    file: str = typer.Argument(..., help="Path to a .vcf vCard file"),
+) -> None:
+    """Import contacts from a vCard (.vcf) file to resolve phone numbers to names.
+
+    Export from macOS Contacts: File → Export → Export vCard.
+    """
+
+    async def _run() -> None:
+        from pathlib import Path as _Path
+        from memoreei.config import get_config
+        from memoreei.search.embeddings import get_provider
+        from memoreei.storage.database import Database
+        from memoreei.tools.memory_tools import MemoryTools
+
+        cfg = get_config()
+        db = Database(db_path=cfg.db_path)
+        await db.connect()
+        embedder = get_provider()
+        tools = MemoryTools(db=db, embedder=embedder)
+
+        result = await tools.import_contacts_vcf(file_path=file)
         typer.echo(json.dumps(result, indent=2))
         await db.close()
 

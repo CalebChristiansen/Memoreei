@@ -409,6 +409,32 @@ async def import_csv_file(
 
 
 @mcp.tool()
+async def sync_contacts() -> dict:
+    """Sync contacts from macOS AddressBook into the contacts table.
+
+    Maps phone numbers and email addresses to display names so that search
+    results and source listings show contact names instead of raw identifiers.
+    macOS only — returns an empty result on other platforms.
+    """
+    tools = await _get_tools()
+    return await tools.sync_contacts_tool()
+
+
+@mcp.tool()
+async def import_contacts_vcf(file_path: str) -> dict:
+    """Import contacts from a vCard (.vcf) file.
+
+    Export from macOS Contacts: File → Export → Export vCard.
+    Maps phone numbers and email addresses to display names.
+
+    Args:
+        file_path: Path to the .vcf file
+    """
+    tools = await _get_tools()
+    return await tools.import_contacts_vcf(file_path=file_path)
+
+
+@mcp.tool()
 async def import_instagram(data_path: str) -> dict:
     """Import Instagram DMs from a data download (GDPR export, JSON format).
     Download at: Instagram Settings > Accounts Center > Your Information > Download Your Information.
