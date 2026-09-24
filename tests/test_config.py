@@ -19,9 +19,19 @@ def reset_config_singleton():
     cfg_module._config = original
 
 
-def test_default_db_path():
-    cfg = Config()
-    assert cfg.db_path == "./memoreei.db"
+def test_default_db_path_is_in_home(isolated_home, monkeypatch):
+    monkeypatch.delenv("MEMOREEI_DB_PATH", raising=False)
+    cfg = get_config()
+    assert cfg.db_path == str(isolated_home / "memoreei.db")
+
+
+def test_default_network_settings(monkeypatch):
+    for var in ("MEMOREEI_HOST", "MEMOREEI_PORT", "MEMOREEI_PUBLIC_URL"):
+        monkeypatch.delenv(var, raising=False)
+    cfg = get_config()
+    assert cfg.host == "0.0.0.0"
+    assert cfg.port == 3679
+    assert cfg.public_url is None
 
 
 def test_default_embedding_provider():
@@ -193,3 +203,91 @@ def test_configured_connectors_multiple():
     connectors = cfg.configured_connectors()
     assert "discord" in connectors
     assert "telegram" in connectors
+
+
+# ---------------------------------------------------------------------------
+# Home directory and config file resolution
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def scratch_environ(monkeypatch):
+    """Let a test load dotenv files without leaking their values into later tests."""
+    import os
+
+    env = dict(os.environ)
+    for var in ("MEMOREEI_HOME", "MEMOREEI_DB_PATH", "MEMOREEI_PORT", "EMBEDDING_PROVIDER"):
+        env.pop(var, None)
+    monkeypatch.setattr(os, "environ", env)
+    monkeypatch.setattr(cfg_module, "_env_loaded", False)
+    return env
+
+
+def test_home_default_is_dot_memoreei(scratch_environ, monkeypatch, tmp_path):
+    scratch_environ["HOME"] = str(tmp_path)
+    assert cfg_module.memoreei_home() == tmp_path / ".memoreei"
+
+
+def test_home_from_env(scratch_environ, tmp_path):
+    scratch_environ["MEMOREEI_HOME"] = str(tmp_path / "from-env")
+    assert cfg_module.memoreei_home() == tmp_path / "from-env"
+
+
+def test_home_flag_beats_env(scratch_environ, tmp_path):
+    scratch_environ["MEMOREEI_HOME"] = str(tmp_path / "from-env")
+    cfg_module.set_home(str(tmp_path / "from-flag"))
+    try:
+        assert cfg_module.memoreei_home() == tmp_path / "from-flag"
+    finally:
+        cfg_module.set_home(None)
+
+
+def test_ensure_home_creates_private_dir(scratch_environ, tmp_path):
+    scratch_environ["MEMOREEI_HOME"] = str(tmp_path / "h")
+    home = cfg_module.ensure_home()
+    assert home.is_dir()
+    assert home.stat().st_mode & 0o777 == 0o700
+
+
+def test_config_env_in_home_is_loaded(scratch_environ, tmp_path, monkeypatch):
+    home = tmp_path / "h"
+    home.mkdir()
+    (home / "config.env").write_text("MEMOREEI_PORT=4000\n")
+    scratch_environ["MEMOREEI_HOME"] = str(home)
+    monkeypatch.chdir(tmp_path)
+    assert get_config().port == 4000
+    assert get_config().db_path == str(home / "memoreei.db")
+
+
+def test_cwd_env_overrides_config_env(scratch_environ, tmp_path, monkeypatch):
+    home = tmp_path / "h"
+    home.mkdir()
+    (home / "config.env").write_text("MEMOREEI_PORT=4000\nEMBEDDING_PROVIDER=openai\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / ".env").write_text("MEMOREEI_PORT=5000\n")
+    scratch_environ["MEMOREEI_HOME"] = str(home)
+    monkeypatch.chdir(work)
+    cfg = get_config()
+    assert cfg.port == 5000  # cwd .env wins
+    assert cfg.embedding_provider == "openai"  # config.env still fills the rest
+
+
+def test_real_environment_beats_both_files(scratch_environ, tmp_path, monkeypatch):
+    home = tmp_path / "h"
+    home.mkdir()
+    (home / "config.env").write_text("MEMOREEI_PORT=4000\n")
+    (tmp_path / ".env").write_text("MEMOREEI_PORT=5000\n")
+    scratch_environ["MEMOREEI_HOME"] = str(home)
+    scratch_environ["MEMOREEI_PORT"] = "6000"
+    monkeypatch.chdir(tmp_path)
+    assert get_config().port == 6000
+
+
+def test_cwd_env_can_set_home(scratch_environ, tmp_path, monkeypatch):
+    home = tmp_path / "elsewhere"
+    home.mkdir()
+    (home / "config.env").write_text("MEMOREEI_PORT=4100\n")
+    (tmp_path / ".env").write_text(f"MEMOREEI_HOME={home}\n")
+    monkeypatch.chdir(tmp_path)
+    assert get_config().port == 4100

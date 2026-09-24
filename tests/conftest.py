@@ -3,7 +3,25 @@ from __future__ import annotations
 
 import pytest
 
+import memoreei.config as config_module
 from memoreei.storage.database import Database
+
+
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path_factory, monkeypatch):
+    """Every test gets its own MEMOREEI_HOME and never reads a real config.
+
+    No ~/.memoreei, no developer's .env in the checkout: env loading is marked done,
+    and tests that exercise loading reset it themselves.
+    """
+    home = tmp_path_factory.mktemp("memoreei-home")
+    monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
+    monkeypatch.setenv("MEMOREEI_HOME", str(home))
+    monkeypatch.delenv("MEMOREEI_DB_PATH", raising=False)
+    monkeypatch.setattr(config_module, "_home_override", None)
+    monkeypatch.setattr(config_module, "_env_loaded", True)
+    monkeypatch.setattr(config_module, "_config", None)
+    return home
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from memoreei.config import Config
@@ -15,6 +15,7 @@ class SyncManager:
 
     def __init__(self) -> None:
         self._lock: asyncio.Lock | None = None
+        self._everything_lock: asyncio.Lock | None = None
         self._last_sync: dict[str, float] = {}
 
     def _get_lock(self) -> asyncio.Lock:
@@ -100,6 +101,30 @@ class SyncManager:
         self._last_sync["_all"] = time.monotonic()
         return total
 
+    async def sync_everything(self, tools: MemoryTools) -> dict[str, Any]:
+        """Run every configured connector, then re-read changed registered imports.
+
+        This is what the argument-free `sync` tool and `memoreei sync` do. It only
+        refreshes sources configured on this machine; it never takes a path or a token.
+        """
+        from memoreei.config import get_config
+        from memoreei.imports import resync_imports
+
+        if self._everything_lock is None:
+            self._everything_lock = asyncio.Lock()
+        async with self._everything_lock:
+            connectors: dict[str, Any] = {}
+            for source in get_config().configured_connectors():
+                try:
+                    connectors[source] = await self.sync_source(source, tools)
+                except Exception as e:
+                    connectors[source] = {"error": str(e)}
+            imports = await resync_imports(tools)
+            self._last_sync["_all"] = time.monotonic()
+        total = sum(v for v in connectors.values() if isinstance(v, int))
+        total += sum(i.get("new", 0) for i in imports)
+        return {"connectors": connectors, "imports": imports, "new_messages": total}
+
     async def auto_sync_loop(self, tools: MemoryTools, cfg: Config) -> None:
         """Optional background coroutine. Only called if config.auto_sync is True."""
         print(
@@ -113,7 +138,7 @@ class SyncManager:
                 print("[sync_manager] Background loop cancelled", file=sys.stderr)
                 raise
             try:
-                await self.refresh_all(tools)
+                await self.sync_everything(tools)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

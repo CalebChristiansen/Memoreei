@@ -5,13 +5,15 @@ from pathlib import Path
 
 import typer
 
-from ._base import ServiceBackend
+from memoreei.config import memoreei_home
+
+from ._base import ServiceBackend, print_installed
 
 _LABEL = "com.memoreei.server"
 
 
 def _launchd_paths() -> tuple[Path, Path, Path]:
-    memoreei_dir = Path.home() / ".memoreei"
+    memoreei_dir = memoreei_home()
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{_LABEL}.plist"
     log_path = memoreei_dir / "memoreei.log"
     return memoreei_dir, plist_path, log_path
@@ -26,7 +28,12 @@ class LaunchdBackend(ServiceBackend):
         plist_path.parent.mkdir(parents=True, exist_ok=True)
 
         start_sh.write_text(
-            f'#!/bin/bash\nset -a\nsource "{env_path}"\nset +a\nexec "{memoreei_bin}" serve --sse --port {port}\n'
+            f"#!/bin/bash\n"
+            f"set -a\n"
+            f'source "{env_path}"\n'
+            f"set +a\n"
+            f'export MEMOREEI_HOME="{env_path.parent}"\n'
+            f'exec "{memoreei_bin}" serve --http --port {port}\n'
         )
         start_sh.chmod(0o755)
 
@@ -63,11 +70,7 @@ class LaunchdBackend(ServiceBackend):
             raise typer.Exit(1)
         subprocess.run(["launchctl", "start", _LABEL], capture_output=True)
 
-        typer.echo(f"\n  ✓ Memoreei service installed and started\n")
-        typer.echo(f"  Endpoint:  http://localhost:{port}/sse")
-        typer.echo(f"  Logs:      memoreei service logs")
-        typer.echo(f"  Status:    memoreei service status")
-        typer.echo(f"  Stop:      memoreei service uninstall\n")
+        print_installed(port)
 
     def uninstall(self) -> None:
         _, plist_path, _ = _launchd_paths()

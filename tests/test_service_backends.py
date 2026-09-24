@@ -45,38 +45,40 @@ def _fake_systemd_paths(tmp_path: Path):
 
 class TestLaunchdInstall:
     def test_writes_start_sh(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
 
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         start_sh = tmp_path / ".memoreei" / "start.sh"
         assert start_sh.exists()
         content = start_sh.read_text()
-        assert "serve --sse --port 8080" in content
+        assert "serve --http --port 3679" in content
+        assert "--sse" not in content
         assert str(env_path) in content
+        assert f'MEMOREEI_HOME="{env_path.parent}"' in content
         assert content.startswith("#!/bin/bash")
 
     def test_start_sh_is_executable(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         start_sh = tmp_path / ".memoreei" / "start.sh"
         assert start_sh.stat().st_mode & 0o111, "start.sh is not executable"
 
     def test_writes_valid_plist(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         _, plist_path, _ = _fake_launchd_paths(tmp_path)
         assert plist_path.exists()
@@ -87,7 +89,7 @@ class TestLaunchdInstall:
         assert "<true/>" in content
 
     def test_calls_launchctl_load_and_start(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
         calls = []
 
@@ -97,14 +99,14 @@ class TestLaunchdInstall:
 
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_capture):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         flat = [" ".join(c) for c in calls]
         assert any("launchctl" in s and "load" in s for s in flat)
         assert any("launchctl" in s and "start" in s for s in flat)
 
     def test_custom_port_in_start_sh(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
@@ -114,7 +116,7 @@ class TestLaunchdInstall:
         assert "9090" in (tmp_path / ".memoreei" / "start.sh").read_text()
 
     def test_launchctl_load_failure_raises(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
         call_n = [0]
 
@@ -127,7 +129,7 @@ class TestLaunchdInstall:
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_fail_on_load), \
              pytest.raises(_AnyExit):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
 
 class TestLaunchdUninstall:
@@ -224,23 +226,24 @@ class TestLaunchdLogs:
 
 class TestSystemdInstall:
     def test_writes_unit_file(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
 
         with patch("memoreei.service._systemd._systemd_paths", lambda: _fake_systemd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_ok):
-            SystemdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            SystemdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         _, unit_path = _fake_systemd_paths(tmp_path)
         assert unit_path.exists()
         content = unit_path.read_text()
         assert f"EnvironmentFile={env_path}" in content
-        assert "ExecStart=/usr/bin/memoreei serve --sse --port 8080" in content
+        assert "ExecStart=/usr/bin/memoreei serve --http --port 3679" in content
+        assert f"Environment=MEMOREEI_HOME={env_path.parent}" in content
         assert "Restart=always" in content
         assert "WantedBy=default.target" in content
 
     def test_custom_port_in_unit(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         with patch("memoreei.service._systemd._systemd_paths", lambda: _fake_systemd_paths(tmp_path)), \
@@ -251,7 +254,7 @@ class TestSystemdInstall:
         assert "port 9090" in unit_path.read_text()
 
     def test_calls_daemon_reload_and_enable(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
         calls = []
 
@@ -261,14 +264,14 @@ class TestSystemdInstall:
 
         with patch("memoreei.service._systemd._systemd_paths", lambda: _fake_systemd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_capture):
-            SystemdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            SystemdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         flat = [" ".join(c) for c in calls]
         assert any("daemon-reload" in s for s in flat)
         assert any("enable" in s and "--now" in s for s in flat)
 
     def test_daemon_reload_failure_raises(self, tmp_path):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         def _fail(*args, **kwargs):
@@ -277,10 +280,10 @@ class TestSystemdInstall:
         with patch("memoreei.service._systemd._systemd_paths", lambda: _fake_systemd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_fail), \
              pytest.raises(_AnyExit):
-            SystemdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            SystemdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
     def test_bus_error_prints_linger_tip(self, tmp_path, capsys):
-        env_path = tmp_path / ".env"
+        env_path = tmp_path / "config.env"
         env_path.write_text("")
 
         def _fail(*args, **kwargs):
@@ -289,7 +292,7 @@ class TestSystemdInstall:
         with patch("memoreei.service._systemd._systemd_paths", lambda: _fake_systemd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_fail), \
              pytest.raises(_AnyExit):
-            SystemdBackend().install("/usr/bin/memoreei", env_path, 8080)
+            SystemdBackend().install("/usr/bin/memoreei", env_path, 3679)
 
         out = capsys.readouterr().out
         assert "loginctl enable-linger" in out

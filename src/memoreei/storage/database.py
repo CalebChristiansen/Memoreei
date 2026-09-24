@@ -78,6 +78,24 @@ CREATE TABLE IF NOT EXISTS signal_checkpoint (
     updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS api_keys (
+    name TEXT PRIMARY KEY,
+    key_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_used_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS import_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    path TEXT NOT NULL,
+    options_json TEXT NOT NULL DEFAULT '{}',
+    added_at INTEGER NOT NULL,
+    last_synced_at INTEGER,
+    last_mtime REAL,
+    UNIQUE(kind, path)
+);
+
 CREATE TABLE IF NOT EXISTS contacts (
     identifier TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -126,6 +144,9 @@ class Database:
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
+        parent = Path(self.db_path).parent
+        if not parent.exists():
+            parent.mkdir(parents=True, mode=0o700)
         self._db = await aiosqlite.connect(self.db_path)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
@@ -493,3 +514,107 @@ class Database:
         ) as cursor:
             row = await cursor.fetchone()
         return row["display_name"] if row else None
+
+    async def count_memories(self) -> int:
+        assert self._db is not None
+        async with self._db.execute("SELECT COUNT(*) AS cnt FROM memories") as cursor:
+            row = await cursor.fetchone()
+        return row["cnt"] if row else 0
+
+    # ── API keys ────────────────────────────────────────────────────────────
+    # Only sha256 hashes are stored; see memoreei.auth.
+
+    async def add_api_key(self, name: str, key_hash: str) -> bool:
+        """Store a key hash under *name*. Returns False if the name is taken."""
+        assert self._db is not None
+        try:
+            await self._db.execute(
+                "INSERT INTO api_keys (name, key_hash, created_at) VALUES (?, ?, ?)",
+                (name, key_hash, int(time.time())),
+            )
+        except aiosqlite.IntegrityError:
+            return False
+        await self._db.commit()
+        return True
+
+    async def list_api_keys(self) -> list[dict[str, Any]]:
+        """Name, created_at and last_used_at for every key. Never the hash."""
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT name, created_at, last_used_at FROM api_keys ORDER BY created_at, name"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def api_key_hashes(self) -> list[tuple[str, str]]:
+        """(name, key_hash) pairs, for the auth check only."""
+        assert self._db is not None
+        async with self._db.execute("SELECT name, key_hash FROM api_keys") as cursor:
+            rows = await cursor.fetchall()
+        return [(row["name"], row["key_hash"]) for row in rows]
+
+    async def revoke_api_key(self, name: str) -> bool:
+        assert self._db is not None
+        cursor = await self._db.execute("DELETE FROM api_keys WHERE name = ?", (name,))
+        await self._db.commit()
+        return cursor.rowcount > 0
+
+    async def touch_api_key(self, name: str, when: int | None = None) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE api_keys SET last_used_at = ? WHERE name = ?",
+            (when if when is not None else int(time.time()), name),
+        )
+        await self._db.commit()
+
+    # ── Registered import files ─────────────────────────────────────────────
+    # Files imported locally, so `sync` can re-read them without being told a path.
+
+    async def register_import(
+        self, kind: str, path: str, options: dict[str, Any], mtime: float | None
+    ) -> int:
+        """Add or update a registered import. Returns its id."""
+        assert self._db is not None
+        now = int(time.time())
+        await self._db.execute(
+            """
+            INSERT INTO import_sources (kind, path, options_json, added_at, last_synced_at, last_mtime)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(kind, path) DO UPDATE SET
+                options_json = excluded.options_json,
+                last_synced_at = excluded.last_synced_at,
+                last_mtime = excluded.last_mtime
+            """,
+            (kind, path, json.dumps(options, sort_keys=True), now, now, mtime),
+        )
+        await self._db.commit()
+        async with self._db.execute(
+            "SELECT id FROM import_sources WHERE kind = ? AND path = ?", (kind, path)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return int(row["id"])
+
+    async def list_imports(self) -> list[dict[str, Any]]:
+        assert self._db is not None
+        async with self._db.execute("SELECT * FROM import_sources ORDER BY id") as cursor:
+            rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["options"] = json.loads(d.pop("options_json") or "{}")
+            result.append(d)
+        return result
+
+    async def mark_import_synced(self, import_id: int, mtime: float) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE import_sources SET last_synced_at = ?, last_mtime = ? WHERE id = ?",
+            (int(time.time()), mtime, import_id),
+        )
+        await self._db.commit()
+
+    async def forget_import(self, import_id: int) -> bool:
+        assert self._db is not None
+        cursor = await self._db.execute("DELETE FROM import_sources WHERE id = ?", (import_id,))
+        await self._db.commit()
+        return cursor.rowcount > 0

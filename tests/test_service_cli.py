@@ -38,17 +38,27 @@ def test_unsupported_platform_exits(tmp_path, monkeypatch, subcmd):
 # ---------------------------------------------------------------------------
 
 
-def test_install_requires_env(tmp_path, monkeypatch):
+def test_install_requires_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch.object(sys, "platform", "darwin"):
         result = runner.invoke(app, ["service", "install"])
     assert result.exit_code == 1
-    assert ".env" in result.output
+    assert "config.env" in result.output
+    assert "memoreei setup" in result.output
 
 
-def test_install_delegates_with_default_port(tmp_path, monkeypatch):
+def test_install_ignores_cwd_env(tmp_path, monkeypatch):
+    """A .env in the current directory is for development; the service needs config.env."""
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".env").write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
+    (tmp_path / ".env").write_text("EMBEDDING_PROVIDER=fastembed\n")
+    with patch(_DETECT, return_value=_mock_backend()):
+        result = runner.invoke(app, ["service", "install"])
+    assert result.exit_code == 1
+
+
+def test_install_delegates_with_default_port(tmp_path, monkeypatch, isolated_home):
+    monkeypatch.chdir(tmp_path)
+    (isolated_home / "config.env").write_text("EMBEDDING_PROVIDER=fastembed\n")
     backend = _mock_backend()
 
     with patch(_DETECT, return_value=backend):
@@ -57,12 +67,12 @@ def test_install_delegates_with_default_port(tmp_path, monkeypatch):
     assert result.exit_code == 0
     backend.install.assert_called_once()
     _, _, port = backend.install.call_args[0]
-    assert port == 8080
+    assert port == 3679
 
 
-def test_install_delegates_with_custom_port(tmp_path, monkeypatch):
+def test_install_delegates_with_custom_port(tmp_path, monkeypatch, isolated_home):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".env").write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
+    (isolated_home / "config.env").write_text("EMBEDDING_PROVIDER=fastembed\n")
     backend = _mock_backend()
 
     with patch(_DETECT, return_value=backend):
@@ -73,16 +83,16 @@ def test_install_delegates_with_custom_port(tmp_path, monkeypatch):
     assert port == 9090
 
 
-def test_install_passes_env_path(tmp_path, monkeypatch):
+def test_install_passes_env_path(tmp_path, monkeypatch, isolated_home):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".env").write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
+    (isolated_home / "config.env").write_text("EMBEDDING_PROVIDER=fastembed\n")
     backend = _mock_backend()
 
     with patch(_DETECT, return_value=backend):
         runner.invoke(app, ["service", "install"])
 
     _, env_path, _ = backend.install.call_args[0]
-    assert env_path.name == ".env"
+    assert env_path == (isolated_home / "config.env").resolve()
 
 
 # ---------------------------------------------------------------------------

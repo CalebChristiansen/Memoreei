@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from memoreei.config import get_config
+from memoreei.imports import import_and_register
 from memoreei.search.embeddings import get_provider
 from memoreei.storage.database import Database
 from memoreei.sync_manager import SyncManager
 from memoreei.tools.memory_tools import MemoryTools
+
+if TYPE_CHECKING:
+    from memoreei.auth import Verifier
 
 # Lazily initialized singletons
 _db: Database | None = None
@@ -29,9 +34,15 @@ async def _get_tools() -> MemoryTools:
     return _tools
 
 
+async def _get_db() -> Database:
+    await _get_tools()
+    assert _db is not None
+    return _db
+
+
 @asynccontextmanager
-async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[type-arg]
-    """Start optional background sync loop if auto_sync is enabled."""
+async def _auto_sync() -> AsyncIterator[None]:
+    """Run the background sync loop for as long as the server runs, if AUTO_SYNC is on."""
     cfg = get_config()
     task: asyncio.Task | None = None
     if cfg.auto_sync:
@@ -48,10 +59,12 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[typ
                 pass
 
 
-mcp = FastMCP("memoreei", lifespan=_lifespan)
+@asynccontextmanager
+async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[type-arg]
+    async with _auto_sync():
+        yield
 
 
-@mcp.tool()
 async def search_memory(
     query: str,
     limit: int = 10,
@@ -81,7 +94,6 @@ async def search_memory(
     )
 
 
-@mcp.tool()
 async def get_context(memory_id: str, before: int = 5, after: int = 5) -> list[dict]:
     """Get surrounding messages/context for a specific memory.
 
@@ -94,7 +106,6 @@ async def get_context(memory_id: str, before: int = 5, after: int = 5) -> list[d
     return await tools.get_context(memory_id=memory_id, before=before, after=after)
 
 
-@mcp.tool()
 async def add_memory(
     content: str,
     source: str = "manual",
@@ -111,14 +122,12 @@ async def add_memory(
     return await tools.add_memory(content=content, source=source, metadata=metadata)
 
 
-@mcp.tool()
 async def list_sources() -> dict:
     """List all data sources and their message counts."""
     tools = await _get_tools()
     return await tools.list_sources()
 
 
-@mcp.tool()
 async def ingest_whatsapp(file_path: str) -> dict:
     """Import a WhatsApp chat export .txt file into memory.
 
@@ -126,10 +135,9 @@ async def ingest_whatsapp(file_path: str) -> dict:
         file_path: Absolute or relative path to the WhatsApp .txt export file
     """
     tools = await _get_tools()
-    return await tools.ingest_whatsapp(file_path=file_path)
+    return await import_and_register(tools, "whatsapp", file_path)
 
 
-@mcp.tool()
 async def refresh_memory() -> dict:
     """Trigger an immediate sync of all configured sources and return new message count."""
     tools = await _get_tools()
@@ -137,14 +145,12 @@ async def refresh_memory() -> dict:
     return {"status": "ok", "new_messages": count}
 
 
-@mcp.tool()
 async def sync_all() -> dict:
     """Sync every configured connector and return counts per source.
 
     Iterates over all connectors that have sufficient configuration (Discord,
     Telegram, Matrix, Slack, email, Mastodon) and syncs each one.
     """
-    from memoreei.config import get_config
     tools = await _get_tools()
     cfg = get_config()
     results: dict[str, int] = {}
@@ -153,7 +159,6 @@ async def sync_all() -> dict:
     return {"status": "ok", "synced": results, "total": sum(results.values())}
 
 
-@mcp.tool()
 async def sync_discord(channel_id: str | None = None) -> dict:
     """Sync recent Discord messages from the configured channel.
 
@@ -164,7 +169,6 @@ async def sync_discord(channel_id: str | None = None) -> dict:
     return await tools.sync_discord_tool(channel_id=channel_id)
 
 
-@mcp.tool()
 async def sync_telegram(chat_id: str | None = None) -> dict:
     """Sync new Telegram messages received by the bot into memory.
 
@@ -179,7 +183,6 @@ async def sync_telegram(chat_id: str | None = None) -> dict:
     return await tools.sync_telegram_tool(chat_id=chat_id)
 
 
-@mcp.tool()
 async def sync_matrix(room_id: str | None = None) -> dict:
     """Sync Matrix room messages into memory using the Matrix Client-Server API.
 
@@ -199,7 +202,6 @@ async def sync_matrix(room_id: str | None = None) -> dict:
     return await tools.sync_matrix_tool(room_id=room_id)
 
 
-@mcp.tool()
 async def sync_slack(channel_id: str | None = None) -> dict:
     """Sync recent Slack messages from the configured channel into memory.
 
@@ -218,7 +220,6 @@ async def sync_slack(channel_id: str | None = None) -> dict:
     return await tools.sync_slack_tool(channel_id=channel_id)
 
 
-@mcp.tool()
 async def sync_email(folder: str = "INBOX", max_emails: int = 200) -> dict:
     """Sync Gmail messages into memory via IMAP.
 
@@ -241,7 +242,6 @@ async def sync_email(folder: str = "INBOX", max_emails: int = 200) -> dict:
     return await tools.sync_email_tool(folder=folder, max_emails=max_emails)
 
 
-@mcp.tool()
 async def sync_mastodon(
     instance: str | None = None,
     hashtag: str | None = None,
@@ -270,7 +270,6 @@ async def sync_mastodon(
     )
 
 
-@mcp.tool()
 async def sync_imessage(chat_name: str | None = None) -> dict:
     """Sync iMessage/SMS conversations from the local macOS Messages database.
 
@@ -290,7 +289,6 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
     return await tools.sync_imessage_tool(chat_name=chat_name)
 
 
-@mcp.tool()
 async def sync_signal(conversation_id: str | None = None) -> dict:
     """Sync Signal Desktop messages from the local encrypted database.
     Requires Signal Desktop to be installed and pysqlcipher3 package.
@@ -311,7 +309,6 @@ async def sync_signal(conversation_id: str | None = None) -> dict:
     return await tools.sync_signal_tool(conversation_id=conversation_id)
 
 
-@mcp.tool()
 async def import_sms_backup(file_path: str) -> dict:
     """Import SMS/MMS messages from an Android SMS Backup & Restore XML file.
     Works with the 'SMS Backup & Restore' app (most popular on Google Play).
@@ -320,10 +317,9 @@ async def import_sms_backup(file_path: str) -> dict:
         file_path: Path to the XML backup file
     """
     tools = await _get_tools()
-    return await tools.import_sms_backup(file_path=file_path)
+    return await import_and_register(tools, "sms", file_path)
 
 
-@mcp.tool()
 async def import_discord_package(package_path: str) -> dict:
     """Import a Discord Data Package (GDPR export). Imports all messages from all channels and DMs.
 
@@ -334,10 +330,9 @@ async def import_discord_package(package_path: str) -> dict:
         package_path: Path to extracted data package folder or ZIP file
     """
     tools = await _get_tools()
-    return await tools.import_discord_package_tool(package_path=package_path)
+    return await import_and_register(tools, "discord-package", package_path)
 
 
-@mcp.tool()
 async def import_messenger(data_path: str) -> dict:
     """Import Facebook Messenger messages from a data download (GDPR export, JSON format).
     Download from: Facebook Settings > Your Information > Download Your Information.
@@ -345,10 +340,9 @@ async def import_messenger(data_path: str) -> dict:
         data_path: Path to the extracted Messenger data folder (containing messages/inbox/)
     """
     tools = await _get_tools()
-    return await tools.import_messenger(data_path=data_path)
+    return await import_and_register(tools, "messenger", data_path)
 
 
-@mcp.tool()
 async def import_json_file(
     file_path: str,
     content_field: str,
@@ -369,16 +363,19 @@ async def import_json_file(
         source_label: Label to tag imported messages with (default: 'json-import')
     """
     tools = await _get_tools()
-    return await tools.import_json_file(
-        file_path=file_path,
-        content_field=content_field,
-        sender_field=sender_field,
-        timestamp_field=timestamp_field,
-        source_label=source_label,
+    return await import_and_register(
+        tools,
+        "json",
+        file_path,
+        {
+            "content_field": content_field,
+            "sender_field": sender_field,
+            "timestamp_field": timestamp_field,
+            "source_label": source_label,
+        },
     )
 
 
-@mcp.tool()
 async def import_csv_file(
     file_path: str,
     content_column: str,
@@ -399,16 +396,19 @@ async def import_csv_file(
         source_label: Label to tag imported messages with (default: 'csv-import')
     """
     tools = await _get_tools()
-    return await tools.import_csv_file(
-        file_path=file_path,
-        content_column=content_column,
-        sender_column=sender_column,
-        timestamp_column=timestamp_column,
-        source_label=source_label,
+    return await import_and_register(
+        tools,
+        "csv",
+        file_path,
+        {
+            "content_column": content_column,
+            "sender_column": sender_column,
+            "timestamp_column": timestamp_column,
+            "source_label": source_label,
+        },
     )
 
 
-@mcp.tool()
 async def sync_contacts() -> dict:
     """Sync contacts from macOS AddressBook into the contacts table.
 
@@ -420,7 +420,6 @@ async def sync_contacts() -> dict:
     return await tools.sync_contacts_tool()
 
 
-@mcp.tool()
 async def import_contacts_vcf(file_path: str) -> dict:
     """Import contacts from a vCard (.vcf) file.
 
@@ -431,10 +430,9 @@ async def import_contacts_vcf(file_path: str) -> dict:
         file_path: Path to the .vcf file
     """
     tools = await _get_tools()
-    return await tools.import_contacts_vcf(file_path=file_path)
+    return await import_and_register(tools, "contacts-vcf", file_path)
 
 
-@mcp.tool()
 async def import_instagram(data_path: str) -> dict:
     """Import Instagram DMs from a data download (GDPR export, JSON format).
     Download at: Instagram Settings > Accounts Center > Your Information > Download Your Information.
@@ -442,7 +440,95 @@ async def import_instagram(data_path: str) -> dict:
         data_path: Path to the extracted Instagram data folder (containing your_instagram_activity/)
     """
     tools = await _get_tools()
-    return await tools.import_instagram(data_path=data_path)
+    return await import_and_register(tools, "instagram", data_path)
+
+
+async def sync() -> dict:
+    """Refresh memory from the sources configured on the server.
+
+    Runs every connector set up in the server's config, and re-reads any import files
+    that were registered on the server and have changed since. Takes no arguments:
+    it can only refresh what the server's owner has already set up.
+    """
+    tools = await _get_tools()
+    return await _sync_manager.sync_everything(tools)
+
+
+# Every tool, for the local (stdio) server.
+LOCAL_TOOLS = [
+    search_memory,
+    get_context,
+    add_memory,
+    list_sources,
+    sync,
+    ingest_whatsapp,
+    refresh_memory,
+    sync_all,
+    sync_discord,
+    sync_telegram,
+    sync_matrix,
+    sync_slack,
+    sync_email,
+    sync_mastodon,
+    sync_imessage,
+    sync_signal,
+    import_sms_backup,
+    import_discord_package,
+    import_messenger,
+    import_json_file,
+    import_csv_file,
+    sync_contacts,
+    import_contacts_vcf,
+    import_instagram,
+]
+
+# The network surface: read what is already stored, plus one argument-free refresh.
+# Nothing here takes a path, a token or new content.
+NETWORK_TOOLS = [search_memory, get_context, list_sources, sync]
+
+
+def build_local_server() -> FastMCP:
+    server = FastMCP("memoreei", lifespan=_lifespan)
+    for fn in LOCAL_TOOLS:
+        server.add_tool(fn)
+    return server
+
+
+def build_network_server() -> FastMCP:
+    # Every request needs a key, so the SDK's DNS-rebinding check (which it switches
+    # on for loopback binds, allowing only localhost Host headers) adds nothing and
+    # would reject clients addressing the server by LAN IP or hostname.
+    server = FastMCP(
+        "memoreei",
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+    for fn in NETWORK_TOOLS:
+        server.add_tool(fn)
+    return server
+
+
+def build_http_app(verify: "Verifier") -> Any:
+    """The network server as an ASGI app behind bearer-key auth.
+
+    The background sync loop runs here, once per process, rather than per session.
+    """
+    from memoreei.auth import BearerAuthMiddleware
+
+    app = build_network_server().streamable_http_app()
+    inner_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(a: Any) -> AsyncIterator[None]:
+        async with inner_lifespan(a), _auto_sync():
+            yield
+
+    app.router.lifespan_context = lifespan
+    return BearerAuthMiddleware(app, verify)
+
+
+mcp = build_local_server()
 
 
 def main() -> None:

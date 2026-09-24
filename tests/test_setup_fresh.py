@@ -51,11 +51,11 @@ def _make_mock_questionary(
     return mock_q
 
 
-def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch):
-    """No .env exists at all — setup should create one from scratch."""
+def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch, isolated_home):
+    """No config.env exists at all — setup should create one from scratch."""
     monkeypatch.chdir(tmp_path)
 
-    env_file = tmp_path / ".env"
+    env_file = isolated_home / "config.env"
     assert not env_file.exists(), "precondition: no .env"
 
     db_path = str(tmp_path / "fresh.db")
@@ -63,7 +63,7 @@ def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch):
         text_values=[db_path, "zezima@gmail.com"],
         password_values=["s3cret"],
         select_values=["fastembed"],
-        confirm_values=[False],
+        confirm_values=[False, False],  # auto-sync, first key
     )
 
     with patch.dict("sys.modules", {"questionary": mock_q}):
@@ -71,8 +71,8 @@ def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, f"CLI failed:\n{result.output}"
 
-    # .env must now exist
-    assert env_file.exists(), ".env was not created"
+    # config.env must now exist
+    assert env_file.exists(), "config.env was not created"
     content = env_file.read_text()
 
     # Must contain DB path (first-time prompt) and gmail credentials

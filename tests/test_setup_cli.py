@@ -63,20 +63,20 @@ def _make_mock_questionary(
 class TestSetupGmail:
     """Test `memoreei setup gmail` — single connector mode."""
 
-    def test_setup_gmail_writes_env(self, tmp_path, monkeypatch):
+    def test_setup_gmail_writes_env(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
         # First-time setup: DB path, embedding provider (select), auto-sync (confirm=False), gmail vars
         mock_q = _make_mock_questionary(
             text_values=[str(tmp_path / "test.db"), "user@gmail.com"],
             password_values=["secret123"],
             select_values=["fastembed"],
-            confirm_values=[False],
+            confirm_values=[False, False],  # auto-sync, first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail"])
 
         assert result.exit_code == 0
-        env_content = (tmp_path / ".env").read_text()
+        env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
         assert "GMAIL_APP_PASSWORD=secret123" in env_content
 
@@ -84,7 +84,7 @@ class TestSetupGmail:
 class TestSetupInteractive:
     """Test `memoreei setup` with no arg — interactive mode."""
 
-    def test_setup_interactive_multi_connector(self, tmp_path, monkeypatch):
+    def test_setup_interactive_multi_connector(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
         # DB path, embedding provider (select), auto-sync (confirm=False), then connector vars
         mock_q = _make_mock_questionary(
@@ -92,13 +92,13 @@ class TestSetupInteractive:
             password_values=["gmailpass", "discordtoken"],
             checkbox_values=["gmail", "discord"],
             select_values=["fastembed"],
-            confirm_values=[False],
+            confirm_values=[False, False],  # auto-sync, first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup"])
 
         assert result.exit_code == 0
-        env_content = (tmp_path / ".env").read_text()
+        env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
         assert "GMAIL_APP_PASSWORD=gmailpass" in env_content
         assert "DISCORD_BOT_TOKEN=discordtoken" in env_content
@@ -108,13 +108,13 @@ class TestSetupInteractive:
 class TestSetupUnknownConnector:
     """Test `memoreei setup nonexistent` — should exit with error."""
 
-    def test_unknown_connector_exits_error(self, tmp_path, monkeypatch):
+    def test_unknown_connector_exits_error(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
         # DB path + embedding provider + auto-sync before connector check
         mock_q = _make_mock_questionary(
             text_values=[str(tmp_path / "test.db")],
             select_values=["fastembed"],
-            confirm_values=[False],
+            confirm_values=[False, False],  # auto-sync, first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "nonexistent"])
@@ -126,20 +126,20 @@ class TestSetupUnknownConnector:
 class TestSetupFirstTimeDbPath:
     """Test first-time setup prompts for DB path."""
 
-    def test_first_time_prompts_db_path(self, tmp_path, monkeypatch):
+    def test_first_time_prompts_db_path(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
         custom_db = str(tmp_path / "custom" / "memoreei.db")
         mock_q = _make_mock_questionary(
             text_values=[custom_db, "user@gmail.com"],
             password_values=["pass"],
             select_values=["fastembed"],
-            confirm_values=[False],
+            confirm_values=[False, False],  # auto-sync, first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail"])
 
         assert result.exit_code == 0
-        env_content = (tmp_path / ".env").read_text()
+        env_content = (isolated_home / "config.env").read_text()
         assert f"MEMOREEI_DB_PATH={custom_db}" in env_content
         assert "EMBEDDING_PROVIDER=fastembed" in env_content
         assert "AUTO_SYNC=false" in env_content
@@ -150,22 +150,23 @@ class TestSetupFirstTimeDbPath:
 class TestSetupPreservesExistingEnv:
     """Test that existing .env values are preserved when adding new connectors."""
 
-    def test_existing_env_preserved(self, tmp_path, monkeypatch):
+    def test_existing_env_preserved(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
         # Pre-populate .env
-        env_file = tmp_path / ".env"
-        env_file.write_text("MEMOREEI_DB_PATH=/some/db\nEXISTING_VAR=keep_me\n")
+        env_file = isolated_home / "config.env"
+        env_file.write_text("MEMOREEI_DB_PATH=/some/db\nEMBEDDING_PROVIDER=fastembed\nEXISTING_VAR=keep_me\n")
 
         # Since DB path exists, no DB prompt — just gmail vars
         mock_q = _make_mock_questionary(
             text_values=["user@gmail.com"],
             password_values=["pass"],
+            confirm_values=[False],  # first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail"])
 
         assert result.exit_code == 0
-        env_content = (tmp_path / ".env").read_text()
+        env_content = (isolated_home / "config.env").read_text()
         assert "EXISTING_VAR=keep_me" in env_content
         assert "MEMOREEI_DB_PATH=/some/db" in env_content
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
@@ -175,24 +176,95 @@ class TestSetupPreservesExistingEnv:
 class TestSetupResetFlag:
     """Test `memoreei setup gmail --reset` clears old values."""
 
-    def test_reset_clears_existing_values(self, tmp_path, monkeypatch):
+    def test_reset_clears_existing_values(self, tmp_path, monkeypatch, isolated_home):
         monkeypatch.chdir(tmp_path)
-        env_file = tmp_path / ".env"
+        env_file = isolated_home / "config.env"
         env_file.write_text(
-            "MEMOREEI_DB_PATH=/some/db\nGMAIL_EMAIL=old@test.com\nGMAIL_APP_PASSWORD=oldpass\n"
+            "MEMOREEI_DB_PATH=/some/db\nEMBEDDING_PROVIDER=fastembed\nGMAIL_EMAIL=old@test.com\nGMAIL_APP_PASSWORD=oldpass\n"
         )
 
         mock_q = _make_mock_questionary(
             text_values=["new@test.com"],
             password_values=["newpass"],
+            confirm_values=[False],  # first key
         )
         with patch.dict("sys.modules", {"questionary": mock_q}):
             result = runner.invoke(app, ["setup", "gmail", "--reset"])
 
         assert result.exit_code == 0
-        env_content = (tmp_path / ".env").read_text()
+        env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=new@test.com" in env_content
         assert "old@test.com" not in env_content
         assert "GMAIL_APP_PASSWORD=newpass" in env_content
         assert "oldpass" not in env_content
         assert "MEMOREEI_DB_PATH=/some/db" in env_content
+
+
+class TestSetupHomeConfig:
+    """setup writes $MEMOREEI_HOME/config.env, privately, and offers the first key."""
+
+    def test_config_env_is_private(self, tmp_path, monkeypatch, isolated_home):
+        monkeypatch.chdir(tmp_path)
+        mock_q = _make_mock_questionary(
+            text_values=[str(isolated_home / "memoreei.db"), "user@gmail.com"],
+            password_values=["pass"],
+            select_values=["fastembed"],
+            confirm_values=[False, False],  # auto-sync, first key
+        )
+        with patch.dict("sys.modules", {"questionary": mock_q}):
+            result = runner.invoke(app, ["setup", "gmail"])
+        assert result.exit_code == 0, result.output
+        env_file = isolated_home / "config.env"
+        assert env_file.stat().st_mode & 0o777 == 0o600
+        assert not (tmp_path / ".env").exists()
+
+    def test_default_db_path_is_not_written(self, tmp_path, monkeypatch, isolated_home):
+        monkeypatch.chdir(tmp_path)
+        mock_q = _make_mock_questionary(
+            text_values=[str(isolated_home / "memoreei.db"), "user@gmail.com"],
+            password_values=["pass"],
+            select_values=["fastembed"],
+            confirm_values=[False, False],
+        )
+        with patch.dict("sys.modules", {"questionary": mock_q}):
+            runner.invoke(app, ["setup", "gmail"])
+        assert "MEMOREEI_DB_PATH" not in (isolated_home / "config.env").read_text()
+
+    def test_offers_and_creates_first_key(self, tmp_path, monkeypatch, isolated_home):
+        monkeypatch.chdir(tmp_path)
+        mock_q = _make_mock_questionary(
+            text_values=[str(isolated_home / "memoreei.db"), "user@gmail.com", "laptop"],
+            password_values=["pass"],
+            select_values=["fastembed"],
+            confirm_values=[False, True],  # auto-sync off, create a key
+        )
+        with patch.dict("sys.modules", {"questionary": mock_q}):
+            result = runner.invoke(app, ["setup", "gmail"])
+        assert result.exit_code == 0, result.output
+        assert "Created key 'laptop'" in result.output
+        assert "mem_" in result.output
+        assert "laptop" in runner.invoke(app, ["key", "list"]).output
+
+    def test_no_key_offer_once_a_key_exists(self, tmp_path, monkeypatch, isolated_home):
+        monkeypatch.chdir(tmp_path)
+        (isolated_home / "config.env").write_text("EMBEDDING_PROVIDER=fastembed\n")
+        runner.invoke(app, ["key", "create", "laptop"])
+        mock_q = _make_mock_questionary(
+            text_values=["user@gmail.com"],
+            password_values=["pass"],
+        )
+        with patch.dict("sys.modules", {"questionary": mock_q}):
+            result = runner.invoke(app, ["setup", "gmail"])
+        assert result.exit_code == 0, result.output
+        mock_q.confirm.assert_not_called()
+
+
+def test_home_flag_points_everything_elsewhere(tmp_path, monkeypatch, isolated_home):
+    other = tmp_path / "other-home"
+    result = runner.invoke(app, ["--home", str(other), "key", "create", "laptop"])
+    assert result.exit_code == 0, result.output
+    assert (other / "memoreei.db").exists()
+    assert not (isolated_home / "memoreei.db").exists()
+    from memoreei.config import set_home
+
+    set_home(None)

@@ -1,23 +1,76 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env once at import time
-_here = Path(__file__).parent
-for _candidate in [_here.parent.parent.parent / ".env", Path(".env")]:
-    if _candidate.exists():
-        load_dotenv(_candidate)
-        break
+DEFAULT_PORT = 3679  # "DORY" on a phone keypad
+DEFAULT_HOST = "0.0.0.0"
+
+# Set by the CLI's --home option; beats MEMOREEI_HOME and the default.
+_home_override: str | None = None
+_env_loaded = False
+
+
+def set_home(path: str | None) -> None:
+    """Point memoreei at a different home directory (the CLI's --home)."""
+    global _home_override, _config, _env_loaded
+    _home_override = path
+    _config = None
+    _env_loaded = False
+
+
+def memoreei_home() -> Path:
+    """The directory holding config.env and memoreei.db.
+
+    ``--home`` › ``MEMOREEI_HOME`` › ``~/.memoreei``. Not created here; see ensure_home().
+    """
+    raw = _home_override or os.environ.get("MEMOREEI_HOME") or "~/.memoreei"
+    return Path(raw).expanduser()
+
+
+def ensure_home() -> Path:
+    """Create the home directory (mode 700) if it doesn't exist, and return it."""
+    home = memoreei_home()
+    if not home.exists():
+        home.mkdir(parents=True, mode=0o700)
+    return home
+
+
+def config_env_path() -> Path:
+    return memoreei_home() / "config.env"
+
+
+def load_env() -> None:
+    """Load settings into os.environ, once.
+
+    Real environment variables win, then a ``.env`` in the current directory (for
+    development), then ``$MEMOREEI_HOME/config.env``. The cwd ``.env`` is read first so it
+    may itself set MEMOREEI_HOME.
+    """
+    global _env_loaded
+    if _env_loaded:
+        return
+    _env_loaded = True
+    cwd_env = Path(".env")
+    if cwd_env.is_file():
+        load_dotenv(cwd_env)
+    home_env = config_env_path()
+    if home_env.is_file():
+        load_dotenv(home_env)
 
 
 @dataclass
 class Config:
     # Core
-    db_path: str = "./memoreei.db"
+    db_path: str = ""
+    host: str = DEFAULT_HOST
+    port: int = DEFAULT_PORT
+    public_url: str | None = None
+    tls_cert: str | None = None
+    tls_key: str | None = None
     embedding_provider: str = "fastembed"
     openai_api_key: str | None = None
     auto_sync: bool = False
@@ -84,8 +137,16 @@ def get_config() -> Config:
     """Return the singleton Config instance, building it from env vars on first call."""
     global _config
     if _config is None:
+        load_env()
         _config = Config(
-            db_path=os.environ.get("MEMOREEI_DB_PATH", "./memoreei.db"),
+            db_path=os.path.expanduser(
+                os.environ.get("MEMOREEI_DB_PATH") or str(memoreei_home() / "memoreei.db")
+            ),
+            host=os.environ.get("MEMOREEI_HOST") or DEFAULT_HOST,
+            port=int(os.environ.get("MEMOREEI_PORT") or DEFAULT_PORT),
+            public_url=(os.environ.get("MEMOREEI_PUBLIC_URL") or "").rstrip("/") or None,
+            tls_cert=os.environ.get("MEMOREEI_TLS_CERT") or None,
+            tls_key=os.environ.get("MEMOREEI_TLS_KEY") or None,
             embedding_provider=os.environ.get("EMBEDDING_PROVIDER", "fastembed").lower(),
             openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
             auto_sync=os.environ.get("AUTO_SYNC", "").lower() in ("1", "true", "yes"),

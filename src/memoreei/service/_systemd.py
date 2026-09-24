@@ -6,13 +6,15 @@ from pathlib import Path
 
 import typer
 
-from ._base import ServiceBackend
+from memoreei.config import memoreei_home
+
+from ._base import ServiceBackend, print_installed
 
 _SERVICE_NAME = "memoreei"
 
 
 def _systemd_paths() -> tuple[Path, Path]:
-    memoreei_dir = Path.home() / ".memoreei"
+    memoreei_dir = memoreei_home()
     unit_path = Path.home() / ".config" / "systemd" / "user" / f"{_SERVICE_NAME}.service"
     return memoreei_dir, unit_path
 
@@ -38,7 +40,8 @@ class SystemdBackend(ServiceBackend):
             f"Description=Memoreei MCP server\n\n"
             f"[Service]\n"
             f"EnvironmentFile={env_path}\n"
-            f"ExecStart={memoreei_bin} serve --sse --port {port}\n"
+            f"Environment=MEMOREEI_HOME={env_path.parent}\n"
+            f"ExecStart={memoreei_bin} serve --http --port {port}\n"
             f"Restart=always\n"
             f"RestartSec=5\n\n"
             f"[Install]\n"
@@ -61,11 +64,7 @@ class SystemdBackend(ServiceBackend):
             _handle_systemd_error(result)
             raise typer.Exit(1)
 
-        typer.echo(f"\n  ✓ Memoreei service installed and started\n")
-        typer.echo(f"  Endpoint:  http://localhost:{port}/sse")
-        typer.echo(f"  Logs:      memoreei service logs")
-        typer.echo(f"  Status:    memoreei service status")
-        typer.echo(f"  Stop:      memoreei service uninstall\n")
+        print_installed(port)
 
     def uninstall(self) -> None:
         _, unit_path = _systemd_paths()
