@@ -37,22 +37,22 @@ def _msg(sender: str, content: str, timestamp_ms: int = 1_700_000_000_000, msg_t
 def test_parses_basic_messages(tmp_path: Path) -> None:
     export = _make_export(tmp_path, {
         "alice_xyz": [_simple_part(
-            ["You", "Alice"],
+            ["You", "Zezima"],
             [
-                _msg("Alice", "Hey there!", 1_700_000_000_000),
+                _msg("Zezima", "Hey there!", 1_700_000_000_000),
                 _msg("You", "Hi!", 1_700_000_001_000),
             ],
         )]
     })
     items = parse_instagram_export(export)
     assert len(items) == 2
-    assert any("Alice: Hey there!" in i.content for i in items)
+    assert any("Zezima: Hey there!" in i.content for i in items)
     assert any("You: Hi!" in i.content for i in items)
 
 
 def test_source_format(tmp_path: Path) -> None:
     export = _make_export(tmp_path, {
-        "bob_abc": [_simple_part(["You", "Bob"], [_msg("Bob", "Hello")])]
+        "bob_abc": [_simple_part(["You", "Hans"], [_msg("Hans", "Hello")])]
     })
     items = parse_instagram_export(export)
     assert all(i.source == "instagram:bob_abc" for i in items)
@@ -78,7 +78,7 @@ def test_fix_encoding_roundtrip() -> None:
 def test_encoding_applied_to_content(tmp_path: Path) -> None:
     # Simulate Instagram's mangled encoding for "héllo"
     mangled_content = "h\u00c3\u00a9llo"
-    mangled_sender = "Mar\u00c3\u00ada"
+    mangled_sender = "Hyl\u00c3\u00ada"
 
     # Write the JSON file directly to simulate what Instagram actually exports
     inbox = tmp_path / "your_instagram_activity" / "messages" / "inbox" / "conv"
@@ -91,14 +91,14 @@ def test_encoding_applied_to_content(tmp_path: Path) -> None:
 
     items = parse_instagram_export(tmp_path)
     assert len(items) == 1
-    assert "María: héllo" in items[0].content
+    assert "Hylía: héllo" in items[0].content
 
 
 # ── Multi-part handling ───────────────────────────────────────────────────────
 
 def test_multi_part_messages_combined(tmp_path: Path) -> None:
-    part1 = _simple_part(["You", "Alice"], [_msg("Alice", "Part1 msg", 1_700_000_000_000)])
-    part2 = _simple_part(["You", "Alice"], [_msg("You", "Part2 msg", 1_700_000_001_000)])
+    part1 = _simple_part(["You", "Zezima"], [_msg("Zezima", "Part1 msg", 1_700_000_000_000)])
+    part2 = _simple_part(["You", "Zezima"], [_msg("You", "Part2 msg", 1_700_000_001_000)])
     export = _make_export(tmp_path, {"conv": [part1, part2]})
 
     items = parse_instagram_export(export)
@@ -109,7 +109,7 @@ def test_multi_part_messages_combined(tmp_path: Path) -> None:
 
 
 def test_multi_part_participants_from_first_file(tmp_path: Path) -> None:
-    part1 = _simple_part(["You", "Alice"], [_msg("Alice", "hello", 1_700_000_000_000)])
+    part1 = _simple_part(["You", "Zezima"], [_msg("Zezima", "hello", 1_700_000_000_000)])
     part2 = {"messages": [_msg("You", "hi", 1_700_000_001_000)]}  # no participants key
 
     inbox = tmp_path / "your_instagram_activity" / "messages" / "inbox" / "conv"
@@ -120,34 +120,34 @@ def test_multi_part_participants_from_first_file(tmp_path: Path) -> None:
     items = parse_instagram_export(tmp_path)
     assert len(items) == 2
     for item in items:
-        assert "Alice" in item.metadata["chat_participants"]
+        assert "Zezima" in item.metadata["chat_participants"]
 
 
 # ── Participant extraction ────────────────────────────────────────────────────
 
 def test_participants_in_metadata(tmp_path: Path) -> None:
     export = _make_export(tmp_path, {
-        "conv": [_simple_part(["You", "Alice", "Bob"], [_msg("Alice", "hey")])]
+        "conv": [_simple_part(["You", "Zezima", "Hans"], [_msg("Zezima", "hey")])]
     })
     items = parse_instagram_export(export)
-    assert set(items[0].metadata["chat_participants"]) == {"You", "Alice", "Bob"}
+    assert set(items[0].metadata["chat_participants"]) == {"You", "Zezima", "Hans"}
 
 
 def test_sender_in_participants_field(tmp_path: Path) -> None:
     export = _make_export(tmp_path, {
-        "conv": [_simple_part(["You", "Alice"], [_msg("Alice", "hey")])]
+        "conv": [_simple_part(["You", "Zezima"], [_msg("Zezima", "hey")])]
     })
     items = parse_instagram_export(export)
-    assert "Alice" in items[0].participants
+    assert "Zezima" in items[0].participants
 
 
 # ── Media / non-text messages ─────────────────────────────────────────────────
 
 def test_media_message_marked_as_media(tmp_path: Path) -> None:
     # A photo message has no "content" key
-    msg = {"sender_name": "Alice", "timestamp_ms": 1_700_000_000_000, "type": "Generic"}
+    msg = {"sender_name": "Zezima", "timestamp_ms": 1_700_000_000_000, "type": "Generic"}
     export = _make_export(tmp_path, {
-        "conv": [_simple_part(["You", "Alice"], [msg])]
+        "conv": [_simple_part(["You", "Zezima"], [msg])]
     })
     items = parse_instagram_export(export)
     assert len(items) == 1
@@ -156,9 +156,9 @@ def test_media_message_marked_as_media(tmp_path: Path) -> None:
 
 
 def test_non_generic_type_skipped(tmp_path: Path) -> None:
-    msg = _msg("Alice", "liked a message", msg_type="Share")
+    msg = _msg("Zezima", "liked a message", msg_type="Share")
     export = _make_export(tmp_path, {
-        "conv": [_simple_part(["You", "Alice"], [msg])]
+        "conv": [_simple_part(["You", "Zezima"], [msg])]
     })
     items = parse_instagram_export(export)
     assert len(items) == 0
@@ -180,8 +180,8 @@ def test_empty_conversation_dir(tmp_path: Path) -> None:
 
 def test_multiple_conversations(tmp_path: Path) -> None:
     export = _make_export(tmp_path, {
-        "alice_1": [_simple_part(["You", "Alice"], [_msg("Alice", "hi")])],
-        "bob_2": [_simple_part(["You", "Bob"], [_msg("Bob", "hello")])],
+        "alice_1": [_simple_part(["You", "Zezima"], [_msg("Zezima", "hi")])],
+        "bob_2": [_simple_part(["You", "Hans"], [_msg("Hans", "hello")])],
     })
     items = parse_instagram_export(export)
     assert len(items) == 2

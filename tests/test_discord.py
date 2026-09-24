@@ -48,13 +48,13 @@ def test_to_memory_item(db):
 
     async def _run():
         connector = DiscordConnector(token="fake", db=db, embedder=MockEmbedder())
-        msg = make_discord_message("123456789", "hello from discord", "Elliot")
+        msg = make_discord_message("123456789", "hello from discord", "Chiron")
         item = connector._to_memory_item(msg, "chan001")
 
-        assert item.content == "Elliot: hello from discord"
+        assert item.content == "Chiron: hello from discord"
         assert item.source == "discord:chan001"
         assert item.source_id == "discord:chan001:123456789"
-        assert "Elliot" in item.participants
+        assert "Chiron" in item.participants
         assert item.metadata["channel_id"] == "chan001"
 
     asyncio.run(_run())

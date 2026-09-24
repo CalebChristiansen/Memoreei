@@ -21,7 +21,7 @@ def _make_item(source: str, source_id: str, content: str, participants: list[str
         source_id=source_id,
         content=content,
         summary=None,
-        participants=participants or ["Alice"],
+        participants=participants or ["Zezima"],
         ts=int(time.time()),
         ingested_at=int(time.time()),
         metadata={},
@@ -34,10 +34,10 @@ async def seeded_db(tmp_path):
     await db.connect()
 
     items = [
-        _make_item("discord", "d1", "existential crisis about the nature of memory", ["Alice"]),
-        _make_item("whatsapp", "w1", "AI is getting better at understanding context", ["Bob"]),
-        _make_item("discord", "d2", "using discord to coordinate the team meeting", ["Charlie"]),
-        _make_item("telegram", "t1", "memory palace technique for studying", ["Dave"]),
+        _make_item("discord", "d1", "existential crisis about the nature of memory", ["Zezima"]),
+        _make_item("whatsapp", "w1", "AI is getting better at understanding context", ["Hans"]),
+        _make_item("discord", "d2", "using discord to coordinate the team meeting", ["Gertrude"]),
+        _make_item("telegram", "t1", "memory palace technique for studying", ["Ajax"]),
     ]
     for item in items:
         await db.insert_memory(item)

@@ -18,11 +18,11 @@ def test_parse_printer_conspiracy():
     assert all(item.ts > 0 for item in items)
     assert all(item.source.startswith("whatsapp:") for item in items)
 
-    # Check that at least Alice, Bob, Charlie appear
+    # Check that at least Zezima, Hans, Gertrude appear
     all_content = " ".join(item.content for item in items)
-    assert "Alice:" in all_content
-    assert "Bob:" in all_content
-    assert "Charlie:" in all_content
+    assert "Zezima:" in all_content
+    assert "Hans:" in all_content
+    assert "Gertrude:" in all_content
 
 
 def test_parse_pizza_wars():
@@ -44,8 +44,8 @@ def test_parse_donut_heist():
 def test_multiline_message(tmp_path):
     chat = tmp_path / "test.txt"
     chat.write_text(
-        "[03/15/26, 09:00:00] Alice: first line\ncontinued on second line\n"
-        "[03/15/26, 09:01:00] Bob: next message\n"
+        "[03/15/26, 09:00:00] Zezima: first line\ncontinued on second line\n"
+        "[03/15/26, 09:01:00] Hans: next message\n"
     )
     items = parse_whatsapp_export(chat)
     assert len(items) == 2
@@ -55,9 +55,9 @@ def test_multiline_message(tmp_path):
 def test_source_id_uniqueness(tmp_path):
     chat = tmp_path / "test.txt"
     chat.write_text(
-        "[03/15/26, 09:00:00] Alice: hello\n"
-        "[03/15/26, 09:01:00] Bob: world\n"
-        "[03/15/26, 09:02:00] Alice: again\n"
+        "[03/15/26, 09:00:00] Zezima: hello\n"
+        "[03/15/26, 09:01:00] Hans: world\n"
+        "[03/15/26, 09:02:00] Zezima: again\n"
     )
     items = parse_whatsapp_export(chat)
     source_ids = [item.source_id for item in items]
@@ -67,13 +67,13 @@ def test_source_id_uniqueness(tmp_path):
 def test_participants_recorded(tmp_path):
     chat = tmp_path / "test.txt"
     chat.write_text(
-        "[03/15/26, 09:00:00] Alice: hello\n"
-        "[03/15/26, 09:01:00] Bob: world\n"
+        "[03/15/26, 09:00:00] Zezima: hello\n"
+        "[03/15/26, 09:01:00] Hans: world\n"
     )
     items = parse_whatsapp_export(chat)
     # Each message has the sender in participants
-    assert "Alice" in items[0].participants
+    assert "Zezima" in items[0].participants
     # Chat participants metadata contains all senders
     chat_participants = items[0].metadata.get("chat_participants", [])
-    assert "Alice" in chat_participants
-    assert "Bob" in chat_participants
+    assert "Zezima" in chat_participants
+    assert "Hans" in chat_participants

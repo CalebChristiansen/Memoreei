@@ -68,16 +68,16 @@ def test_parse_timestamp_numeric_string():
 # ---------------------------------------------------------------------------
 
 SAMPLE_JSON_ARRAY = [
-    {"message": "Hello world", "author": "Alice", "date": "2024-01-01T10:00:00Z"},
-    {"message": "How are you?", "author": "Bob", "date": "2024-01-01T10:01:00Z"},
-    {"message": "Empty", "author": "Charlie", "date": "2024-01-01T10:02:00Z"},
+    {"message": "Hello world", "author": "Zezima", "date": "2024-01-01T10:00:00Z"},
+    {"message": "How are you?", "author": "Hans", "date": "2024-01-01T10:01:00Z"},
+    {"message": "Empty", "author": "Gertrude", "date": "2024-01-01T10:02:00Z"},
 ]
 
 SAMPLE_JSONL = "\n".join([
-    '{"body": "First line", "from": "Alice", "ts": 1700000000}',
-    '{"body": "Second line", "from": "Bob", "ts": 1700000060}',
+    '{"body": "First line", "from": "Zezima", "ts": 1700000000}',
+    '{"body": "Second line", "from": "Hans", "ts": 1700000060}',
     "",  # blank line — should be skipped
-    '{"body": "Third line", "from": "Charlie", "ts": 1700000120}',
+    '{"body": "Third line", "from": "Gertrude", "ts": 1700000120}',
 ])
 
 
@@ -93,10 +93,10 @@ def test_import_json_array(tmp_path):
 
     assert len(errors) == 0
     assert len(items) == 3
-    assert items[0].content == "Alice: Hello world"
-    assert items[1].content == "Bob: How are you?"
+    assert items[0].content == "Zezima: Hello world"
+    assert items[1].content == "Hans: How are you?"
     assert items[0].source == "test-json"
-    assert items[0].participants == ["Alice"]
+    assert items[0].participants == ["Zezima"]
 
 
 def test_import_json_no_sender(tmp_path):
@@ -122,7 +122,7 @@ def test_import_jsonlines(tmp_path):
     )
 
     assert len(items) == 3
-    assert items[0].content == "Alice: First line"
+    assert items[0].content == "Zezima: First line"
     assert items[0].ts == 1700000000
 
 
@@ -183,14 +183,14 @@ def test_import_json_wrapped_object(tmp_path):
 # ---------------------------------------------------------------------------
 
 SAMPLE_CSV = """from,message,timestamp
-Alice,Hello world,2024-01-01T10:00:00Z
-Bob,How are you?,2024-01-01T10:01:00Z
-Charlie,Fine thanks,2024-01-01T10:02:00Z
+Zezima,Hello world,2024-01-01T10:00:00Z
+Hans,How are you?,2024-01-01T10:01:00Z
+Gertrude,Fine thanks,2024-01-01T10:02:00Z
 """
 
-SAMPLE_TSV = "sender\tbody\tdate\nAlice\tTab separated\t1700000000\nBob\tSecond row\t1700000060\n"
+SAMPLE_TSV = "sender\tbody\tdate\nZezima\tTab separated\t1700000000\nHans\tSecond row\t1700000060\n"
 
-SAMPLE_SEMICOLON = "name;content;ts\nAlice;Semicolon row;1700000000\n"
+SAMPLE_SEMICOLON = "name;content;ts\nZezima;Semicolon row;1700000000\n"
 
 
 def test_import_csv_basic(tmp_path):
@@ -205,9 +205,9 @@ def test_import_csv_basic(tmp_path):
 
     assert len(errors) == 0
     assert len(items) == 3
-    assert items[0].content == "Alice: Hello world"
+    assert items[0].content == "Zezima: Hello world"
     assert items[0].source == "csv-test"
-    assert items[1].participants == ["Bob"]
+    assert items[1].participants == ["Hans"]
 
 
 def test_import_tsv(tmp_path):
@@ -220,7 +220,7 @@ def test_import_tsv(tmp_path):
     )
 
     assert len(items) == 2
-    assert items[0].content == "Alice: Tab separated"
+    assert items[0].content == "Zezima: Tab separated"
     assert items[0].ts == 1700000000
 
 
@@ -234,7 +234,7 @@ def test_import_csv_semicolon_delimiter(tmp_path):
     )
 
     assert len(items) == 1
-    assert items[0].content == "Alice: Semicolon row"
+    assert items[0].content == "Zezima: Semicolon row"
 
 
 def test_import_csv_missing_column(tmp_path):
@@ -257,7 +257,7 @@ def test_import_csv_file_not_found():
 
 
 def test_import_csv_no_header(tmp_path):
-    data = "Alice,Hello world,1700000000\nBob,Goodbye,1700000060\n"
+    data = "Zezima,Hello world,1700000000\nHans,Goodbye,1700000060\n"
     f = tmp_path / "data.csv"
     f.write_text(data, encoding="utf-8")
 
@@ -268,7 +268,7 @@ def test_import_csv_no_header(tmp_path):
     )
 
     assert len(items) == 2
-    assert items[0].content == "Alice: Hello world"
+    assert items[0].content == "Zezima: Hello world"
     assert items[0].ts == 1700000000
 
 
@@ -283,7 +283,7 @@ def test_import_csv_no_content_mapping(tmp_path):
 
 def test_import_csv_latin1_encoding(tmp_path):
     # Write a file with latin-1 characters
-    content = "sender,message\nAlice,Caf\xe9 chat\nBob,na\xefve talk\n"
+    content = "sender,message\nZezima,Caf\xe9 chat\nHans,na\xefve talk\n"
     f = tmp_path / "latin1.csv"
     f.write_bytes(content.encode("latin-1"))
 
@@ -298,8 +298,8 @@ def test_import_csv_latin1_encoding(tmp_path):
 @pytest.mark.asyncio
 async def test_memory_tools_import_json(temp_db, mock_embedder, tmp_path):
     data = [
-        {"text": "Hello", "user": "Alice"},
-        {"text": "World", "user": "Bob"},
+        {"text": "Hello", "user": "Zezima"},
+        {"text": "World", "user": "Hans"},
     ]
     f = tmp_path / "data.json"
     f.write_text(json.dumps(data), encoding="utf-8")
@@ -319,7 +319,7 @@ async def test_memory_tools_import_json(temp_db, mock_embedder, tmp_path):
 
 @pytest.mark.asyncio
 async def test_memory_tools_import_csv(temp_db, mock_embedder, tmp_path):
-    csv_content = "author,body,when\nAlice,Hi there,1700000000\nBob,Hey,1700000060\n"
+    csv_content = "author,body,when\nZezima,Hi there,1700000000\nHans,Hey,1700000060\n"
     f = tmp_path / "messages.csv"
     f.write_text(csv_content, encoding="utf-8")
 

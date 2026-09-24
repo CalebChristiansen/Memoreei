@@ -35,7 +35,7 @@ def make_item(
         source_id=source_id,
         content=content,
         summary=None,
-        participants=["Alice"],
+        participants=["Zezima"],
         ts=ts or int(time.time()),
         ingested_at=int(time.time()),
         metadata={},

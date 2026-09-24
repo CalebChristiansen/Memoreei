@@ -18,7 +18,7 @@ def _make_memory(content: str, **kwargs) -> MemoryItem:
         source_id=kwargs.get("source_id", str(uuid.uuid4())),
         content=content,
         summary=kwargs.get("summary"),
-        participants=kwargs.get("participants", ["alice"]),
+        participants=kwargs.get("participants", ["zezima"]),
         ts=kwargs.get("ts", int(time.time())),
         ingested_at=kwargs.get("ingested_at", int(time.time())),
         metadata=kwargs.get("metadata", {}),

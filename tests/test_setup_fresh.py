@@ -60,7 +60,7 @@ def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch):
 
     db_path = str(tmp_path / "fresh.db")
     mock_q = _make_mock_questionary(
-        text_values=[db_path, "alice@gmail.com"],
+        text_values=[db_path, "zezima@gmail.com"],
         password_values=["s3cret"],
         select_values=["fastembed"],
         confirm_values=[False],
@@ -77,7 +77,7 @@ def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch):
 
     # Must contain DB path (first-time prompt) and gmail credentials
     assert f"MEMOREEI_DB_PATH={db_path}" in content
-    assert "GMAIL_EMAIL=alice@gmail.com" in content
+    assert "GMAIL_EMAIL=zezima@gmail.com" in content
     assert "GMAIL_APP_PASSWORD=s3cret" in content
 
     # Validate every non-blank line is proper KEY=VALUE

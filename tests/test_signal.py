@@ -88,8 +88,8 @@ def _make_signal_db(path: str) -> None:
     # Conversations
     conn.execute(
         "INSERT INTO conversations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("conv-alice", None, int(time.time()), "private", None, None,
-         "Alice", None, "Alice Smith", "+15550001111", "uuid-alice", None, None),
+        ("conv-zezima", None, int(time.time()), "private", None, None,
+         "Zezima", None, "Zezima Lumbridge", "+15550001111", "uuid-zezima", None, None),
     )
     conn.execute(
         "INSERT INTO conversations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -101,34 +101,34 @@ def _make_signal_db(path: str) -> None:
     base_ms = 1700000000000  # ~Nov 2023
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-1", None, 0, None, base_ms, 0, "conv-alice", base_ms, "+15550001111",
-         "uuid-alice", 1, 0, 0, 0, 0, None, "incoming", "Hello!", None, None, None,
+        ("msg-1", None, 0, None, base_ms, 0, "conv-zezima", base_ms, "+15550001111",
+         "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "Hello!", None, None, None,
          base_ms, None, 0, None),
     )
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-2", None, 0, None, base_ms + 1000, 0, "conv-alice", base_ms + 1000,
-         None, None, 1, 0, 0, 0, 0, None, "outgoing", "Hey Alice!", None, None,
+        ("msg-2", None, 0, None, base_ms + 1000, 0, "conv-zezima", base_ms + 1000,
+         None, None, 1, 0, 0, 0, 0, None, "outgoing", "Hey Zezima!", None, None,
          None, base_ms + 1000, None, 0, None),
     )
     # Empty body (should be skipped)
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-3", None, 0, None, base_ms + 2000, 0, "conv-alice", base_ms + 2000,
-         "+15550001111", "uuid-alice", 1, 0, 0, 0, 0, None, "incoming", "",
+        ("msg-3", None, 0, None, base_ms + 2000, 0, "conv-zezima", base_ms + 2000,
+         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "",
          None, None, None, base_ms + 2000, None, 0, None),
     )
     # NULL body (should be skipped)
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-4", None, 0, None, base_ms + 3000, 0, "conv-alice", base_ms + 3000,
-         "+15550001111", "uuid-alice", 1, 0, 0, 0, 0, None, "incoming", None,
+        ("msg-4", None, 0, None, base_ms + 3000, 0, "conv-zezima", base_ms + 3000,
+         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", None,
          None, None, None, base_ms + 3000, None, 0, None),
     )
     # System message (type not in incoming/outgoing — should be skipped)
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-5", None, 0, None, base_ms + 4000, 0, "conv-alice", base_ms + 4000,
+        ("msg-5", None, 0, None, base_ms + 4000, 0, "conv-zezima", base_ms + 4000,
          None, None, 0, 0, 0, 0, 0, None, "keychange", "Safety number changed.",
          None, None, None, base_ms + 4000, None, 0, None),
     )
@@ -136,7 +136,7 @@ def _make_signal_db(path: str) -> None:
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ("msg-6", None, 0, None, base_ms + 5000, 0, "conv-group", base_ms + 5000,
-         "+15550002222", "uuid-bob", 1, 0, 0, 0, 0, None, "incoming", "What are we reading?",
+         "+15550002222", "uuid-hans", 1, 0, 0, 0, 0, None, "incoming", "What are we reading?",
          None, None, None, base_ms + 5000, None, 0, None),
     )
 
@@ -335,9 +335,9 @@ async def test_sync_source_labels(mem_db, embedder, signal_db_path, signal_confi
         await connector.sync()
 
     sources = await mem_db.list_sources()
-    assert f"{SOURCE_PREFIX}:conv-alice" in sources
+    assert f"{SOURCE_PREFIX}:conv-zezima" in sources
     assert f"{SOURCE_PREFIX}:conv-group" in sources
-    assert sources[f"{SOURCE_PREFIX}:conv-alice"] == 2
+    assert sources[f"{SOURCE_PREFIX}:conv-zezima"] == 2
     assert sources[f"{SOURCE_PREFIX}:conv-group"] == 1
 
 
@@ -354,9 +354,9 @@ async def test_sync_sender_attribution(mem_db, embedder, signal_db_path, signal_
     assert len(results) == 1
     assert "+15550001111: Hello!" in results[0].content
 
-    results = await mem_db.search_fts("Hey Alice", limit=5)
+    results = await mem_db.search_fts("Hey Zezima", limit=5)
     assert len(results) == 1
-    assert "me: Hey Alice!" in results[0].content
+    assert "me: Hey Zezima!" in results[0].content
 
 
 @pytest.mark.asyncio
@@ -380,11 +380,11 @@ async def test_sync_conversation_filter(mem_db, embedder, signal_db_path, signal
         db_path=signal_db_path, config_path=signal_config_path,
     )
     with _patch_open_signal_db(signal_db_path):
-        count = await connector.sync(conversation_id="conv-alice")
+        count = await connector.sync(conversation_id="conv-zezima")
 
     assert count == 2
     sources = await mem_db.list_sources()
-    assert f"{SOURCE_PREFIX}:conv-alice" in sources
+    assert f"{SOURCE_PREFIX}:conv-zezima" in sources
     assert f"{SOURCE_PREFIX}:conv-group" not in sources
 
 
@@ -457,12 +457,12 @@ async def test_sync_incremental_new_message(mem_db, embedder, tmp_path, signal_c
 
     assert first == 3
 
-    # Add a new message to conv-alice
+    # Add a new message to conv-zezima
     conn = sqlite3.connect(db_path)
     conn.execute(
         "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-new", None, 0, None, 1700000010000, 0, "conv-alice", 1700000010000,
-         "+15550001111", "uuid-alice", 1, 0, 0, 0, 0, None, "incoming", "New message!",
+        ("msg-new", None, 0, None, 1700000010000, 0, "conv-zezima", 1700000010000,
+         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "New message!",
          None, None, None, 1700000010000, None, 0, None),
     )
     conn.commit()

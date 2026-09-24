@@ -40,7 +40,7 @@ def make_item(content: str, source_id: str) -> MemoryItem:
         source_id=source_id,
         content=content,
         summary=None,
-        participants=["Alice"],
+        participants=["Zezima"],
         ts=int(time.time()),
         ingested_at=int(time.time()),
         metadata={},

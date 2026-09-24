@@ -85,7 +85,7 @@ def _make_chat_db(path: str) -> None:
 
     # Handles
     conn.execute("INSERT INTO handle VALUES (1, '+15550001234', 'US', 'iMessage', NULL)")
-    conn.execute("INSERT INTO handle VALUES (2, 'alice@example.com', 'US', 'iMessage', NULL)")
+    conn.execute("INSERT INTO handle VALUES (2, 'zezima@example.com', 'US', 'iMessage', NULL)")
 
     # Chats
     # Individual chat with +15550001234
