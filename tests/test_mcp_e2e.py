@@ -115,9 +115,11 @@ def test_tools_list(initialized_proc):
     assert resp.get("id") == 2
     tools = resp.get("result", {}).get("tools", [])
     tool_names = {t["name"] for t in tools}
-    expected = {"search_memory", "get_context", "add_memory", "list_sources", "ingest_whatsapp", "sync_discord"}
-    assert len(tools) == 6, f"Expected 6 tools, got {len(tools)}: {tool_names}"
-    assert tool_names == expected
+    from memoreei.server import LOCAL_TOOLS
+
+    # The stdio server is the local one: every tool, including the ones that import files.
+    assert tool_names == {fn.__name__ for fn in LOCAL_TOOLS}
+    assert {"search_memory", "get_context", "add_memory", "list_sources", "sync", "ingest_whatsapp"} <= tool_names
 
 
 def test_search_memory_returns_content(initialized_proc):
