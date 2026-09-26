@@ -80,6 +80,8 @@ def serve(
     tls_key: Optional[str] = typer.Option(None, "--tls-key", help="TLS private key (PEM) for HTTPS"),
 ) -> None:
     """Start the MCP server: stdio for a local client, or --http for the network."""
+    import sys
+
     if not http:
         from memoreei.server import mcp
 
@@ -87,7 +89,6 @@ def serve(
         return
 
     import logging
-    import sys
 
     import uvicorn
 
@@ -112,6 +113,18 @@ def serve(
     if not names:
         typer.echo("No API keys yet. Create one: memoreei key create <name>", err=True)
         raise typer.Exit(1)
+
+    if sys.platform == "darwin" and cfg.imessage_db_path:
+        from memoreei.service import _macos_access as fda
+
+        if fda.can_read_messages(cfg.imessage_db_path):
+            typer.echo(fda.ACCESS_OK, err=True)
+        else:
+            typer.echo(
+                f"{fda.ACCESS_MISSING}. iMessage sync will fail until it's granted: "
+                "memoreei service grant-access",
+                err=True,
+            )
 
     store: KeyStore | None = None
 
@@ -318,32 +331,84 @@ def service_install(
     backend.install(memoreei_bin, env_path, port or get_config().port)
 
     if sys.platform == "darwin" and get_config().imessage_db_path:
-        typer.echo("  iMessage needs Full Disk Access for the service, granted once in System")
-        typer.echo("  Settings. To open it with the right file already shown:")
-        typer.echo("    memoreei service grant-access\n")
+        typer.echo("  iMessage needs Full Disk Access, granted once in System Settings.")
+        if sys.stdin.isatty() and typer.confirm("  Walk through it now?", default=True):
+            _grant_full_disk_access()
+        else:
+            typer.echo("  Any time: memoreei service grant-access\n")
+
+
+def _grant_full_disk_access() -> None:
+    """Guide the user through Full Disk Access with dialogs, then check it worked."""
+    import os
+    import subprocess
+    from memoreei.service import _macos_access as fda
+    from memoreei.service._launchd import _LABEL, _launchd_paths
+
+    target = fda.binary_needing_access()
+    name = fda.display_name(target)
+    typer.echo(f"\n  Full Disk Access is needed for:\n    {target}\n")
+    typer.echo("  " + fda.instructions(name).replace("\n\n", "\n  ") + "\n")
+
+    choice = fda.dialog(fda.instructions(name), ["Cancel", "Open Settings"], "Open Settings")
+    if choice == "Cancel":
+        raise typer.Exit(1)
+    fda.open_full_disk_access(target)
+    if choice is None:
+        # No dialogs possible (e.g. over SSH): the windows may still open on the Mac's screen.
+        typer.echo("  Opened System Settings and Finder on the Mac's screen.")
+        typer.echo("  When it's done, restart the service: memoreei service install\n")
+        return
+
+    _, plist_path, log_path = _launchd_paths()
+    while True:
+        done = fda.dialog(
+            f"When \u201c{name}\u201d is in the Full Disk Access list and switched on, click "
+            "Done. Memoreei will restart and check that it can read your messages.",
+            ["Cancel", "Done"],
+            "Done",
+        )
+        if done != "Done":
+            raise typer.Exit(1)
+        if not plist_path.exists():
+            typer.echo("  ✓ Granted. Now start the service: memoreei service install\n")
+            return
+        offset = log_path.stat().st_size if log_path.exists() else 0
+        subprocess.run(
+            ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{_LABEL}"], capture_output=True
+        )
+        typer.echo("  Restarting the service and checking…")
+        ok = fda.wait_for_startup_report(log_path, offset)
+        if ok:
+            typer.echo("  ✓ Memoreei can read your messages.\n")
+            fda.dialog("All set: Memoreei can read your messages.", ["OK"], "OK")
+            return
+        if ok is None:
+            typer.echo("  Couldn't tell whether it worked. Check: memoreei service logs\n")
+            return
+        typer.echo(f"  ✗ Still no access. Is \u201c{name}\u201d in the list and switched on?")
+        again = fda.dialog(
+            f"Memoreei still can't read your messages.\n\nCheck that \u201c{name}\u201d is "
+            "in the Full Disk Access list and its switch is on. If it's there, try switching "
+            "it off and on again.",
+            ["Cancel", "Try Again"],
+            "Try Again",
+            icon="caution",
+        )
+        if again != "Try Again":
+            raise typer.Exit(1)
+        fda.open_full_disk_access(target)
 
 
 @service_app.command(name="grant-access")
 def service_grant_access() -> None:
-    """macOS: open Full Disk Access settings with the file to add already shown in Finder.
-
-    Needed to read iMessage (and Contacts) from the background service.
-    """
+    """macOS: walk through granting Full Disk Access, which iMessage needs, and check it."""
     import sys
-    from memoreei.service._macos_access import binary_needing_access, open_full_disk_access
 
     if sys.platform != "darwin":
         typer.echo("Full Disk Access is a macOS setting; nothing to do here.")
         raise typer.Exit(0)
-    target = binary_needing_access()
-    open_full_disk_access(target)
-    typer.echo("\n  Opened System Settings → Privacy & Security → Full Disk Access,")
-    typer.echo("  and a Finder window with this selected:\n")
-    typer.echo(f"    {target}\n")
-    typer.echo("  1. Unlock the settings pane if it's locked.")
-    typer.echo("  2. Drag that file from Finder into the list, and make sure it's switched on.")
-    typer.echo("     (Or click +, press Cmd-Shift-G and paste the path above.)")
-    typer.echo("  3. Restart the service: memoreei service install\n")
+    _grant_full_disk_access()
 
 
 @service_app.command(name="uninstall")
