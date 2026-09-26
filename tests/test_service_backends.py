@@ -13,8 +13,8 @@ from click.exceptions import Exit as ClickExit
 from memoreei.service._launchd import LaunchdBackend, _launchd_paths
 from memoreei.service._systemd import SystemdBackend, _systemd_paths
 
-# typer.Exit subclasses click.exceptions.Exit (not SystemExit)
-_AnyExit = (SystemExit, ClickExit)
+# typer.Exit subclassed click.exceptions.Exit until typer 0.27; catch all three
+_AnyExit = (SystemExit, ClickExit, typer.Exit)
 
 
 # ---------------------------------------------------------------------------
