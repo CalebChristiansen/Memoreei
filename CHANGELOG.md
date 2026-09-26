@@ -7,9 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.3.0rc1] - 2026-09-24
+## [0.3.0rc2] - 2026-09-26
 
-memoreei becomes a network server that asks for a key.
+memoreei becomes a network server that asks for a key. (`v0.3.0rc1` was tagged but never
+published: its release tests failed on a fresh install, against mcp 2.x.)
 
 ### Breaking
 - **SSE is gone.** `memoreei serve --sse` is replaced by `memoreei serve --http`, which
@@ -48,6 +49,7 @@ memoreei becomes a network server that asks for a key.
 - Requests to the network server are logged with the name of the key that made them.
 
 ### Fixed
+- `mcp` is pinned below 2.0, whose FastMCP rename broke fresh installs.
 - JSON and CSV imports identify rows by content rather than position, so re-importing a
   re-exported or reordered file adds only the new rows instead of duplicating them.
 - The Docker image builds (it was missing `README.md`) and keeps config and database in
@@ -112,7 +114,7 @@ memoreei becomes a network server that asks for a key.
 - Movie Ring and Contact Dossier example apps
 
 [Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.1...HEAD
-[0.3.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0rc1
+[0.3.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0rc2
 [0.2.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CalebChristiansen/Memoreei/releases/tag/v0.1.0
