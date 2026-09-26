@@ -276,8 +276,9 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
     Reads ~/Library/Messages/chat.db in read-only mode. macOS only — returns
     an error dict on other platforms without raising.
 
-    Requires Full Disk Access granted to Terminal (or the app running this server)
-    in System Settings → Privacy & Security → Full Disk Access.
+    Requires Full Disk Access for the program running this server, granted in System
+    Settings → Privacy & Security → Full Disk Access (`memoreei service grant-access`
+    opens it with the right file shown).
 
     The path to chat.db can be overridden with the IMESSAGE_DB_PATH env var.
 

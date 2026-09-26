@@ -202,12 +202,19 @@ starts; click **Allow**. Missed it? Firewall → Options, add the `Python.app` y
 Python lives in, and set it to allow. The symptom is a client that times out while
 `curl http://127.0.0.1:3679/mcp` on the Mac itself answers `401`.
 
-**macOS and iMessage:** reading `~/Library/Messages/chat.db` needs **Full Disk Access**,
-granted in System Settings → Privacy & Security → Full Disk Access to the program that
-reads it. A grant to Terminal covers `memoreei sync` typed in Terminal, but not the
-background service, which is launched differently and may need its own. If
-`memoreei service logs` shows `Operation not permitted`, that grant is missing. It can
-only be given in person, on the Mac itself.
+**macOS and iMessage:** reading `~/Library/Messages/chat.db` needs **Full Disk Access**
+for the program that reads it, and macOS has no way for an app to ask for it. Instead:
+
+```bash
+memoreei service grant-access
+```
+
+opens System Settings → Privacy & Security → Full Disk Access, and a Finder window with
+the exact file to add already selected: drag it into the list and switch it on, then
+`memoreei service install` again to restart. (For most Pythons that file is a
+`Python.app` buried inside `Python.framework`, which is why finding it by hand is no
+fun.) It can only be done in person, on the Mac itself. If `memoreei service logs`
+shows `Operation not permitted` or `unable to open database file`, it's missing.
 
 ### 5. Connect a client
 

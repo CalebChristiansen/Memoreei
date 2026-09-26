@@ -317,6 +317,34 @@ def service_install(
     memoreei_bin = str(Path(sys.executable).parent / "memoreei")
     backend.install(memoreei_bin, env_path, port or get_config().port)
 
+    if sys.platform == "darwin" and get_config().imessage_db_path:
+        typer.echo("  iMessage needs Full Disk Access for the service, granted once in System")
+        typer.echo("  Settings. To open it with the right file already shown:")
+        typer.echo("    memoreei service grant-access\n")
+
+
+@service_app.command(name="grant-access")
+def service_grant_access() -> None:
+    """macOS: open Full Disk Access settings with the file to add already shown in Finder.
+
+    Needed to read iMessage (and Contacts) from the background service.
+    """
+    import sys
+    from memoreei.service._macos_access import binary_needing_access, open_full_disk_access
+
+    if sys.platform != "darwin":
+        typer.echo("Full Disk Access is a macOS setting; nothing to do here.")
+        raise typer.Exit(0)
+    target = binary_needing_access()
+    open_full_disk_access(target)
+    typer.echo("\n  Opened System Settings → Privacy & Security → Full Disk Access,")
+    typer.echo("  and a Finder window with this selected:\n")
+    typer.echo(f"    {target}\n")
+    typer.echo("  1. Unlock the settings pane if it's locked.")
+    typer.echo("  2. Drag that file from Finder into the list, and make sure it's switched on.")
+    typer.echo("     (Or click +, press Cmd-Shift-G and paste the path above.)")
+    typer.echo("  3. Restart the service: memoreei service install\n")
+
 
 @service_app.command(name="uninstall")
 def service_uninstall() -> None:

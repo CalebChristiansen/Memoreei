@@ -108,8 +108,8 @@ class IMessageConnector:
         except sqlite3.OperationalError as exc:
             raise RuntimeError(
                 f"Cannot open iMessage database at {self.db_path}: {exc}. "
-                "Make sure Terminal (or your app) has Full Disk Access in "
-                "System Settings → Privacy & Security."
+                "This process needs Full Disk Access. Run 'memoreei service grant-access' "
+                "to open System Settings with the file to add already shown in Finder."
             ) from exc
 
         try:
