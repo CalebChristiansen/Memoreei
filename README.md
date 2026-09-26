@@ -211,8 +211,8 @@ memoreei service grant-access
 ```
 
 A dialog explains each step, then opens System Settings at Full Disk Access and a
-Finder window with the exact file to add already selected (for most Pythons, a
-`Python.app` buried in `Python.framework`, which nobody finds by hand). Drag it into
+Finder window with the exact file to add already selected: the real Python interpreter
+behind your virtualenv, usually buried somewhere nobody finds by hand. Drag it into
 the list, switch it on, click **Done**, and memoreei restarts the service and tells you
 whether it can now read your messages. It has to be done in person, at the Mac. The
 service log also says `Full Disk Access: ok` or `missing` each time it starts.

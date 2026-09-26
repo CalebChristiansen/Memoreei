@@ -1,6 +1,7 @@
 """Unit tests for LaunchdBackend and SystemdBackend."""
 from __future__ import annotations
 
+import plistlib
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
@@ -44,33 +45,34 @@ def _fake_systemd_paths(tmp_path: Path):
 
 
 class TestLaunchdInstall:
-    def test_writes_start_sh(self, tmp_path):
-        env_path = tmp_path / "config.env"
-        env_path.write_text("MEMOREEI_DB_PATH=./memoreei.db\n")
-
+    def _install(self, tmp_path, port=3679):
+        env_path = tmp_path / ".memoreei" / "config.env"
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.write_text("EMBEDDING_PROVIDER=fastembed\n")
         with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
              patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
+            LaunchdBackend().install("/usr/bin/memoreei", env_path, port)
+        _, plist_path, _ = _fake_launchd_paths(tmp_path)
+        with plist_path.open("rb") as f:
+            return env_path, plistlib.load(f)
 
-        start_sh = tmp_path / ".memoreei" / "start.sh"
-        assert start_sh.exists()
-        content = start_sh.read_text()
-        assert "serve --http --port 3679" in content
-        assert "--sse" not in content
-        assert str(env_path) in content
-        assert f'MEMOREEI_HOME="{env_path.parent}"' in content
-        assert content.startswith("#!/bin/bash")
+    def test_plist_runs_memoreei_directly(self, tmp_path):
+        """No shell wrapper: macOS would hold /bin/bash responsible for Full Disk Access."""
+        env_path, plist = self._install(tmp_path)
+        assert plist["ProgramArguments"] == ["/usr/bin/memoreei", "serve", "--http", "--port", "3679"]
+        assert plist["EnvironmentVariables"] == {"MEMOREEI_HOME": str(env_path.parent)}
+        assert not (tmp_path / ".memoreei" / "start.sh").exists()
 
-    def test_start_sh_is_executable(self, tmp_path):
-        env_path = tmp_path / "config.env"
-        env_path.write_text("")
+    def test_removes_old_start_sh(self, tmp_path):
+        old = tmp_path / ".memoreei" / "start.sh"
+        old.parent.mkdir(parents=True)
+        old.write_text("#!/bin/bash\nexec memoreei serve --sse --port 8080\n")
+        self._install(tmp_path)
+        assert not old.exists()
 
-        with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
-             patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 3679)
-
-        start_sh = tmp_path / ".memoreei" / "start.sh"
-        assert start_sh.stat().st_mode & 0o111, "start.sh is not executable"
+    def test_custom_port_in_plist(self, tmp_path):
+        _, plist = self._install(tmp_path, port=9090)
+        assert plist["ProgramArguments"][-1] == "9090"
 
     def test_writes_valid_plist(self, tmp_path):
         env_path = tmp_path / "config.env"
@@ -104,16 +106,6 @@ class TestLaunchdInstall:
         flat = [" ".join(c) for c in calls]
         assert any("launchctl" in s and "load" in s for s in flat)
         assert any("launchctl" in s and "start" in s for s in flat)
-
-    def test_custom_port_in_start_sh(self, tmp_path):
-        env_path = tmp_path / "config.env"
-        env_path.write_text("")
-
-        with patch("memoreei.service._launchd._launchd_paths", lambda: _fake_launchd_paths(tmp_path)), \
-             patch("subprocess.run", side_effect=_ok):
-            LaunchdBackend().install("/usr/bin/memoreei", env_path, 9090)
-
-        assert "9090" in (tmp_path / ".memoreei" / "start.sh").read_text()
 
     def test_launchctl_load_failure_raises(self, tmp_path):
         env_path = tmp_path / "config.env"

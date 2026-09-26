@@ -4,9 +4,8 @@ There is no API that asks for Full Disk Access: an app can only open the right p
 System Settings and point at the file to add. This does that, with native dialogs
 explaining each step, then restarts the service and checks it can really read Messages.
 
-The file to add isn't obvious. A framework build of Python (Homebrew's, python.org's)
-re-executes itself as ``Python.framework/Versions/X.Y/Resources/Python.app``, and that
-bundle, not the venv's ``python`` symlink, is what macOS asks permission for.
+The file to add isn't obvious: it's the real interpreter behind the virtualenv's
+``python`` symlink, usually somewhere deep inside a Homebrew or python.org framework.
 """
 from __future__ import annotations
 
@@ -24,14 +23,14 @@ ACCESS_MISSING = "memoreei: Full Disk Access: missing"
 
 
 def binary_needing_access(executable: str | None = None) -> Path:
-    """The file to add to Full Disk Access for this Python."""
-    real = Path(executable or sys.executable).resolve()
-    for parent in real.parents:
-        if parent.parent.name == "Versions" and parent.parent.parent.name == "Python.framework":
-            app = parent / "Resources" / "Python.app"
-            if app.exists():
-                return app
-    return real
+    """The file to add to Full Disk Access: this Python's real interpreter.
+
+    macOS holds the first program a launchd job runs responsible for its file access,
+    and the service runs memoreei directly, so that's the interpreter in its shebang
+    with symlinks (venv, Homebrew's ``opt/``) resolved. A framework Python goes on to
+    re-execute itself as ``Python.app``, but the grant has to be on the interpreter.
+    """
+    return Path(executable or sys.executable).resolve()
 
 
 def display_name(target: Path) -> str:

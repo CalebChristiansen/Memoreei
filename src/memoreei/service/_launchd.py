@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import plistlib
 import subprocess
 from pathlib import Path
 
@@ -22,46 +23,30 @@ def _launchd_paths() -> tuple[Path, Path, Path]:
 class LaunchdBackend(ServiceBackend):
     def install(self, memoreei_bin: str, env_path: Path, port: int) -> None:
         memoreei_dir, plist_path, log_path = _launchd_paths()
-        start_sh = memoreei_dir / "start.sh"
 
         memoreei_dir.mkdir(parents=True, exist_ok=True)
         plist_path.parent.mkdir(parents=True, exist_ok=True)
 
-        start_sh.write_text(
-            f"#!/bin/bash\n"
-            f"set -a\n"
-            f'source "{env_path}"\n'
-            f"set +a\n"
-            f'export MEMOREEI_HOME="{env_path.parent}"\n'
-            f'exec "{memoreei_bin}" serve --http --port {port}\n'
-        )
-        start_sh.chmod(0o755)
+        # launchd runs memoreei itself, with no shell script in between: macOS holds the
+        # first program a job runs responsible for its file access, so a wrapper script
+        # would make Full Disk Access a question about /bin/bash rather than Python.
+        # memoreei reads config.env from MEMOREEI_HOME by itself.
+        stale_wrapper = memoreei_dir / "start.sh"
+        if stale_wrapper.exists():
+            stale_wrapper.unlink()
 
-        plist_path.write_text(
-            f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{_LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{start_sh}</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>{memoreei_dir}</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>{log_path}</string>
-    <key>StandardErrorPath</key>
-    <string>{log_path}</string>
-</dict>
-</plist>
-"""
-        )
+        plist = {
+            "Label": _LABEL,
+            "ProgramArguments": [memoreei_bin, "serve", "--http", "--port", str(port)],
+            "EnvironmentVariables": {"MEMOREEI_HOME": str(env_path.parent)},
+            "WorkingDirectory": str(memoreei_dir),
+            "RunAtLoad": True,
+            "KeepAlive": True,
+            "StandardOutPath": str(log_path),
+            "StandardErrorPath": str(log_path),
+        }
+        with plist_path.open("wb") as f:
+            plistlib.dump(plist, f)
 
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
         result = subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True, text=True)

@@ -25,9 +25,12 @@ def _framework_python(tmp_path):
     return venv_python, version / "Resources/Python.app"
 
 
-def test_framework_python_needs_its_python_app(tmp_path):
-    venv_python, app_bundle = _framework_python(tmp_path)
-    assert binary_needing_access(str(venv_python)) == app_bundle.resolve()
+def test_framework_python_needs_its_interpreter_not_python_app(tmp_path):
+    """launchd holds the interpreter responsible, not the Python.app it re-execs into."""
+    venv_python, _ = _framework_python(tmp_path)
+    expected = (tmp_path / "Cellar/python@3.11/3.11.0/Frameworks/Python.framework"
+                "/Versions/3.11/bin/python3.11").resolve()
+    assert binary_needing_access(str(venv_python)) == expected
 
 
 def test_plain_python_needs_itself(tmp_path):
@@ -41,7 +44,8 @@ def test_plain_python_needs_itself(tmp_path):
 
 
 def test_grant_access_opens_pane_and_reveals_file(tmp_path):
-    venv_python, app_bundle = _framework_python(tmp_path)
+    venv_python, _ = _framework_python(tmp_path)
+    interpreter = venv_python.resolve()
     with patch.object(sys, "platform", "darwin"), \
          patch.object(sys, "executable", str(venv_python)), \
          patch("subprocess.run") as run:
@@ -49,8 +53,8 @@ def test_grant_access_opens_pane_and_reveals_file(tmp_path):
     assert result.exit_code == 0, result.output
     calls = [c.args[0] for c in run.call_args_list]
     assert ["open", FULL_DISK_ACCESS_PANE] in calls
-    assert ["open", "-R", str(app_bundle.resolve())] in calls
-    assert str(app_bundle.resolve()) in result.output
+    assert ["open", "-R", str(interpreter)] in calls
+    assert str(interpreter) in result.output
 
 
 def test_grant_access_is_a_no_op_off_macos():

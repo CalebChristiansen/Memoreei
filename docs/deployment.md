@@ -52,7 +52,7 @@ Everything lives in one directory, `~/.memoreei/`:
 |------|------|
 | `config.env` | settings and connector credentials |
 | `memoreei.db` | the memories, API key hashes and the list of registered import files |
-| `start.sh`, `memoreei.log` | written by `memoreei service install` on macOS |
+| `memoreei.log` | the service log, on macOS |
 
 Use another directory with `memoreei --home <dir> …` or `MEMOREEI_HOME=<dir>`. Back up
 this directory and you have backed up memoreei.
@@ -106,7 +106,8 @@ memoreei service install
 ```
 
 On macOS this writes `~/Library/LaunchAgents/com.memoreei.server.plist`, which runs
-`~/.memoreei/start.sh`. On Linux it writes `~/.config/systemd/user/memoreei.service`:
+`memoreei serve --http` directly (no wrapper script, so that Full Disk Access is granted
+to Python rather than to a shell). On Linux it writes `~/.config/systemd/user/memoreei.service`:
 
 ```ini
 [Unit]
