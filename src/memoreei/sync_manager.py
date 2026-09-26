@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 if TYPE_CHECKING:
     from memoreei.config import Config
@@ -17,6 +17,12 @@ class SyncManager:
         self._lock: asyncio.Lock | None = None
         self._everything_lock: asyncio.Lock | None = None
         self._last_sync: dict[str, float] = {}
+        # The last sync_everything: {"finished_at": epoch seconds, "result": …}, for status.
+        self.last_run: dict[str, Any] | None = None
+
+    @property
+    def running(self) -> bool:
+        return self._everything_lock is not None and self._everything_lock.locked()
 
     def _get_lock(self) -> asyncio.Lock:
         if self._lock is None:
@@ -121,24 +127,31 @@ class SyncManager:
                     connectors[source] = {"error": str(e)}
             imports = await resync_imports(tools)
             self._last_sync["_all"] = time.monotonic()
-        total = sum(v for v in connectors.values() if isinstance(v, int))
-        total += sum(i.get("new", 0) for i in imports)
-        return {"connectors": connectors, "imports": imports, "new_messages": total}
+            total = sum(v for v in connectors.values() if isinstance(v, int))
+            total += sum(i.get("new", 0) for i in imports)
+            result = {"connectors": connectors, "imports": imports, "new_messages": total}
+            self.last_run = {"finished_at": time.time(), "result": result}
+        return result
 
-    async def auto_sync_loop(self, tools: MemoryTools, cfg: Config) -> None:
-        """Optional background coroutine. Only called if config.auto_sync is True."""
-        print(
-            f"[sync_manager] Starting background sync loop (interval={cfg.sync_interval}s)",
-            file=sys.stderr,
-        )
+    async def auto_sync_loop(
+        self, get_tools: Callable[[], Awaitable[MemoryTools]], get_cfg: Callable[[], Config]
+    ) -> None:
+        """Background sync, for as long as the server runs.
+
+        Settings are read afresh each round, so turning AUTO_SYNC on or changing the
+        interval in config.env (the dashboard does both) needs no restart.
+        """
+        print("[sync_manager] Background sync loop started", file=sys.stderr)
         while True:
             try:
-                await asyncio.sleep(cfg.sync_interval)
+                await asyncio.sleep(get_cfg().sync_interval)
             except asyncio.CancelledError:
                 print("[sync_manager] Background loop cancelled", file=sys.stderr)
                 raise
+            if not get_cfg().auto_sync:
+                continue
             try:
-                await self.sync_everything(tools)
+                await self.sync_everything(await get_tools())
             except asyncio.CancelledError:
                 raise
             except Exception as e:

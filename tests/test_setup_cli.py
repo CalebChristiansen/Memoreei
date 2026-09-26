@@ -268,3 +268,35 @@ def test_home_flag_points_everything_elsewhere(tmp_path, monkeypatch, isolated_h
     from memoreei.config import set_home
 
     set_home(None)
+
+
+# ── status and search against a database with something in it ──────────────
+
+
+def test_status_and_search_with_data(monkeypatch, mock_embedder):
+    import asyncio
+
+    from typer.testing import CliRunner
+
+    from memoreei.cli import app
+    from memoreei.config import get_config
+    from memoreei.storage.database import Database
+    from memoreei.storage.models import MemoryItem
+
+    monkeypatch.setattr("memoreei.search.embeddings.get_provider", lambda: mock_embedder)
+
+    async def _seed() -> None:
+        async with Database(db_path=get_config().db_path) as db:
+            await db.insert_memory(MemoryItem(
+                id="m1", source="whatsapp:heist", source_id="1", content="the donut heist",
+                summary=None, participants=["Link"], ts=1_700_000_000, ingested_at=1_700_000_000,
+                metadata={}, embedding=[0.0] * 10,
+            ))
+
+    asyncio.run(_seed())
+    runner = CliRunner()
+    status = runner.invoke(app, ["status"])
+    assert status.exit_code == 0, status.output
+    assert "whatsapp:heist" in status.output and "Total messages: 1" in status.output
+    miss = runner.invoke(app, ["search", "zzzqqq"])
+    assert miss.exit_code == 0, miss.output

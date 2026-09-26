@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+<title>{% block title %}Memoreei{% endblock %}</title>
+<link rel="stylesheet" href="/admin/static/admin.css">
+<script src="/admin/static/htmx.min.js" defer></script>
+<script src="/admin/static/admin.js" defer></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/admin/">Memoreei</a>
+  {% if nav != "none" %}
+  <nav>
+    <a href="/admin/" {% if nav == "status" %}aria-current="page"{% endif %}>Status</a>
+    <a href="/admin/sources" {% if nav == "sources" %}aria-current="page"{% endif %}>Sources</a>
+    <a href="/admin/keys" {% if nav == "keys" %}aria-current="page"{% endif %}>Clients</a>
+  </nav>
+  <form method="post" action="/admin/logout" class="logout"><button class="link">Sign out</button></form>
+  {% endif %}
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+<footer>memoreei {{ version }}</footer>
+</body>
+</html>

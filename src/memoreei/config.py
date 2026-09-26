@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 DEFAULT_PORT = 3679  # "DORY" on a phone keypad
 DEFAULT_HOST = "0.0.0.0"
@@ -12,6 +13,9 @@ DEFAULT_HOST = "0.0.0.0"
 # Set by the CLI's --home option; beats MEMOREEI_HOME and the default.
 _home_override: str | None = None
 _env_loaded = False
+# Variables set in the real environment before any file was read; a reload never
+# overrides them, so they keep winning over config.env as they did at startup.
+_process_env_keys: frozenset[str] = frozenset()
 
 
 def set_home(path: str | None) -> None:
@@ -22,12 +26,24 @@ def set_home(path: str | None) -> None:
     _env_loaded = False
 
 
+def default_home(platform: str | None = None) -> str:
+    """Where memoreei keeps its data when nothing says otherwise.
+
+    macOS follows the Mac convention (and is where Memoreei.app looks), so the app and
+    the pip-installed CLI share one set of keys and one database. Elsewhere, a dot
+    directory in the home folder. Docker sets MEMOREEI_HOME=/data.
+    """
+    if (platform or sys.platform) == "darwin":
+        return "~/Library/Application Support/Memoreei"
+    return "~/.memoreei"
+
+
 def memoreei_home() -> Path:
     """The directory holding config.env and memoreei.db.
 
-    ``--home`` › ``MEMOREEI_HOME`` › ``~/.memoreei``. Not created here; see ensure_home().
+    ``--home`` › ``MEMOREEI_HOME`` › default_home(). Not created here; see ensure_home().
     """
-    raw = _home_override or os.environ.get("MEMOREEI_HOME") or "~/.memoreei"
+    raw = _home_override or os.environ.get("MEMOREEI_HOME") or default_home()
     return Path(raw).expanduser()
 
 
@@ -50,16 +66,32 @@ def load_env() -> None:
     development), then ``$MEMOREEI_HOME/config.env``. The cwd ``.env`` is read first so it
     may itself set MEMOREEI_HOME.
     """
-    global _env_loaded
+    global _env_loaded, _process_env_keys
     if _env_loaded:
         return
     _env_loaded = True
+    _process_env_keys = frozenset(os.environ)
     cwd_env = Path(".env")
     if cwd_env.is_file():
         load_dotenv(cwd_env)
     home_env = config_env_path()
     if home_env.is_file():
         load_dotenv(home_env)
+
+
+def reload_config() -> None:
+    """Re-read config.env after it has been edited, for a server that's already running.
+
+    Values from config.env replace what was loaded from it before; variables from the
+    real environment still win, as they did at startup.
+    """
+    global _config
+    path = config_env_path()
+    if path.is_file():
+        for key, value in dotenv_values(path).items():
+            if key not in _process_env_keys:
+                os.environ[key] = value or ""
+    _config = None
 
 
 @dataclass

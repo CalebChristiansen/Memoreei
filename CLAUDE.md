@@ -31,6 +31,8 @@ src/memoreei/
 ├── server.py              # MCP servers: local (stdio, every tool), network (HTTP, 4 tools)
 ├── auth.py                # API keys, bearer-auth middleware, client config printout
 ├── imports.py             # registered import files, re-read by `sync`
+├── catalog.py             # what can be set up (setup wizard and dashboard share it)
+├── admin/                 # the /admin dashboard and its login rules
 ├── storage/database.py    # SQLite + FTS5 + vector search
 ├── search/hybrid.py       # Hybrid search with RRF fusion
 ├── connectors/            # Discord, WhatsApp, Telegram, Matrix, Slack, Email
@@ -38,6 +40,8 @@ src/memoreei/
 ```
 
 ## Key Paths
-- **Home:** `~/.memoreei/` (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
+- **Home:** `~/.memoreei/`, or `~/Library/Application Support/Memoreei` on macOS (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
+- **Mac app:** `macos/` (Swift menu-bar app, build script, lock file); see `macos/README.md`
+- **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx, loopback-only by default)
 - **Dev config:** a `.env` in the checkout overrides `config.env` while you work here
 - **Venv:** `.venv/bin/python`, with memoreei installed editable (`pip install -e '.[dev]'`)

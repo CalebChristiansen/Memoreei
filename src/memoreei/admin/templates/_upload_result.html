@@ -1,0 +1,2 @@
+{% if result.error %}<p class="bad">{{ result.error }}</p>
+{% else %}<p class="ok">{{ name }}: {{ "{:,}".format(result.new) }} new messages. It'll be re-read by every sync.</p>{% endif %}

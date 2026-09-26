@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% set nav = "none" %}
+{% block main %}
+<h1>{% if expired %}That link has expired{% else %}Signed out{% endif %}</h1>
+<p>{% if expired %}Dashboard links work once, and for five minutes.{% endif %}
+{% if in_app() %}Open the dashboard from the Memoreei menu in the menu bar.{% else %}Run this on the
+computer Memoreei runs on, and open the link it prints:{% endif %}</p>
+{% if not in_app() %}<pre>memoreei admin-url</pre>{% endif %}
+{% endblock %}

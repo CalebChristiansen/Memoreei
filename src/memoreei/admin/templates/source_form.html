@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>{{ c.icon }} {{ c.name }}</h1>
+{% if fda is not none %}
+<p class="card">{% if fda %}<span class="ok">Full Disk Access is granted.</span> Memoreei can read your Messages.
+{% else %}<span class="bad">Full Disk Access is missing.</span> Memoreei can't read your Messages until it's granted.
+{% if in_app() %}Choose <b>Set Up Full Disk Access…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}; you can save these settings first.{% endif %}</p>
+{% endif %}
+<form method="post" class="card">
+  {% for f in fields %}
+  <label for="{{ f.var }}">{{ f.label }}</label>
+  <input id="{{ f.var }}" name="{{ f.var }}" {% if f.secret %}type="password" placeholder="{{ 'saved — leave blank to keep' if f.is_set else '' }}"{% else %}value="{{ f.value }}"{% endif %} autocomplete="off">
+  <p class="hint">{{ f.hint }}</p>
+  {% endfor %}
+  <button>Save</button>
+  <a href="/admin/sources">Cancel</a>
+</form>
+{% if configured %}
+<form method="post" action="/admin/sources/{{ c.key }}/remove" class="remove">
+  <button class="danger">Stop reading {{ c.name }}</button>
+  <span class="muted">Messages already stored stay searchable.</span>
+</form>
+{% endif %}
+{% endblock %}

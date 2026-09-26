@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS api_keys (
     last_used_at INTEGER
 );
 
+-- The dashboard's logins: one-time login links and the sessions they start.
+-- Hashes only, like api_keys, and never valid as MCP keys.
+CREATE TABLE IF NOT EXISTS admin_tokens (
+    token_hash TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('login', 'session')),
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS import_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,
@@ -565,6 +574,42 @@ class Database:
             "UPDATE api_keys SET last_used_at = ? WHERE name = ?",
             (when if when is not None else int(time.time()), name),
         )
+        await self._db.commit()
+
+    # ── Dashboard logins ────────────────────────────────────────────────────
+    # Hashes of one-time login tokens and session tokens; see memoreei.admin.auth.
+
+    async def add_admin_token(self, token_hash: str, kind: str, ttl: int) -> None:
+        assert self._db is not None
+        now = int(time.time())
+        await self._db.execute("DELETE FROM admin_tokens WHERE expires_at <= ?", (now,))
+        await self._db.execute(
+            "INSERT INTO admin_tokens (token_hash, kind, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (token_hash, kind, now, now + ttl),
+        )
+        await self._db.commit()
+
+    async def admin_token_valid(self, token_hash: str, kind: str) -> bool:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT 1 FROM admin_tokens WHERE token_hash = ? AND kind = ? AND expires_at > ?",
+            (token_hash, kind, int(time.time())),
+        ) as cursor:
+            return await cursor.fetchone() is not None
+
+    async def take_admin_token(self, token_hash: str, kind: str) -> bool:
+        """Delete a token, returning whether it was there and unexpired: single use."""
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "DELETE FROM admin_tokens WHERE token_hash = ? AND kind = ? AND expires_at > ?",
+            (token_hash, kind, int(time.time())),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
+    async def delete_admin_token(self, token_hash: str) -> None:
+        assert self._db is not None
+        await self._db.execute("DELETE FROM admin_tokens WHERE token_hash = ?", (token_hash,))
         await self._db.commit()
 
     # ── Registered import files ─────────────────────────────────────────────

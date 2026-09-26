@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Sources</h1>
+<p>Where Memoreei reads your messages from. More are coming; the command line has the rest.</p>
+<table>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="icon">{{ r.icon }}</td>
+    <td>{{ r.name }}{% if r.kind == "upload" %}<br><span class="muted">{{ r.hint }}</span>{% endif %}</td>
+    {% if r.kind == "config" %}
+    <td>{% if r.configured %}<span class="ok">set up</span>{% else %}<span class="muted">not set up</span>{% endif %}</td>
+    <td><a class="button" href="/admin/sources/{{ r.key }}">{% if r.configured %}Change{% else %}Set up{% endif %}</a></td>
+    {% else %}
+    <td colspan="2">
+      <form hx-post="/admin/upload/{{ r.key }}" hx-encoding="multipart/form-data" hx-target="next .result">
+        <input type="file" name="file" accept="{{ r.accept }}" required> <button>Import</button>
+      </form><div class="result"></div>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

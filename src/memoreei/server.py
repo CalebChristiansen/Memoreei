@@ -42,21 +42,19 @@ async def _get_db() -> Database:
 
 @asynccontextmanager
 async def _auto_sync() -> AsyncIterator[None]:
-    """Run the background sync loop for as long as the server runs, if AUTO_SYNC is on."""
-    cfg = get_config()
-    task: asyncio.Task | None = None
-    if cfg.auto_sync:
-        tools = await _get_tools()
-        task = asyncio.create_task(_sync_manager.auto_sync_loop(tools, cfg))
+    """Run the background sync loop for as long as the server runs.
+
+    The loop checks AUTO_SYNC each round, so it can be switched on while running.
+    """
+    task = asyncio.create_task(_sync_manager.auto_sync_loop(_get_tools, get_config))
     try:
         yield
     finally:
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 @asynccontextmanager
@@ -511,10 +509,13 @@ def build_network_server() -> FastMCP:
 
 
 def build_http_app(verify: "Verifier") -> Any:
-    """The network server as an ASGI app behind bearer-key auth.
+    """The HTTP server: MCP at /mcp behind bearer keys, and the dashboard at /admin.
 
-    The background sync loop runs here, once per process, rather than per session.
+    The dashboard has its own guard (memoreei.admin.auth) and never accepts API keys;
+    everything else needs one. The background sync loop runs here, once per process,
+    rather than per session.
     """
+    from memoreei.admin.app import build_admin_app
     from memoreei.auth import BearerAuthMiddleware
 
     app = build_network_server().streamable_http_app()
@@ -526,7 +527,27 @@ def build_http_app(verify: "Verifier") -> Any:
             yield
 
     app.router.lifespan_context = lifespan
-    return BearerAuthMiddleware(app, verify)
+    return _AdminDispatch(build_admin_app(), BearerAuthMiddleware(app, verify))
+
+
+class _AdminDispatch:
+    """Send /admin to the dashboard and everything else (lifespan included) to MCP."""
+
+    def __init__(self, admin: Any, mcp_app: Any) -> None:
+        self.admin = admin
+        self.mcp_app = mcp_app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "http" and (path == "/admin" or path.startswith("/admin/")):
+            if path == "/admin":
+                from starlette.responses import RedirectResponse
+
+                await RedirectResponse("/admin/", status_code=307)(scope, receive, send)
+                return
+            await self.admin({**scope, "root_path": scope.get("root_path", "") + "/admin"}, receive, send)
+            return
+        await self.mcp_app(scope, receive, send)
 
 
 mcp = build_local_server()

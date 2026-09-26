@@ -25,6 +25,40 @@ def test_default_db_path_is_in_home(isolated_home, monkeypatch):
     assert cfg.db_path == str(isolated_home / "memoreei.db")
 
 
+def test_default_home_is_the_mac_convention_on_macos():
+    assert cfg_module.default_home("darwin") == "~/Library/Application Support/Memoreei"
+
+
+def test_default_home_is_a_dot_directory_elsewhere():
+    assert cfg_module.default_home("linux") == "~/.memoreei"
+
+
+def test_home_without_env_uses_platform_default(monkeypatch):
+    monkeypatch.delenv("MEMOREEI_HOME", raising=False)
+    monkeypatch.setattr(cfg_module.sys, "platform", "darwin")
+    assert str(cfg_module.memoreei_home()).endswith("Library/Application Support/Memoreei")
+    monkeypatch.setattr(cfg_module.sys, "platform", "linux")
+    assert str(cfg_module.memoreei_home()).endswith("/.memoreei")
+
+
+def test_reload_picks_up_edited_config_env(isolated_home, monkeypatch):
+    monkeypatch.delenv("AUTO_SYNC", raising=False)
+    (isolated_home / "config.env").write_text("AUTO_SYNC=false\n")
+    cfg_module.reload_config()
+    assert get_config().auto_sync is False
+    (isolated_home / "config.env").write_text("AUTO_SYNC=true\n")
+    cfg_module.reload_config()
+    assert get_config().auto_sync is True
+
+
+def test_reload_never_overrides_the_real_environment(isolated_home, monkeypatch):
+    monkeypatch.setenv("AUTO_SYNC", "false")
+    monkeypatch.setattr(cfg_module, "_process_env_keys", frozenset({"AUTO_SYNC"}))
+    (isolated_home / "config.env").write_text("AUTO_SYNC=true\n")
+    cfg_module.reload_config()
+    assert get_config().auto_sync is False
+
+
 def test_default_network_settings(monkeypatch):
     for var in ("MEMOREEI_HOST", "MEMOREEI_PORT", "MEMOREEI_PUBLIC_URL"):
         monkeypatch.delenv(var, raising=False)

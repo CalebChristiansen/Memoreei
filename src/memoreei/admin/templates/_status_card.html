@@ -1,0 +1,21 @@
+<section id="status" class="card"
+  {% if running %}hx-get="/admin/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <dl>
+    <dt>Memories</dt><dd>{{ "{:,}".format(total) }}
+      {% if by_kind %}<span class="muted">({% for kind, n in by_kind %}{{ kind }} {{ "{:,}".format(n) }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}</dd>
+    <dt>Sources</dt><dd>{% if connectors %}{{ connectors|join(", ") }}{% else %}none yet — <a href="/admin/sources">set one up</a>{% endif %}</dd>
+    {% if fda is not none %}
+    <dt>Full Disk Access</dt>
+    <dd>{% if fda %}<span class="ok">granted</span>{% else %}<span class="bad">missing</span> — iMessage can't be read until it's granted. {% if in_app() %}Choose <b>Set Up Full Disk Access…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}.{% endif %}</dd>
+    {% endif %}
+    <dt>Clients</dt><dd>{{ keys }} key{{ "" if keys == 1 else "s" }} — <a href="/admin/keys">manage</a></dd>
+    <dt>Last sync</dt>
+    <dd>{% if running %}<span class="busy">Syncing now…</span> The first iMessage sync reads every message and can take a long while.
+        {% elif last_run %}{{ last_run.finished_at|ago }}: {{ "{:,}".format(last_run.result.new_messages) }} new
+          {% for name, r in last_run.result.connectors.items() %}{% if r is mapping %}<br><span class="bad">{{ name }}: {{ r.error }}</span>{% endif %}{% endfor %}
+        {% else %}not since the server started{% endif %}</dd>
+    <dt>Automatic sync</dt><dd>{% if auto_sync %}every {{ interval_min }} minute{{ "" if interval_min == 1 else "s" }}{% else %}off{% endif %}</dd>
+    <dt>Data</dt><dd><code>{{ home }}</code></dd>
+  </dl>
+  <button hx-post="/admin/sync" hx-target="#status" hx-swap="outerHTML" {% if running or not connectors %}disabled{% endif %}>Sync now</button>
+</section>

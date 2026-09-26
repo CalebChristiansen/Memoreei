@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 import typer
 
+from memoreei.catalog import CONNECTORS as _CONNECTORS
+from memoreei.catalog import is_connector_configured as _is_connector_configured
+from memoreei.catalog import parse_env_vars as _parse_env_vars
+from memoreei.catalog import read_env_lines as _read_env_lines
+from memoreei.catalog import write_env_updates as _write_env_updates
+
 if TYPE_CHECKING:
     from memoreei.storage.database import Database
     from memoreei.tools.memory_tools import MemoryTools
@@ -27,7 +33,8 @@ def main(
         None,
         "--home",
         help="Memoreei's home directory, holding config.env and memoreei.db "
-        "(default: $MEMOREEI_HOME, else ~/.memoreei)",
+        "(default: $MEMOREEI_HOME, else ~/Library/Application Support/Memoreei on macOS, "
+        "~/.memoreei elsewhere)",
     ),
 ) -> None:
     """Memoreei — personal memory MCP server CLI."""
@@ -111,8 +118,13 @@ def serve(
 
     names = asyncio.run(_key_names())
     if not names:
-        typer.echo("No API keys yet. Create one: memoreei key create <name>", err=True)
-        raise typer.Exit(1)
+        # Still no way in without a key: /mcp refuses everything until one exists. The
+        # server starts anyway so the dashboard can be where the first key is made.
+        typer.echo(
+            "memoreei: no API keys yet, so every client is refused. Create one in the "
+            "dashboard, or: memoreei key create <name>",
+            err=True,
+        )
 
     if sys.platform == "darwin" and cfg.imessage_db_path:
         from memoreei.service import _macos_access as fda
@@ -148,6 +160,12 @@ def serve(
         f"memoreei: serving {scheme}://{host}:{port}/mcp for {len(names)} key(s): {', '.join(names)}",
         err=True,
     )
+    typer.echo(
+        f"memoreei: dashboard at {scheme}://localhost:{port}/admin/ "
+        "(sign in with the link from: memoreei admin-url)",
+        err=True,
+    )
+    _exit_with_parent()
     uvicorn.run(
         build_http_app(verify),
         host=host,
@@ -159,21 +177,41 @@ def serve(
     )
 
 
+def _exit_with_parent() -> None:
+    """Under Memoreei.app, stop when the app does, even if it crashed.
+
+    The app sets MEMOREEI_PARENT_PID. Were the server to outlive it, it would hold the
+    port and the app's next start would find it taken.
+    """
+    import os
+    import signal
+    import threading
+    import time
+
+    parent = os.environ.get("MEMOREEI_PARENT_PID")
+    if not parent or not parent.isdigit():
+        return
+
+    def watch() -> None:
+        while os.getppid() == int(parent):
+            time.sleep(2)
+        typer.echo("memoreei: Memoreei.app has gone; stopping", err=True)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=watch, name="parent-watch", daemon=True).start()
+
+
 @app.command()
 def status() -> None:
     """Show DB stats: message counts, sources, last sync times."""
 
     async def _run() -> None:
         from memoreei.config import get_config
-        from memoreei.search.embeddings import get_provider
-        from memoreei.storage.database import Database
 
         cfg = get_config()
-        db = Database(db_path=cfg.db_path)
-        await db.connect()
-
-        sources = await db.list_sources()
-        total = sum(s.get("count", 0) for s in sources)
+        async with _open_db() as db:
+            sources = await db.list_sources()
+        total = sum(sources.values())
 
         typer.echo(f"DB: {cfg.db_path}")
         typer.echo(f"Total messages: {total}")
@@ -181,14 +219,13 @@ def status() -> None:
         typer.echo("")
         typer.echo("Sources:")
         if sources:
-            for s in sources:
-                typer.echo(f"  {s['source']:40s}  {s.get('count', 0):>6} messages")
+            for name, count in sources.items():
+                typer.echo(f"  {name:40s}  {count:>6} messages")
         else:
             typer.echo("  (none)")
 
         typer.echo("")
         typer.echo(f"Configured connectors: {cfg.configured_connectors() or ['(none)']}")
-        await db.close()
 
     asyncio.run(_run())
 
@@ -283,18 +320,8 @@ def search(
     """Search memories from the CLI."""
 
     async def _run() -> None:
-        from memoreei.config import get_config
-        from memoreei.search.embeddings import get_provider
-        from memoreei.storage.database import Database
-        from memoreei.tools.memory_tools import MemoryTools
-
-        cfg = get_config()
-        db = Database(db_path=cfg.db_path)
-        await db.connect()
-        embedder = get_provider()
-        tools = MemoryTools(db=db, embedder=embedder)
-
-        results = await tools.search_memory(query=query, limit=limit, source=source)
+        async with _open_tools() as tools:
+            results = await tools.search_memory(query=query, limit=limit, source=source)
         if not results:
             typer.echo("No results found.")
             return
@@ -304,8 +331,6 @@ def search(
             typer.echo(f"    {r.get('content', '')[:200]}")
             if r.get("participant"):
                 typer.echo(f"    — {r['participant']}")
-
-        await db.close()
 
     asyncio.run(_run())
 
@@ -660,132 +685,6 @@ def key_revoke(
     typer.echo(f"  ✓ Revoked '{name}'.")
 
 
-_CONNECTORS = {
-    "gmail": {
-        "name": "Gmail (IMAP)",
-        "icon": "📧",
-        "vars": [
-            ("GMAIL_EMAIL", "Gmail address", False, "e.g. you@gmail.com"),
-            ("GMAIL_APP_PASSWORD", "App Password", True,
-             "Generate at https://myaccount.google.com/apppasswords (requires 2FA)"),
-        ],
-        "sync_name": "email",
-    },
-    "discord": {
-        "name": "Discord (Bot API)",
-        "icon": "🎮",
-        "vars": [
-            ("DISCORD_BOT_TOKEN", "Bot token", True, "From https://discord.com/developers/applications"),
-            ("DISCORD_CHANNEL_ID", "Channel ID", False, "Right-click channel → Copy ID (enable Developer Mode)"),
-        ],
-    },
-    "telegram": {
-        "name": "Telegram",
-        "icon": "✈️",
-        "vars": [
-            ("TELEGRAM_BOT_TOKEN", "Bot token", True, "From @BotFather on Telegram"),
-            ("TELEGRAM_CHAT_ID", "Chat ID", False, "Use @userinfobot or check API updates"),
-        ],
-    },
-    "slack": {
-        "name": "Slack",
-        "icon": "💬",
-        "vars": [
-            ("SLACK_BOT_TOKEN", "Bot token", True, "From https://api.slack.com/apps → OAuth & Permissions"),
-            ("SLACK_CHANNEL_ID", "Channel ID", False, "Right-click channel → View channel details → copy ID"),
-        ],
-    },
-    "matrix": {
-        "name": "Matrix",
-        "icon": "🟩",
-        "vars": [
-            ("MATRIX_HOMESERVER", "Homeserver URL", False, "e.g. https://matrix.org"),
-            ("MATRIX_ACCESS_TOKEN", "Access token", True, "Settings → Help & About → Access Token in Element"),
-            ("MATRIX_ROOM_ID", "Room ID", False, "e.g. !abc123:matrix.org"),
-        ],
-    },
-    "mastodon": {
-        "name": "Mastodon",
-        "icon": "🐘",
-        "vars": [
-            ("MASTODON_INSTANCE", "Instance URL", False, "e.g. https://mastodon.social"),
-            ("MASTODON_HASHTAG", "Hashtag to track (optional)", False, "Without the # sign"),
-            ("MASTODON_ACCESS_TOKEN", "Access token", True,
-             "Preferences → Development → New Application → copy token"),
-        ],
-    },
-    "signal": {
-        "name": "Signal Desktop",
-        "icon": "🔒",
-        "vars": [
-            ("SIGNAL_DB_PATH", "Signal DB path (optional)", False,
-             "Leave blank for auto-detect (~/.config/Signal/sql/db.sqlite)"),
-            ("SIGNAL_CONFIG_PATH", "Signal config path (optional)", False,
-             "Leave blank for auto-detect (~/.config/Signal/config.json)"),
-        ],
-    },
-    "imessage": {
-        "name": "iMessage (macOS only)",
-        "icon": "🍎",
-        "vars": [
-            ("IMESSAGE_DB_PATH", "Messages DB path", False,
-             "Press Enter to use the default macOS location.",
-             "~/Library/Messages/chat.db"),
-        ],
-    },
-}
-
-
-def _read_env_lines(env_path: "Path") -> list[str]:
-    if env_path.exists():
-        return env_path.read_text().splitlines()
-    return []
-
-
-def _parse_env_vars(env_lines: list[str]) -> dict[str, str]:
-    """Parse .env lines into a dict of KEY -> VALUE (non-commented, non-empty)."""
-    result: dict[str, str] = {}
-    for line in env_lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if "=" in stripped:
-            key, _, value = stripped.partition("=")
-            key = key.strip()
-            value = value.strip()
-            if key and value:
-                result[key] = value
-    return result
-
-
-def _is_connector_configured(key: str, env_vars: dict[str, str]) -> bool:
-    """Check if all vars for a connector have non-empty values in env_vars."""
-    info = _CONNECTORS[key]
-    return all(var_name in env_vars for var_name, *_ in info["vars"])
-
-
-def _write_env_updates(
-    env_path: "Path", env_lines: list[str], updates: list[tuple[str, str]]
-) -> None:
-    for var_name, value in updates:
-        found = False
-        for i, line in enumerate(env_lines):
-            stripped = line.lstrip("# ").strip()
-            if stripped.startswith(f"{var_name}=") or stripped.startswith(f"{var_name} ="):
-                env_lines[i] = f"{var_name}={value}"
-                found = True
-                break
-        if not found:
-            env_lines.append(f"{var_name}={value}")
-    import os as _os
-
-    # config.env holds tokens: create it private, and keep it that way.
-    fd = _os.open(env_path, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
-    with _os.fdopen(fd, "w") as f:
-        f.write("\n".join(env_lines) + "\n")
-    _os.chmod(env_path, 0o600)
-
-
 def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     """Prompt the user for a single connector's variables. Returns list of (var, value)."""
     import questionary
@@ -812,6 +711,25 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     return updates
 
 
+@app.command(name="admin-url")
+def admin_url() -> None:
+    """Print a one-time link that signs this browser in to the dashboard.
+
+    The link works once, within five minutes, on the computer the server runs on (or
+    from anywhere, if MEMOREEI_ADMIN_REMOTE=true, as the Docker image sets).
+    """
+    from memoreei.admin.auth import LOGIN_TTL, create_login_token, login_url
+    from memoreei.config import get_config
+
+    async def _run() -> str:
+        async with _open_db() as db:
+            return await create_login_token(db)
+
+    cfg = get_config()
+    typer.echo(login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert)))
+    typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
+
+
 @app.command()
 def setup(
     connector: Optional[str] = typer.Argument(
@@ -820,7 +738,7 @@ def setup(
     ),
     reset: bool = typer.Option(False, "--reset", help="Clear existing values before reconfiguring"),
 ) -> None:
-    """Interactive setup — configure connectors and write them to ~/.memoreei/config.env."""
+    """Interactive setup — configure connectors and write them to config.env in the home directory."""
     import questionary
     from pathlib import Path
     from memoreei.config import config_env_path, ensure_home, memoreei_home

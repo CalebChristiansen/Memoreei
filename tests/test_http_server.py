@@ -156,12 +156,14 @@ def test_server_urls_one_per_address(monkeypatch):
 # ── serve --http ─────────────────────────────────────────────────────────────
 
 
-def test_serve_http_refuses_without_keys():
+def test_serve_http_without_keys_starts_but_says_every_client_is_refused():
+    # It starts so the dashboard can make the first key; /mcp still refuses everything
+    # (test_no_keys_means_mcp_refuses_everything).
     with patch("uvicorn.run") as run:
         result = runner.invoke(app, ["serve", "--http"])
-    assert result.exit_code == 1
-    assert "No API keys yet. Create one: memoreei key create <name>" in result.output
-    run.assert_not_called()
+    assert result.exit_code == 0, result.output
+    assert "no API keys yet, so every client is refused" in result.output
+    run.assert_called_once()
 
 
 def test_serve_http_starts_with_a_key():

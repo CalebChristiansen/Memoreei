@@ -1,0 +1,14 @@
+{% if error %}
+<p class="bad">{{ error }}</p>
+{% else %}
+<section class="card created">
+  <h2>Key for “{{ name }}”</h2>
+  <p><b>This is the only time it's shown.</b> Copy it now; only a fingerprint of it is kept.</p>
+  <pre id="new-key">{{ key }}</pre>
+  <button type="button" data-copy="new-key">Copy key</button>
+  <h3>Client setup</h3>
+  <pre id="client-config">{{ config }}</pre>
+  <button type="button" data-copy="client-config">Copy setup</button>
+</section>
+{% endif %}
+{% with oob = true %}{% include "_key_list.html" %}{% endwith %}

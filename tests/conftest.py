@@ -1,6 +1,8 @@
 """Shared pytest fixtures for the memoreei test suite."""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import memoreei.config as config_module
@@ -22,6 +24,15 @@ def isolated_home(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(config_module, "_env_loaded", True)
     monkeypatch.setattr(config_module, "_config", None)
     return home
+
+
+@pytest.fixture(autouse=True)
+def restore_environ():
+    """config.reload_config() writes to os.environ, as it must in a running server."""
+    saved = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(saved)
 
 
 @pytest.fixture
