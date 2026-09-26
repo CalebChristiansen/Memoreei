@@ -7,6 +7,34 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Memoreei.app for macOS**: a menu-bar app with the server and its own Python inside,
+  for macOS 12 or newer, as `Memoreei-arm64.dmg` and `Memoreei-x86_64.dmg` on each
+  GitHub release. It walks you through Full Disk Access (granted to Memoreei, not to a
+  Python interpreter), starts at login, restarts the server if it crashes, and says when
+  an update is out. Unsigned for now: open it the first time with *Open Anyway*.
+- **A web dashboard at `/admin`**: status, sources, and client keys (create, show once
+  with client setup, revoke), with *Sync now*. It answers only on the machine the server
+  runs on, unless `MEMOREEI_ADMIN_REMOTE=true` (the Docker image sets it), and only
+  after signing in with a one-time link from `memoreei admin-url`. The sources page offers
+  iMessage for now; the rest stay in `memoreei setup` until each is tested there.
+- `memoreei admin-url`, and a `python -m memoreei` entry point.
+
+### Changed
+- **On macOS the home directory is `~/Library/Application Support/Memoreei`**, shared
+  with Memoreei.app. Linux keeps `~/.memoreei`, Docker keeps `/data`, and `--home` /
+  `MEMOREEI_HOME` still override. There's no automatic move: to keep an existing Mac
+  install, move `~/.memoreei` there by hand, or set `MEMOREEI_HOME=~/.memoreei`.
+- `serve --http` starts with no API keys, and refuses every client until one exists, so
+  the first key can be made in the dashboard.
+- Background sync picks up `AUTO_SYNC` and the interval from `config.env` each round, so
+  changing them (as the dashboard does) needs no restart.
+
+### Fixed
+- `memoreei status` crashed on any database with messages in it.
+- `memoreei search` left its database open when nothing matched, and aiosqlite 0.22
+  complained on exit.
+
 ## [0.3.0rc2] - 2026-09-26
 
 memoreei becomes a network server that asks for a key. (`v0.3.0rc1` was tagged but never

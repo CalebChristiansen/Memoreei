@@ -1,0 +1,3 @@
+# The macOS app pins onnxruntime to the last release with macOS 12 wheels.
+# See macos/README.md before changing it.
+onnxruntime==1.19.2

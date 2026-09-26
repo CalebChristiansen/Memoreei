@@ -70,6 +70,10 @@ Memoreei isn't just a memory server — any app can be built on top of it. Two o
 
 ## Quick Start
 
+**On a Mac?** [Memoreei.app](#on-a-mac-memoreeiapp) is the easy way: nothing to
+install first, no Terminal, and it's the only way to read iMessage without granting
+Full Disk Access to Python itself.
+
 ```bash
 pip install memoreei
 memoreei setup           # interactive — pick connectors, enter credentials
@@ -85,9 +89,11 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-Everything memoreei knows lives in one directory, `~/.memoreei/`: `config.env` for
-settings and credentials, `memoreei.db` for the memories. Every command finds it from
-wherever you run it. Point it elsewhere with `--home <dir>` or `MEMOREEI_HOME`.
+Everything memoreei knows lives in one directory: `config.env` for settings and
+credentials, `memoreei.db` for the memories. It's `~/Library/Application
+Support/Memoreei` on macOS (shared with Memoreei.app) and `~/.memoreei` everywhere
+else. Every command finds it from wherever you run it. Point it elsewhere with
+`--home <dir>` or `MEMOREEI_HOME`.
 
 Then connect an AI client, either on the same machine or over the network.
 
@@ -118,6 +124,47 @@ See [Run it as a network server](#run-it-as-a-network-server), next.
 
 ---
 
+## On a Mac: Memoreei.app
+
+A menu-bar app with the whole server inside it, Python included. It runs the network
+server, asks for nothing to be installed first, and sets itself up through a dashboard
+in your browser.
+
+1. **Download** the DMG for your Mac from the
+   [latest release](https://github.com/CalebChristiansen/Memoreei/releases/latest):
+   `Memoreei-arm64.dmg` for Apple silicon (Apple menu → About This Mac says *Chip
+   Apple M…*), `Memoreei-x86_64.dmg` for Intel. macOS 12 or newer.
+2. **Drag Memoreei into Applications** and open it.
+3. **"Memoreei can't be opened"?** The app isn't signed by Apple yet. Open System
+   Settings → Privacy & Security, scroll down, and click **Open Anyway** next to the
+   message about Memoreei. (On macOS 12–14, right-clicking the app and choosing
+   **Open** also works.) You do this once per download.
+4. **Full Disk Access.** A window walks you through it: macOS gives apps no way to ask,
+   so you drag Memoreei's icon into the Full Disk Access list yourself. The window
+   notices when it's done. If macOS offers to *Quit & Reopen* Memoreei, go ahead.
+5. **The firewall** may ask whether *Memoreei Server* may accept incoming connections.
+   Click **Allow**, or other machines can't reach it.
+6. **The dashboard** opens in your browser. Under **Sources**, set up iMessage; under
+   **Clients**, create a key for each machine or app that will search your memories. The
+   key is shown once, with ready-to-paste setup for Claude Code and `.mcp.json`.
+
+Memoreei lives in the menu bar from then on and starts at login (switch that off in
+its menu). **Open Memoreei…** signs you in to the dashboard. **Quit** stops the server
+too, so clients lose access until you open it again.
+
+**Updates.** The menu shows *Update Available* when there's a new release. Download the
+new DMG and replace the app. Until Memoreei is signed, macOS treats each new version as
+a stranger and switches its Full Disk Access off; the setup window reopens by itself,
+and Memoreei is still in the list, so you just switch it back on.
+
+**Where things are.** Data in `~/Library/Application Support/Memoreei`, logs in
+`~/Library/Logs/Memoreei` (**Show Log** in the menu). A `memoreei` installed with pip
+on the same Mac uses the same data, so `memoreei key list` in Terminal shows the app's
+keys. Don't run both servers at once: they'd want the same port, and the app will say
+so rather than fight over it.
+
+---
+
 ## Run it as a network server
 
 Run memoreei on one always-on machine (a home server, a desktop, a Mac that never
@@ -142,7 +189,7 @@ memoreei setup
 ```
 
 The wizard asks which embedding provider to use, whether to sync in the background,
-and which connectors to configure. It writes `~/.memoreei/config.env` (readable only by
+and which connectors to configure. It writes `config.env` in the home directory (readable only by
 you), then offers to create the first API key. Say yes, and name it after the machine
 that will use it.
 
@@ -185,8 +232,8 @@ memoreei service logs       # tail the log; each request is logged with its key'
 memoreei service uninstall  # remove it
 ```
 
-To run it in the foreground instead: `memoreei serve --http`. It refuses to start until
-at least one key exists; there is no way to run the network server open.
+To run it in the foreground instead: `memoreei serve --http`. Until at least one key
+exists it refuses every client; there is no way to run the network server open.
 
 Port 3679 spells DORY on a phone keypad. It is officially registered to the Apple
 Newton's dock sync, a device discontinued in 1998, which is not expected to object.
@@ -198,9 +245,10 @@ the user service starts at boot rather than at your first SSH login.
 **macOS firewall:** if it's on (System Settings → Network → Firewall), other machines
 can't connect until you allow the Python that runs memoreei to accept incoming
 connections. macOS asks with a dialog on the Mac's screen the first time the server
-starts; click **Allow**. Missed it? Firewall → Options, add the `Python.app` your
-Python lives in, and set it to allow. The symptom is a client that times out while
-`curl http://127.0.0.1:3679/mcp` on the Mac itself answers `401`.
+starts; click **Allow**. Missed it? Firewall → Options → **+**, and add the interpreter
+`memoreei service grant-access` points you at (the same file, for the same reason). The
+symptom is a client that times out while `curl http://127.0.0.1:3679/mcp` on the Mac
+itself answers `401`.
 
 **macOS and iMessage:** reading `~/Library/Messages/chat.db` needs **Full Disk Access**,
 and macOS gives apps no way to ask for it. `memoreei service install` offers to walk
@@ -216,6 +264,20 @@ behind your virtualenv, usually buried somewhere nobody finds by hand. Drag it i
 the list, switch it on, click **Done**, and memoreei restarts the service and tells you
 whether it can now read your messages. It has to be done in person, at the Mac. The
 service log also says `Full Disk Access: ok` or `missing` each time it starts.
+
+### The dashboard
+
+The server has a web dashboard at `/admin` for what setup and `key` do on the command
+line: status, sources, and client keys. It answers only on the machine the server runs
+on, and only after you sign in with a one-time link:
+
+```bash
+memoreei admin-url     # prints http://localhost:3679/admin/login?token=…
+```
+
+Open the link in a browser on that machine. It works once, within five minutes, and
+signs that browser in for a month. The dashboard never accepts API keys, and API keys
+never open it.
 
 ### 5. Connect a client
 
@@ -266,7 +328,7 @@ memories.example.com {
 ```
 
 Then tell memoreei the URL clients should use, so `key create` prints it:
-`MEMOREEI_PUBLIC_URL=https://memories.example.com` in `~/.memoreei/config.env`.
+`MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env`.
 
 **Or let memoreei do it**, if you already have a certificate:
 
@@ -476,7 +538,7 @@ Sync Mastodon posts. Public and hashtag timelines require no authentication.
 | `access_token` | string | `MASTODON_ACCESS_TOKEN` env var | OAuth token (optional, for home timeline) |
 
 #### `sync_imessage`
-> 🧪 Beta — macOS only. Requires Full Disk Access for Terminal in System Settings → Privacy & Security.
+> 🧪 Beta — macOS only. Requires Full Disk Access for the program running memoreei: [Memoreei.app](#on-a-mac-memoreeiapp) walks you through it, and `memoreei service grant-access` does for a pip install.
 
 Sync iMessage/SMS conversations from `~/Library/Messages/chat.db` (read-only).
 
@@ -517,7 +579,7 @@ Sync every configured connector and return counts per source.
 # Every command takes --home to use a different home directory
 memoreei --home /srv/memoreei status
 
-# Interactive setup — writes ~/.memoreei/config.env, offers the first API key
+# Interactive setup — writes config.env in the home directory, offers the first API key
 memoreei setup             # pick from a list (spacebar to select, enter to confirm)
 memoreei setup gmail       # configure a specific connector directly
 
@@ -533,6 +595,9 @@ memoreei serve --http --tls-cert cert.pem --tls-key key.pem
 memoreei key create laptop
 memoreei key list
 memoreei key revoke laptop
+
+# A one-time link that signs a browser in to the dashboard (/admin)
+memoreei admin-url
 
 # Run the network server in the background (launchd / systemd)
 memoreei service install [--port 3679]
@@ -652,7 +717,8 @@ Query: "that weird API rate limit issue"
 
 ## Configuration
 
-`memoreei setup` writes `~/.memoreei/config.env` and is the easy way. To edit it by hand,
+`memoreei setup` (or the dashboard) writes `config.env` in the home directory and is
+the easy way. To edit it by hand,
 [`.env.example`](.env.example) lists every setting. Settings are read from, in order of
 precedence:
 
@@ -664,7 +730,7 @@ precedence:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MEMOREEI_HOME` | `~/.memoreei` | Home directory, holding `config.env` and `memoreei.db`; `--home` overrides it |
+| `MEMOREEI_HOME` | `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere | Home directory, holding `config.env` and `memoreei.db`; `--home` overrides it |
 | `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | SQLite database path |
 | `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local ONNX, no API key) or `openai` |
 | `OPENAI_API_KEY` | — | Required only if `EMBEDDING_PROVIDER=openai` |
@@ -680,6 +746,7 @@ precedence:
 | `MEMOREEI_PUBLIC_URL` | — | The URL clients use, e.g. behind a reverse proxy. Only used to print client config |
 | `MEMOREEI_TLS_CERT` | — | TLS certificate (PEM), to serve HTTPS directly |
 | `MEMOREEI_TLS_KEY` | — | TLS private key (PEM) |
+| `MEMOREEI_ADMIN_REMOTE` | `false` | Let the dashboard answer other machines, not just this one. The Docker image sets it, since a container's loopback isn't the host's |
 
 API keys aren't settings: they live, hashed, in the database. See `memoreei key`.
 
@@ -760,20 +827,25 @@ API keys aren't settings: they live, hashed, in the database. See `memoreei key`
 - Live sync connectors (Discord, Telegram, Slack, Matrix, Gmail, Mastodon) make outbound API calls to those services
 - `EMBEDDING_PROVIDER=openai` sends message text to OpenAI's API for embedding
 
-`~/.memoreei/` is created readable only by you, and `config.env` is written mode 600.
+The home directory is created readable only by you, and `config.env` is written mode 600.
 
 ---
 
 ## Docker
 
 The image keeps everything in `/data` (`MEMOREEI_HOME=/data`) and runs the network
-server on port 3679. The server won't start without a key, so make one first:
+server on port 3679. Make a key first, or use the dashboard:
 
 ```bash
 docker compose run --rm memoreei setup              # optional: connectors, into ./data/config.env
 docker compose run --rm memoreei key create laptop
 docker compose up -d
+docker compose run --rm memoreei admin-url          # a sign-in link for the dashboard
 ```
+
+The dashboard answers other machines in Docker (`MEMOREEI_ADMIN_REMOTE=true`), because
+the container's loopback isn't the host's. It still needs the one-time link. Don't
+publish port 3679 beyond your own network.
 
 Inside a container memoreei can't see the host's addresses, so set
 `MEMOREEI_PUBLIC_URL` in `docker-compose.yml` to the URL clients will use; `key create`

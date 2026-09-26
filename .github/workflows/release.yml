@@ -50,8 +50,12 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+  macos:
+    needs: test
+    uses: ./.github/workflows/macos.yml
+
   github-release:
-    needs: publish
+    needs: [publish, macos]
     runs-on: ubuntu-latest
 
     steps:
@@ -59,8 +63,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Memoreei-*.dmg
+          merge-multiple: true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, 'rc') }}
+          files: Memoreei-*.dmg

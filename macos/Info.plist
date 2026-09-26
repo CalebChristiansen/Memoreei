@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>@BUNDLE_ID@</string>
+	<key>CFBundleName</key><string>Memoreei</string>
+	<key>CFBundleDisplayName</key><string>Memoreei</string>
+	<key>CFBundleExecutable</key><string>Memoreei</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>@SHORT_VERSION@</string>
+	<key>CFBundleVersion</key><string>@VERSION@</string>
+	<key>LSMinimumSystemVersion</key><string>@MIN_MACOS@</string>
+	<key>LSUIElement</key><true/>
+	<key>NSHumanReadableCopyright</key><string>MIT licensed</string>
+	<key>MemoreeiVersion</key><string>@VERSION@</string>
+	<key>MemoreeiReleasesAPI</key><string>https://api.github.com/repos/CalebChristiansen/Memoreei/releases/latest</string>
+</dict>
+</plist>

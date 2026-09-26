@@ -34,3 +34,7 @@ tasks-*.json
 run_tasks*.sh
 ralph*.env
 usecases/
+
+# macOS app build output
+macos/build/
+*.iconset/
