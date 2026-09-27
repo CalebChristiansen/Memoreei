@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0rc3] - 2026-09-26
+
 ### Added
 - **Memoreei.app for macOS**: a menu-bar app with the server and its own Python inside,
   for macOS 12 or newer, as `Memoreei-arm64.dmg` and `Memoreei-x86_64.dmg` on each
@@ -146,7 +148,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc3...HEAD
+[0.3.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc2...v0.3.0rc3
 [0.3.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0rc2
 [0.2.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.1.0...v0.2.0
