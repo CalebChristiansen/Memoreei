@@ -1,14 +1,28 @@
 {% if error %}
-<p class="bad">{{ error }}</p>
+<p class="bad" role="alert">{{ error }}</p>
 {% else %}
 <section class="card created">
-  <h2>Key for “{{ name }}”</h2>
-  <p><b>This is the only time it's shown.</b> Copy it now; only a fingerprint of it is kept.</p>
-  <pre id="new-key">{{ key }}</pre>
-  <button type="button" data-copy="new-key">Copy key</button>
-  <h3>Client setup</h3>
-  <pre id="client-config">{{ config }}</pre>
-  <button type="button" data-copy="client-config">Copy setup</button>
+  <div class="row">
+    <h2>Key for “{{ name }}”</h2>
+    <span class="tag">Shown once</span>
+  </div>
+  <p>Copy it now. Memoreei keeps only a fingerprint, so it can't show it again.</p>
+  <div class="copyable">
+    <pre id="new-key" class="key">{{ key }}</pre>
+    <button type="button" data-copy="new-key">Copy key</button>
+  </div>
+  <h3>Add it to Claude Code</h3>
+  <div class="copyable">
+    <pre id="claude-code" class="soft">{{ claude_code }}</pre>
+    <button type="button" class="quiet" data-copy="claude-code">Copy</button>
+  </div>
+  <details>
+    <summary>Other apps: .mcp.json setup</summary>
+    <div class="copyable">
+      <pre id="client-config" class="soft">{{ config }}</pre>
+      <button type="button" class="quiet" data-copy="client-config">Copy</button>
+    </div>
+  </details>
 </section>
 {% endif %}
 {% with oob = true %}{% include "_key_list.html" %}{% endwith %}

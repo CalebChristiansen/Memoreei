@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -20,6 +21,7 @@ from starlette.responses import PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from memoreei import __version__
 from memoreei.admin import auth
@@ -29,6 +31,7 @@ from memoreei.catalog import (
     DASHBOARD_UPLOADS,
     UPLOADS,
     is_connector_configured,
+    kind_name,
     parse_env_vars,
     read_env_lines,
     write_env_updates,
@@ -155,7 +158,34 @@ def _ago(ts: float | None) -> str:
     return "just now"
 
 
+def _tilde(path: str) -> str:
+    home = str(Path.home())
+    return "~" + path[len(home):] if path == home or path.startswith(home + os.sep) else path
+
+
+def _linkify(text: str) -> Markup:
+    """A catalog hint, with its web address made a link."""
+    parts = re.split(r"(https?://[^\s)]+)", text)
+    return Markup("").join(
+        Markup('<a href="{0}" rel="noreferrer">{1}</a>').format(p, p.split("://", 1)[1])
+        if i % 2 else escape(p)
+        for i, p in enumerate(parts)
+    )
+
+
+def _connector_key(sync_name: str) -> str | None:
+    """The dashboard page for a connector, by the name sync reports it under."""
+    for key in _dashboard_connectors():
+        if CONNECTORS[key].get("sync_name", key) == sync_name:
+            return key
+    return None
+
+
 templates.env.filters["ago"] = _ago
+templates.env.filters["tilde"] = _tilde
+templates.env.filters["linkify"] = _linkify
+templates.env.filters["kind_name"] = kind_name
+templates.env.filters["connector_key"] = lambda name: _connector_key(name)
 # Memoreei.app sets MEMOREEI_APP; the dashboard then points at its menu, not the CLI.
 templates.env.globals["in_app"] = lambda: bool(os.environ.get("MEMOREEI_APP"))
 
@@ -173,15 +203,17 @@ def _dashboard_connectors() -> tuple[str, ...]:
     return tuple(k for k in DASHBOARD_CONNECTORS if k != "imessage" or _on_mac())
 
 
-def _rows() -> list[dict[str, Any]]:
-    """Everything the dashboard offers, config and upload kinds alike, as table rows."""
+def _accounts() -> list[dict[str, Any]]:
+    """The connectors the dashboard sets up, and whether each is."""
     env = _env_vars()
-    rows = [
-        {"key": k, "kind": "config", **CONNECTORS[k], "configured": is_connector_configured(k, env)}
+    return [
+        {"key": k, **CONNECTORS[k], "configured": is_connector_configured(k, env)}
         for k in _dashboard_connectors()
     ]
-    rows += [{"key": k, "kind": "upload", **UPLOADS[k], "configured": False} for k in DASHBOARD_UPLOADS]
-    return rows
+
+
+def _uploads() -> list[dict[str, Any]]:
+    return [{"key": k, **UPLOADS[k]} for k in DASHBOARD_UPLOADS]
 
 
 async def _status_context() -> dict[str, Any]:
@@ -194,26 +226,57 @@ async def _status_context() -> dict[str, Any]:
         kind = source.split(":", 1)[0]
         by_kind[kind] = by_kind.get(kind, 0) + count
     cfg = get_config()
+    connectors = cfg.configured_connectors()
+    # What's set up, and what's been read (imports included), by the name people know.
+    accounts = _accounts()
+    names = [kind_name(c) for c in connectors]
+    names += [a["short"] for a in accounts if a["configured"] and a["short"] not in names]
+    names += [kind_name(k) for k in by_kind if kind_name(k) not in names]
+    fda = _full_disk_access()
+    last_run = _sync_manager.last_run
+    failed = bool(last_run) and any(
+        isinstance(r, dict) for r in last_run["result"].get("connectors", {}).values()
+    )
+    keys = len(await db.list_api_keys())
+    has_source = any(a["configured"] for a in accounts) or bool(sources)
     return {
         "home": str(memoreei_home()),
         "port": cfg.port,
         "total": sum(sources.values()),
         "by_kind": sorted(by_kind.items(), key=lambda kv: -kv[1]),
-        "connectors": cfg.configured_connectors(),
+        "connectors": connectors,
+        "source_names": names,
         "auto_sync": cfg.auto_sync,
         "interval_min": max(1, cfg.sync_interval // 60),
-        "fda": _full_disk_access(),
+        "fda": fda,
         "running": _sync_manager.running,
-        "last_run": _sync_manager.last_run,
-        "keys": len(await db.list_api_keys()),
+        "last_run": last_run,
+        "keys": keys,
         # As the Sources page counts it, so the two never disagree.
-        "has_source": any(r["configured"] for r in _rows()) or bool(sources),
+        "has_source": has_source,
+        # A new install: the two setup steps lead the page until both are done.
+        "welcome": not has_source or not keys,
+        "problems": failed or fda is False,
     }
 
 
+def _address() -> str:
+    """Where clients reach this server, as the Clients page tells them."""
+    from memoreei.auth import server_urls
+
+    cfg = get_config()
+    url = server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert))[0]
+    return url.split("://", 1)[-1].removesuffix("/mcp")
+
+
 async def _service_context() -> dict[str, Any] | None:
-    """The Linux service's switches, as the Mac app's menu has them. None where there's no
-    systemd user unit to switch (macOS, a container, `serve` run by hand without one)."""
+    """The switches of whatever keeps this server running: Memoreei.app on a Mac, the
+    systemd user unit on Linux. None where there's neither (a container, `serve` run by
+    hand, the `service install` LaunchAgent)."""
+    from memoreei.service import _app
+
+    if sys.platform == "darwin" and _app.available():
+        return {"app": True, "enabled": _app.start_at_login(), "active": True}
     if not sys.platform.startswith("linux"):
         return None
     from memoreei.service import _systemd as sd
@@ -281,11 +344,18 @@ async def status(request: Request) -> Response:
     return _page(
         request, "status.html", nav="status", **await _status_context(), **_page_notices(),
         service=await _service_context(), linger_failed="linger" in request.query_params,
+        address=_address(),
     )
 
 
 async def status_fragment(request: Request) -> Response:
-    return _page(request, "_status_card.html", **await _status_context())
+    context = await _status_context()
+    response = _page(request, "_status_card.html", **context)
+    # htmx polls this while a sync runs. Once it's over, reload the page: the counts,
+    # the sources and the welcome steps above the card have all moved on too.
+    if request.headers.get("hx-request") and not context["running"]:
+        response.headers["hx-refresh"] = "true"
+    return response
 
 
 async def _start_sync() -> None:
@@ -311,6 +381,11 @@ async def service_autostart(request: Request) -> Response:
     from memoreei.service import _systemd as sd
 
     on = str((await request.form()).get("on", "")) == "1"
+    from memoreei.service import _app
+
+    if sys.platform == "darwin" and _app.available():
+        await asyncio.to_thread(_app.set_start_at_login, on)
+        return RedirectResponse("/admin/", status_code=303)
     await asyncio.to_thread(sd.set_enabled, on)
     # `memoreei open` turns this on the first time only; from now on it's this switch.
     (ensure_home() / ".start-at-login-chosen").touch()
@@ -328,7 +403,11 @@ async def service_stop(request: Request) -> Response:
     """Stop the server, after this page has been sent: the page is its last word."""
     from memoreei.service import _systemd as sd
 
+    from memoreei.service import _app
+
     def stop() -> None:
+        if sys.platform == "darwin" and _app.available():
+            _app.request_quit()  # so the app quits with it, rather than restarting it
         if sd.running_as_unit():
             sd.stop_soon()  # so systemd knows it was asked, and doesn't restart it
         else:
@@ -344,8 +423,15 @@ async def service_stop(request: Request) -> Response:
 async def log_page(request: Request) -> Response:
     from memoreei.service import _systemd as sd
 
-    text = await asyncio.to_thread(sd.journal, 300)
-    return _page(request, "log.html", nav="status", log=text)
+    from memoreei.service import _app
+
+    if sys.platform == "darwin" and _app.available():
+        text = await asyncio.to_thread(_app.log_tail, 300)
+        hint = f"The whole file: <code>{escape(_tilde(str(_app.log_path())))}</code>"
+    else:
+        text = await asyncio.to_thread(sd.journal, 300)
+        hint = "In a terminal: <code>memoreei service logs</code>"
+    return _page(request, "log.html", nav="status", log=text, log_hint=hint)
 
 
 async def keys_page(request: Request) -> Response:
@@ -377,6 +463,8 @@ async def key_create(request: Request) -> Response:
         name=name,
         key=key,
         urls=urls,
+        claude_code=f'claude mcp add --transport http memoreei {urls[0]} \\\n'
+        f'  --header "Authorization: Bearer {key}"',
         config=client_config_text(key, urls, from_public_url=bool(cfg.public_url)),
         keys=await db.list_api_keys(),
     )
@@ -391,10 +479,7 @@ async def key_revoke(request: Request) -> Response:
 
 
 async def sources_page(request: Request) -> Response:
-    return _page(
-        request, "sources.html", nav="sources", rows=_rows(), fda=_full_disk_access(),
-        linux=not _on_mac() and sys.platform.startswith("linux"),
-    )
+    return _page(request, "sources.html", nav="sources", accounts=_accounts(), uploads=_uploads())
 
 
 def _enabled_connector(request: Request) -> dict[str, Any] | None:
@@ -487,7 +572,7 @@ async def upload(request: Request) -> Response:
     target = folder / Path(str(file.filename or "upload")).name
     target.write_bytes(await file.read())
     result = await import_and_register(await _get_tools(), kind, str(target))
-    return _page(request, "_upload_result.html", result=result, name=UPLOADS[kind]["name"])
+    return _page(request, "_upload_result.html", result=result, filename=target.name)
 
 
 async def root_redirect(request: Request) -> Response:

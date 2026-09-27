@@ -712,7 +712,7 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     import questionary
 
     info = _CONNECTORS[key]
-    typer.echo(f"\n  {info['icon']}  {info['name']}\n")
+    typer.echo(f"\n  {info['name']}\n")
     updates: list[tuple[str, str]] = []
 
     for var_info in info["vars"]:
@@ -984,7 +984,7 @@ def setup(
         env_vars = _parse_env_vars(env_lines)
         choices = [
             questionary.Choice(
-                title=f"{info['icon']}  {info['name']}"
+                title=info["name"]
                 + (" ✓" if _is_connector_configured(key, env_vars) else ""),
                 value=key,
             )
@@ -1034,8 +1034,7 @@ def setup(
     typer.echo(f"\n  ✓ Saved to {env_path}\n")
     for key in configured:
         sync_name = _CONNECTORS[key].get("sync_name", key)
-        icon = _CONNECTORS[key]["icon"]
-        typer.echo(f"  {icon}  Test: memoreei sync {sync_name}")
+        typer.echo(f"  Test: memoreei sync {sync_name}")
     typer.echo(f"\n  Check all: memoreei config\n")
     _offer_first_key()
 

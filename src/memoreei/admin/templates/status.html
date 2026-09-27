@@ -1,61 +1,93 @@
 {% extends "base.html" %}
+{% block main_class %}{% if welcome %} class="welcome"{% endif %}{% endblock %}
 {% block main %}
-<h1>Status</h1>
+{% if welcome %}
+<div class="page-head">
+  <div>
+    <h1>Welcome to Memoreei</h1>
+    <p>Two steps, then it remembers for you.</p>
+  </div>
+</div>
+{% else %}
+<header class="page-head">
+  <div>
+    <h1>Status</h1>
+    <p>{% if problems %}Something needs a look. It's below.{% else %}All quiet. Everything is where you left it.{% endif %}</p>
+  </div>
+  <span class="pill big"><span class="dot"></span>Running on port {{ port }}</span>
+</header>
+{% endif %}
+
 {% if update %}
-<section class="card notice">
-  <b>Memoreei {{ update.version }} is out.</b> This is {{ version }}.
-  <a href="{{ update.url }}">Download it</a>{% if bundle %} and install it the way you installed
-  this one; Memoreei restarts on the new version by itself{% endif %}.
+<section class="bubble" aria-label="Update">
+  <div><b>Memoreei {{ update.version }} is out.</b> You have {{ version }}.{% if bundle %} Install it the usual way; Memoreei restarts itself.{% endif %}</div>
+  <a class="button" href="{{ update.url }}">Download {{ update.version }}</a>
+  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
 </section>
 {% endif %}
 {% if legacy %}
-<section class="card notice">
-  <b>There's data from an earlier Memoreei in <code>{{ legacy }}</code>.</b> This version
+<section class="bubble" aria-label="Earlier data">
+  <div><b>There's data from an earlier Memoreei in <code>{{ legacy }}</code>.</b> This version
   keeps its data in <code>{{ home }}</code> and leaves the old folder alone. To go on using the
   old data where it is, add this line to <code>~/.config/memoreei/env</code>{% if not bundle %}
   (or set it wherever your service gets its environment){% endif %}, then stop Memoreei and open
   it again:
-  <pre>MEMOREEI_HOME={{ legacy }}</pre>
+  <pre>MEMOREEI_HOME={{ legacy }}</pre></div>
+  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
 </section>
 {% endif %}
-{% if not has_source or not keys %}
-<section class="card setup">
-  <h2>Get started</h2>
-  <ol class="steps">
-    <li{% if has_source %} class="done"{% endif %}>
-      <div><b>Add a source.</b> Choose what Memoreei reads, like your {{ "iMessages" if fda is not none or in_app() else "email or chats" }}.</div>
-      {% if has_source %}<span class="ok">✓ Done</span>{% else %}<a class="button" href="/admin/sources">Add a source</a>{% endif %}
-    </li>
-    <li{% if keys %} class="done"{% endif %}>
-      <div><b>Add a client.</b> Make a key for each app or computer that will search your
-        memories, such as Claude Code on another machine.</div>
-      {% if keys %}<span class="ok">✓ Done</span>{% else %}<a class="button" href="/admin/keys">Add a client</a>{% endif %}
-    </li>
-  </ol>
-</section>
-{% endif %}
+
+{% if welcome %}
+<ol class="steps">
+  <li class="card {{ 'done' if has_source else 'current' }}">
+    <div class="step-head">
+      <span class="num" {% if has_source %}aria-hidden="true"{% endif %}>{% if has_source %}<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>{% else %}1{% endif %}</span>
+      <h2>Add a source</h2>
+    </div>
+    {% if has_source %}
+    <p>Done: {{ source_names|join(", ") or "a source" }}. <a href="/admin/sources">Add another</a></p>
+    {% else %}
+    <p>Choose what Memoreei reads, like your {{ "iMessages" if fda is not none or in_app() else "email or chats" }}.</p>
+    <div><a class="button" href="/admin/sources">Add a source</a></div>
+    {% endif %}
+  </li>
+  <li class="card {{ 'done' if keys else ('current' if has_source else '') }}">
+    <div class="step-head">
+      <span class="num" {% if keys %}aria-hidden="true"{% endif %}>{% if keys %}<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>{% else %}2{% endif %}</span>
+      <h2>Connect a client</h2>
+    </div>
+    {% if keys %}
+    <p>Done: {{ keys }} key{{ "" if keys == 1 else "s" }}. <a href="/admin/keys">Add another</a></p>
+    {% else %}
+    <p>Give each app that searches your memories, like Claude Code, its own key.</p>
+    <div><a class="button" href="/admin/keys">Add a client</a></div>
+    {% endif %}
+  </li>
+</ol>
 {% include "_status_card.html" %}
-{% if service %}
-<section class="card" id="service">
-  <dl>
-    <dt>Server</dt>
-    <dd>{% if service.active %}<span class="ok">running</span> on port {{ port }}{% else %}not running as a service{% endif %}</dd>
-    <dt>Start at login</dt>
-    <dd><form method="post" action="/admin/service/autostart" class="switch">
-      {% if service.enabled %}on <input type="hidden" name="on" value="0"><button class="link">Turn off</button>
-      {% else %}off <input type="hidden" name="on" value="1"><button class="link">Turn on</button>{% endif %}
-    </form></dd>
-    <dt>Start at boot</dt>
-    <dd>{% if service.linger %}on: Memoreei starts before anyone logs in
-      {% elif service.linger is none %}<span class="muted">unknown</span>
-      {% else %}off: Memoreei waits for you to log in
-        <form method="post" action="/admin/service/linger" class="switch"><button class="link">Turn on</button></form>
-        {% if linger_failed %}<br><span class="bad">That needs an administrator,</span> who can run:
-          <pre>{{ service.linger_command }}</pre>{% endif %}
-      {% endif %}</dd>
-    <dt>Log</dt><dd><a href="/admin/log">Show the log</a></dd>
-  </dl>
-  <form method="post" action="/admin/service/stop"><button class="danger">Stop Memoreei</button></form>
-</section>
+{% if service %}{% include "_server_card.html" %}{% endif %}
+{% else %}
+<div class="grid-3">
+  <div class="card count hero">
+    <div class="n">{{ "{:,}".format(total) }}</div>
+    <div>memor{{ "y" if total == 1 else "ies" }}</div>
+    {% if by_kind %}<div class="chips">{% for kind, n in by_kind[:4] %}<span>{{ kind|kind_name }} {{ "{:,}".format(n) }}</span>{% endfor %}</div>{% endif %}
+  </div>
+  <a class="card count" href="/admin/sources">
+    <div class="n">{{ source_names|length }}</div>
+    <div>source{{ "" if source_names|length == 1 else "s" }}</div>
+    <div class="caption">{{ source_names|join(", ") if source_names else "None yet" }}</div>
+  </a>
+  <a class="card count" href="/admin/keys">
+    <div class="n">{{ keys }}</div>
+    <div>client{{ "" if keys == 1 else "s" }}</div>
+    <div class="more">Manage keys →</div>
+  </a>
+</div>
+
+<div class="grid-2">
+{% include "_status_card.html" %}
+{% include "_server_card.html" %}
+</div>
 {% endif %}
 {% endblock %}

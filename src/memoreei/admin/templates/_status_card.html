@@ -1,21 +1,66 @@
+{#- The part of the status page that changes while a sync runs: htmx polls it every two
+    seconds until the sync is over, then the whole page reloads with the new counts. -#}
+{%- macro fda_row() -%}
+{% if fda is not none %}
+<dt>Full Disk Access</dt>
+<dd>{% if fda %}<span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Granted</span>
+  {% else %}<span class="pill warn">Missing</span> iMessage can't be read until it's granted.
+  {% if in_app() %}Choose <b>Allow Access to Messages…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}.{% endif %}</dd>
+{% endif %}
+{%- endmacro -%}
+{%- macro auto_row(label) -%}
+<dt>{{ label }}</dt><dd>{% if auto_sync %}Every {{ interval_min }} minute{{ "" if interval_min == 1 else "s" }}{% else %}Off{% endif %}</dd>
+{%- endmacro -%}
+{%- macro problem_rows() -%}
+{% if last_run and not running %}{% for name, r in last_run.result.connectors.items() %}{% if r is mapping %}
+<dt>Problem</dt><dd class="problem"><b>{{ name|kind_name }}:</b> {{ r.error }}{% if name|connector_key %} <a href="/admin/sources/{{ name|connector_key }}">Check its settings</a>{% endif %}</dd>
+{% endif %}{% endfor %}{% endif %}
+{%- endmacro -%}
+{%- macro sync_button() -%}
+<button class="sync" hx-post="/admin/sync" hx-target="#status" hx-swap="outerHTML" {% if running or not connectors %}disabled{% endif %}>Sync now</button>
+{%- endmacro -%}
+
+{% if welcome %}
+<div id="status" style="display: contents"
+  {% if running %}hx-get="/admin/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if running %}
+  <section class="card syncing" aria-label="First sync">
+    <div class="typing" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div>
+      <h2>Reading your {{ "iMessages" if "imessage" in connectors else "messages" }}…</h2>
+      <p class="muted">{{ "{:,}".format(total) }} so far. The first sync reads everything, so make a cup of tea.</p>
+    </div>
+    {{ sync_button() }}
+  </section>
+  {% endif %}
+  <section class="card">
+    <dl class="facts">
+      {{ fda_row() }}
+      {% if not running %}
+      <dt>Last sync</dt>
+      <dd>{% if last_run %}{{ last_run.finished_at|ago|capitalize }} · {{ "{:,}".format(last_run.result.new_messages) }} new{% else %}Not since the server started{% endif %}</dd>
+      {{ problem_rows() }}
+      {% endif %}
+      {{ auto_row("Automatic sync") }}
+      <dt>Server</dt><dd>Running on port {{ port }}</dd>
+    </dl>
+    {% if not running and connectors %}<div>{{ sync_button() }}</div>{% endif %}
+  </section>
+</div>
+{% else %}
 <section id="status" class="card"
   {% if running %}hx-get="/admin/status" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  <dl>
-    <dt>Memories</dt><dd>{{ "{:,}".format(total) }}
-      {% if by_kind %}<span class="muted">({% for kind, n in by_kind %}{{ kind }} {{ "{:,}".format(n) }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}</dd>
-    <dt>Sources</dt><dd>{% if connectors %}{{ connectors|join(", ") }}{% else %}none yet — <a href="/admin/sources">set one up</a>{% endif %}</dd>
-    {% if fda is not none %}
-    <dt>Full Disk Access</dt>
-    <dd>{% if fda %}<span class="ok">granted</span>{% else %}<span class="bad">missing</span> — iMessage can't be read until it's granted. {% if in_app() %}Choose <b>Set Up Full Disk Access…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}.{% endif %}</dd>
-    {% endif %}
-    <dt>Clients</dt><dd>{{ keys }} key{{ "" if keys == 1 else "s" }} — <a href="/admin/keys">manage</a></dd>
+  <h2>Sync</h2>
+  <dl class="facts">
     <dt>Last sync</dt>
-    <dd>{% if running %}<span class="busy">Syncing now…</span> The first iMessage sync reads every message and can take a long while.
-        {% elif last_run %}{{ last_run.finished_at|ago }}: {{ "{:,}".format(last_run.result.new_messages) }} new
-          {% for name, r in last_run.result.connectors.items() %}{% if r is mapping %}<br><span class="bad">{{ name }}: {{ r.error }}</span>{% endif %}{% endfor %}
-        {% else %}not since the server started{% endif %}</dd>
-    <dt>Automatic sync</dt><dd>{% if auto_sync %}every {{ interval_min }} minute{{ "" if interval_min == 1 else "s" }}{% else %}off{% endif %}</dd>
-    <dt>Data</dt><dd><code>{{ home }}</code></dd>
+    <dd>{% if running %}Syncing now… {{ "{:,}".format(total) }} memories so far
+      {% elif last_run %}{{ last_run.finished_at|ago|capitalize }} · {{ "{:,}".format(last_run.result.new_messages) }} new
+      {% else %}Not since the server started{% endif %}</dd>
+    {{ auto_row("Automatic") }}
+    {{ problem_rows() }}
+    {{ fda_row() }}
+    <dt>Data</dt><dd class="mono">{{ home|tilde }}</dd>
   </dl>
-  <button hx-post="/admin/sync" hx-target="#status" hx-swap="outerHTML" {% if running or not connectors %}disabled{% endif %}>Sync now</button>
+  <div>{{ sync_button() }}</div>
 </section>
+{% endif %}

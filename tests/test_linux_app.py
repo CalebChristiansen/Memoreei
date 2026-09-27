@@ -42,7 +42,7 @@ def linux(monkeypatch):
 def test_linux_sources_offer_no_imessage_and_explain_signal(server, linux):
     text = signed_in(server).get("/admin/sources").text
     assert "iMessage" not in text
-    assert "Signal Desktop isn't supported yet" in text
+    assert "Signal locks its key in your keyring" in text
     assert "memoreei setup" in text
     assert signed_in(server).get("/admin/sources/imessage").status_code == 404
 
@@ -76,7 +76,7 @@ def test_stop_answers_first_then_stops(server, linux, monkeypatch):
     monkeypatch.setattr(sd, "running_as_unit", lambda: True)
     monkeypatch.setattr(sd, "stop_soon", lambda: stopped.append(True))
     r = signed_in(server).post("/admin/service/stop", headers=ORIGIN)
-    assert "Memoreei has stopped" in r.text
+    assert "Memoreei is taking a nap" in r.text
     assert stopped == [True]
 
 

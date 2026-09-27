@@ -251,7 +251,7 @@ def test_create_key_shows_it_once_with_client_config(server):
     r = client.post("/admin/keys", data={"name": "desktop"}, headers=ORIGIN)
     assert r.status_code == 200
     key = re.search(r"mem_[A-Za-z0-9_-]+", r.text).group(0)
-    assert "only time it" in r.text
+    assert "Shown once" in r.text and "can't show it again" in r.text
     assert "claude mcp add --transport http memoreei" in r.text
     assert asyncio.run(_verify(server.db_path, key)) == "desktop"
     assert key not in client.get("/admin/keys").text
@@ -314,7 +314,7 @@ def test_setting_up_imessage_writes_config_and_turns_on_auto_sync(server, monkey
     assert "AUTO_SYNC=true" in text
     assert oct(config_env_path().stat().st_mode & 0o777) == "0o600"
     assert get_config().auto_sync is True  # the running server sees it without a restart
-    assert "set up" in client.get("/admin/sources").text
+    assert "Connected" in client.get("/admin/sources").text
 
 
 def test_saving_a_source_starts_a_sync_and_shows_the_status_page(server, monkeypatch):
@@ -339,7 +339,7 @@ def test_status_page_walks_a_new_install_through_setup(server, monkeypatch):
     client = signed_in(server)
     client.post("/admin/keys/laptop/revoke", headers=ORIGIN)  # the fixture's key
     text = client.get("/admin/").text
-    assert "Get started" in text
+    assert "Welcome to Memoreei" in text
     assert 'href="/admin/sources">Add a source' in text
     assert 'href="/admin/keys">Add a client' in text
 
@@ -353,9 +353,9 @@ def test_setup_steps_disappear_once_a_source_and_a_client_exist(server, monkeypa
     monkeypatch.setattr(admin_app, "_start_sync", no_sync)
     client = signed_in(server)
     text = client.get("/admin/").text
-    assert "Get started" in text and "✓ Done" in text  # the fixture's key: step 2 done
+    assert "Welcome to Memoreei" in text and "Done: 1 key" in text  # the fixture's key: step 2 done
     client.post("/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"}, headers=ORIGIN)
-    assert "Get started" not in client.get("/admin/").text
+    assert "Welcome to Memoreei" not in client.get("/admin/").text
 
 
 def test_removing_a_connector_clears_its_settings(server, monkeypatch):
@@ -364,7 +364,7 @@ def test_removing_a_connector_clears_its_settings(server, monkeypatch):
     client.post("/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"}, headers=ORIGIN)
     client.post("/admin/sources/imessage/remove", headers=ORIGIN)
     assert "IMESSAGE_DB_PATH=\n" in config_env_path().read_text()
-    assert "not set up" in client.get("/admin/sources").text
+    assert "Not set up" in client.get("/admin/sources").text
 
 
 def test_secret_fields_are_never_sent_back(server, monkeypatch):
@@ -376,7 +376,7 @@ def test_secret_fields_are_never_sent_back(server, monkeypatch):
     client.post("/admin/sources/telegram", data={"TELEGRAM_BOT_TOKEN": "sekrit-123"}, headers=ORIGIN)
     page = client.get("/admin/sources/telegram").text
     assert "sekrit-123" not in page
-    assert "saved — leave blank to keep" in page
+    assert "Saved. Leave blank to keep it." in page
     # Saving again with the secret left blank keeps it.
     client.post("/admin/sources/telegram", data={"TELEGRAM_CHAT_ID": "1"}, headers=ORIGIN)
     assert "TELEGRAM_BOT_TOKEN=sekrit-123" in config_env_path().read_text()
@@ -387,8 +387,8 @@ def test_secret_fields_are_never_sent_back(server, monkeypatch):
 
 def test_status_page(server):
     text = signed_in(server).get("/admin/").text
-    assert "Memories" in text and "1 key" in text
-    assert "none yet" in text  # no sources set up
+    assert "Welcome to Memoreei" in text and "Done: 1 key" in text
+    assert "Add a source" in text  # no sources set up
 
 
 def test_sync_now_runs_and_reports(server, monkeypatch):
@@ -444,3 +444,98 @@ def test_refused_writes_are_logged(server, caplog):
     with caplog.at_level("WARNING", logger="memoreei.admin"):
         client.post("/admin/keys", data={"name": "x"}, headers={"Origin": "http://evil.example"})
     assert "cross-origin" in caplog.text and "evil.example" in caplog.text
+
+
+# ── Memoreei.app's switches ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def in_app(server, tmp_path, monkeypatch):
+    """The dashboard as Memoreei.app's server serves it: the app's switches in the Server card."""
+    import memoreei.admin.app as admin_app
+    from memoreei.service import _app
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("MEMOREEI_APP", "1")
+    monkeypatch.setenv("MEMOREEI_APP_EXECUTABLE", "/Applications/Memoreei.app/Contents/MacOS/Memoreei")
+    monkeypatch.setattr(admin_app.sys, "platform", "darwin")
+    monkeypatch.setattr(_app, "_mark_decided", lambda: None)  # `defaults write`
+    monkeypatch.setattr(admin_app, "_service_context", _real_service_context)
+    return home
+
+
+from memoreei.admin.app import _service_context as _real_service_context  # noqa: E402
+
+
+def _with_a_source(client) -> None:
+    client.post("/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"}, headers=ORIGIN)
+
+
+def test_app_start_at_login_writes_the_apps_launch_agent(server, in_app, monkeypatch):
+    import plistlib
+
+    from memoreei.admin import app as admin_app
+
+    async def no_sync() -> None:
+        pass
+
+    monkeypatch.setattr(admin_app, "_start_sync", no_sync)
+    client = signed_in(server)
+    _with_a_source(client)
+    assert 'aria-label="Start at login"' in client.get("/admin/").text
+    client.post("/admin/service/autostart", data={"on": "1"}, headers=ORIGIN)
+    agent = in_app / "Library/LaunchAgents/cafe.caleb.Memoreei.plist"
+    plist = plistlib.loads(agent.read_bytes())
+    assert plist["ProgramArguments"] == ["/Applications/Memoreei.app/Contents/MacOS/Memoreei"]
+    assert plist["KeepAlive"] == {"SuccessfulExit": False}
+    assert plist["EnvironmentVariables"]["MEMOREEI_LAUNCHD"] == "1"
+    assert 'aria-pressed="true"' in client.get("/admin/").text
+    client.post("/admin/service/autostart", data={"on": "0"}, headers=ORIGIN)
+    assert not agent.exists()
+
+
+def test_app_stop_asks_the_app_to_quit(server, in_app, monkeypatch):
+    import memoreei.admin.app as admin_app
+
+    killed = []
+    monkeypatch.setattr(admin_app.os, "kill", lambda pid, sig: killed.append(sig))
+    r = signed_in(server).post("/admin/service/stop", headers=ORIGIN)
+    assert "Memoreei is taking a nap" in r.text
+    assert (in_app / "Library/Caches/Memoreei/quit-requested").exists()
+    assert killed
+
+
+def test_app_log_is_the_servers_log_file(server, in_app):
+    log = in_app / "Library/Logs/Memoreei/memoreei.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("2026-09-27 09:12:04 INFO first\n2026-09-27 09:27:58 WARNING careful\n")
+    text = signed_in(server).get("/admin/log").text
+    assert '<span class="warn">2026-09-27 09:27:58 WARNING careful</span>' in text
+    assert "~/Library/Logs/Memoreei/memoreei.log" in text
+
+
+# ── The status page, set up ──────────────────────────────────────────────────
+
+
+def test_a_set_up_install_gets_counts_not_steps(server, monkeypatch):
+    from memoreei.admin import app as admin_app
+
+    async def no_sync() -> None:
+        pass
+
+    monkeypatch.setattr(admin_app, "_start_sync", no_sync)
+    client = signed_in(server)
+    _with_a_source(client)
+    text = client.get("/admin/").text
+    assert "Welcome to Memoreei" not in text
+    assert "All quiet" in text and "Running on port 3679" in text
+    assert "Manage keys →" in text and "iMessage" in text
+
+
+def test_a_finished_sync_reloads_the_page(server):
+    client = signed_in(server)
+    r = client.get("/admin/status", headers={"HX-Request": "true"})
+    assert r.headers["hx-refresh"] == "true"
+    assert "hx-refresh" not in client.get("/admin/status").headers

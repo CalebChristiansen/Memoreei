@@ -5,26 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
 <title>{% block title %}Memoreei{% endblock %}</title>
-<link rel="icon" href="/admin/static/icon.png">
+<link rel="icon" href="/admin/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/admin/static/icon.png" sizes="64x64">
 <link rel="stylesheet" href="/admin/static/admin.css">
 <script src="/admin/static/htmx.min.js" defer></script>
 <script src="/admin/static/admin.js" defer></script>
 </head>
 <body>
-<header>
-  <a class="brand" href="/admin/">Memoreei</a>
-  {% if nav != "none" %}
-  <nav>
-    <a href="/admin/" {% if nav == "status" %}aria-current="page"{% endif %}>Status</a>
-    <a href="/admin/sources" {% if nav == "sources" %}aria-current="page"{% endif %}>Sources</a>
-    <a href="/admin/keys" {% if nav == "keys" %}aria-current="page"{% endif %}>Clients</a>
+{% if nav == "none" %}
+<div class="solo">
+{% block solo %}{% endblock %}
+</div>
+{% else %}
+<div class="shell">
+<aside class="sidebar">
+  <a class="brand" href="/admin/"><img src="/admin/static/icon.svg" alt=""><span>Memoreei</span></a>
+  <nav aria-label="Dashboard">
+    <a href="/admin/" {% if nav == "status" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Status</span></a>
+    <a href="/admin/sources" {% if nav == "sources" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z M4 13h5l1 2h4l1-2h5"/></svg><span>Sources</span></a>
+    <a href="/admin/keys" {% if nav == "keys" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 13L21 3 M16 8l3 3 M18.5 5.5l2 2 M12 16a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg><span>Clients</span></a>
   </nav>
-  <form method="post" action="/admin/logout" class="logout"><button class="link">Sign out</button></form>
-  {% endif %}
-</header>
-<main>
+  <div class="foot">
+    <form method="post" action="/admin/logout">
+      <button class="signout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9"/></svg>Sign out</button>
+    </form>
+    <div class="version">Memoreei {{ version }}</div>
+  </div>
+</aside>
+<main{% block main_class %}{% endblock %}>
 {% block main %}{% endblock %}
 </main>
-<footer>memoreei {{ version }}</footer>
+</div>
+{% endif %}
 </body>
 </html>

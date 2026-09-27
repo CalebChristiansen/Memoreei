@@ -1,13 +1,13 @@
 <section id="key-list" {% if oob %}hx-swap-oob="true"{% endif %}>
 {% if keys %}
 <table>
-  <thead><tr><th>Name</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+  <thead><tr><th scope="col">Name</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
   <tbody>
   {% for k in keys %}
   <tr>
-    <td>{{ k.name }}</td><td>{{ k.created_at|ago }}</td><td>{{ k.last_used_at|ago }}</td>
-    <td><button class="danger" hx-post="/admin/keys/{{ k.name|urlencode }}/revoke" hx-target="#key-list" hx-swap="outerHTML"
-      hx-confirm="Revoke “{{ k.name }}”? Anything using it loses access at once.">Revoke</button></td>
+    <td>{{ k.name }}</td><td>{{ k.created_at|ago|capitalize }}</td><td>{{ k.last_used_at|ago|capitalize }}</td>
+    <td><button class="danger small" hx-post="/admin/keys/{{ k.name|urlencode }}/revoke" hx-target="#key-list" hx-swap="outerHTML"
+      hx-confirm="Revoke “{{ k.name }}”? Anything using it loses access at once.">Revoke<span class="visually-hidden"> {{ k.name }}</span></button></td>
   </tr>
   {% endfor %}
   </tbody>

@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% set nav = "none" %}
-{% block main %}
-<h1>{% if expired %}That link has expired{% else %}Signed out{% endif %}</h1>
-<p>{% if expired %}Dashboard links work once, and for five minutes.{% endif %}
-{% if in_app() %}Open the dashboard from the Memoreei menu in the menu bar.{% else %}Run this on the
-computer Memoreei runs on, and open the link it prints:{% endif %}</p>
-{% if not in_app() %}<pre>memoreei admin-url</pre>{% endif %}
+{% block title %}{% if expired %}Link expired{% else %}Signed out{% endif %} · Memoreei{% endblock %}
+{% block solo %}
+<img class="logo" src="/admin/static/icon.svg" alt="Memoreei">
+<div class="msg">
+  <h1>{% if expired %}That link has expired{% else %}Signed out{% endif %}</h1>
+  <p>{% if expired %}Dashboard links work once, for five minutes. {% endif %}{% if in_app() %}Choose <b>Open Dashboard</b> in the Memoreei menu in the menu bar.{% else %}For a fresh one, run this on the computer Memoreei lives on:{% endif %}</p>
+</div>
+{% if not in_app() %}
+<div class="command">
+  <pre id="admin-url">memoreei admin-url</pre>
+  <button type="button" class="quiet" data-copy="admin-url">Copy</button>
+</div>
+<p class="caption">On a Mac, choose Open Dashboard in the menu bar instead.</p>
+{% endif %}
 {% endblock %}

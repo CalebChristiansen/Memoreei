@@ -1,35 +1,72 @@
 {% extends "base.html" %}
+{% block title %}Sources · Memoreei{% endblock %}
 {% block main %}
-<h1>Sources</h1>
-<p>Where Memoreei reads your messages from. More are coming; the command line has the rest.</p>
-{% if linux %}
-<section class="card">
-  <p>On Linux, set sources up from a terminal for now:</p>
-  <pre>memoreei setup</pre>
-  <p class="hint">Gmail, Discord, Slack, Telegram, Matrix and Mastodon. For a chat export (WhatsApp,
-  Messenger, Instagram, Android SMS), <code>memoreei import --help</code>.</p>
-  <p class="hint">🔒 Signal Desktop isn't supported yet: Signal now locks its database key in your
-  keyring, and Memoreei can't read it from there.</p>
-</section>
-{% endif %}
-<table>
-  <tbody>
-  {% for r in rows %}
-  <tr>
-    <td class="icon">{{ r.icon }}</td>
-    <td>{{ r.name }}{% if r.kind == "upload" %}<br><span class="muted">{{ r.hint }}</span>{% endif %}</td>
-    {% if r.kind == "config" %}
-    <td>{% if r.configured %}<span class="ok">set up</span>{% else %}<span class="muted">not set up</span>{% endif %}</td>
-    <td><a class="button" href="/admin/sources/{{ r.key }}">{% if r.configured %}Change{% else %}Set up{% endif %}</a></td>
-    {% else %}
-    <td colspan="2">
-      <form hx-post="/admin/upload/{{ r.key }}" hx-encoding="multipart/form-data" hx-target="next .result">
-        <input type="file" name="file" accept="{{ r.accept }}" required> <button>Import</button>
-      </form><div class="result"></div>
-    </td>
-    {% endif %}
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="page-head">
+  <div>
+    <h1>Sources</h1>
+    <p>Where Memoreei reads from. A few more live in <code>memoreei setup</code>.</p>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card list-card">
+    <h2>Accounts</h2>
+    <ul class="rows">
+      {% for r in accounts %}
+      <li>
+        <span class="tile {{ 'on' if r.configured }}" aria-hidden="true">{{ r.icon }}</span>
+        <div class="what">
+          <span class="name">{{ r.short }}</span>
+          {% if r.configured %}<span class="ok">Connected</span>{% else %}<span class="caption">Not set up</span>{% endif %}
+        </div>
+        <a class="button {{ 'quiet' if r.configured }}" href="/admin/sources/{{ r.key }}">{% if r.configured %}Change{% else %}Set up{% endif %}<span class="visually-hidden"> {{ r.short }}</span></a>
+      </li>
+      {% endfor %}
+      {% if not accounts %}
+      <li>
+        <div class="what">
+          <span>Set accounts up in a terminal for now:</span>
+          <code>memoreei setup</code>
+        </div>
+      </li>
+      {% endif %}
+      <li>
+        <span class="tile" aria-hidden="true">S</span>
+        <div class="what">
+          <span class="name">Signal Desktop</span>
+          <span class="caption">Not yet: Signal locks its key in your keyring</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="card list-card">
+    <h2>Import a file</h2>
+    <p class="caption sub">Imported files are re-read on every sync.</p>
+    <ul class="rows">
+      {% for r in uploads %}
+      <li>
+        <span class="tile" aria-hidden="true">{{ r.icon }}</span>
+        <div class="what">
+          <span class="name">{{ r.short }}</span>
+          <span class="caption">{{ r.what }}</span>
+        </div>
+        <form hx-post="/admin/upload/{{ r.key }}" hx-encoding="multipart/form-data" hx-target="next .result"
+          hx-trigger="change">
+          <label class="file">Choose file<input type="file" name="file" accept="{{ r.accept }}" required></label>
+        </form>
+        <p class="result" role="status"></p>
+      </li>
+      {% endfor %}
+      {% if not uploads %}
+      <li>
+        <div class="what">
+          <span>A chat export (WhatsApp, Messenger, Instagram, Android SMS) imports from a terminal:</span>
+          <code>memoreei import --help</code>
+        </div>
+      </li>
+      {% endif %}
+    </ul>
+  </section>
+</div>
 {% endblock %}

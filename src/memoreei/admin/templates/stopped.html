@@ -1,8 +1,19 @@
 {% extends "base.html" %}
+{% set nav = "none" %}
 {% block title %}Stopped · Memoreei{% endblock %}
-{% block main %}
-<h1>Memoreei has stopped</h1>
-<p>Clients can't search until it starts again. To start it, open Memoreei from your
-applications, or run:</p>
-<pre>memoreei open</pre>
+{% block solo %}
+<div class="napping" aria-hidden="true">
+  <span></span><span></span><span></span>
+  <svg width="22" height="14" viewBox="0 0 22 14"><path d="M0 0H22L4 14V0Z"/></svg>
+</div>
+<div class="msg">
+  <h1>Memoreei is taking a nap</h1>
+  <p>Clients can't search until it's back. Open Memoreei from your apps{% if not in_app() %}, or run:{% else %}.{% endif %}</p>
+</div>
+{% if not in_app() %}
+<div class="command">
+  <pre id="open-cmd">memoreei open</pre>
+  <button type="button" class="quiet" data-copy="open-cmd">Copy</button>
+</div>
+{% endif %}
 {% endblock %}

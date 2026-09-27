@@ -13,11 +13,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# "icon" is a monogram: the dashboard draws it on a tile, teal once the source is set up.
 # Tuple fields per variable: (name, label, secret, hint[, default]).
 CONNECTORS: dict[str, dict] = {
     "gmail": {
         "name": "Gmail (IMAP)",
-        "icon": "📧",
+        "short": "Gmail",
+        "icon": "G",
+        "blurb": "Reads your mail over IMAP. Nothing is sent anywhere.",
         "vars": [
             ("GMAIL_EMAIL", "Gmail address", False, "e.g. you@gmail.com"),
             ("GMAIL_APP_PASSWORD", "App Password", True,
@@ -27,7 +30,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "discord": {
         "name": "Discord (Bot API)",
-        "icon": "🎮",
+        "short": "Discord",
+        "icon": "D",
+        "blurb": "Reads one channel through a bot you add to your server.",
         "vars": [
             ("DISCORD_BOT_TOKEN", "Bot token", True, "From https://discord.com/developers/applications"),
             ("DISCORD_CHANNEL_ID", "Channel ID", False, "Right-click channel → Copy ID (enable Developer Mode)"),
@@ -35,7 +40,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "telegram": {
         "name": "Telegram",
-        "icon": "✈️",
+        "short": "Telegram",
+        "icon": "T",
+        "blurb": "Reads one chat through a bot you add to it.",
         "vars": [
             ("TELEGRAM_BOT_TOKEN", "Bot token", True, "From @BotFather on Telegram"),
             ("TELEGRAM_CHAT_ID", "Chat ID", False, "Use @userinfobot or check API updates"),
@@ -43,7 +50,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "slack": {
         "name": "Slack",
-        "icon": "💬",
+        "short": "Slack",
+        "icon": "S",
+        "blurb": "Reads one channel through a Slack app you install.",
         "vars": [
             ("SLACK_BOT_TOKEN", "Bot token", True, "From https://api.slack.com/apps → OAuth & Permissions"),
             ("SLACK_CHANNEL_ID", "Channel ID", False, "Right-click channel → View channel details → copy ID"),
@@ -51,7 +60,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "matrix": {
         "name": "Matrix",
-        "icon": "🟩",
+        "short": "Matrix",
+        "icon": "M",
+        "blurb": "Reads one room with your access token.",
         "vars": [
             ("MATRIX_HOMESERVER", "Homeserver URL", False, "e.g. https://matrix.org"),
             ("MATRIX_ACCESS_TOKEN", "Access token", True, "Settings → Help & About → Access Token in Element"),
@@ -60,7 +71,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "mastodon": {
         "name": "Mastodon",
-        "icon": "🐘",
+        "short": "Mastodon",
+        "icon": "M",
+        "blurb": "Reads your timeline, or one hashtag.",
         "vars": [
             ("MASTODON_INSTANCE", "Instance URL", False, "e.g. https://mastodon.social"),
             ("MASTODON_HASHTAG", "Hashtag to track (optional)", False, "Without the # sign"),
@@ -70,7 +83,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "signal": {
         "name": "Signal Desktop",
-        "icon": "🔒",
+        "short": "Signal Desktop",
+        "icon": "S",
+        "blurb": "Reads Signal Desktop's database on this computer.",
         "vars": [
             ("SIGNAL_DB_PATH", "Signal DB path (optional)", False,
              "Leave blank for auto-detect (~/.config/Signal/sql/db.sqlite)"),
@@ -80,7 +95,9 @@ CONNECTORS: dict[str, dict] = {
     },
     "imessage": {
         "name": "iMessage (macOS only)",
-        "icon": "🍎",
+        "short": "iMessage",
+        "icon": "I",
+        "blurb": "Reads Messages on this Mac, texts included. Nothing is sent anywhere.",
         "vars": [
             ("IMESSAGE_DB_PATH", "Messages DB path", False,
              "Press Enter to use the default macOS location.",
@@ -141,14 +158,30 @@ def write_env_updates(
 
 # File imports, the "upload" kind: the importer (imports.py) and what the file is.
 UPLOADS: dict[str, dict] = {
-    "whatsapp": {"name": "WhatsApp chat export", "icon": "💚", "accept": ".txt",
+    "whatsapp": {"name": "WhatsApp chat export", "short": "WhatsApp chat", "icon": "W",
+                 "what": "An exported .txt", "accept": ".txt",
                  "hint": "In a chat: ⋯ → More → Export chat → Without media"},
-    "sms": {"name": "Android SMS backup", "icon": "📱", "accept": ".xml",
+    "sms": {"name": "Android SMS backup", "short": "Android SMS", "icon": "S",
+            "what": "A backup .xml", "accept": ".xml",
             "hint": "An XML file from SMS Backup & Restore"},
-    "contacts-vcf": {"name": "Contacts (vCard)", "icon": "👥", "accept": ".vcf",
+    "contacts-vcf": {"name": "Contacts (vCard)", "short": "Contacts", "icon": "C",
+                     "what": "A vCard .vcf, so names replace numbers", "accept": ".vcf",
                      "hint": "Contacts → File → Export → Export vCard"},
 }
 
 # What the dashboard offers. The rest stay CLI-only until each is tested there.
 DASHBOARD_CONNECTORS: tuple[str, ...] = ("imessage",)
 DASHBOARD_UPLOADS: tuple[str, ...] = ()
+
+
+# What a stored message's source prefix ("imessage:+1…") is called on screen.
+KIND_NAMES: dict[str, str] = {
+    "imessage": "iMessage", "sms": "SMS", "email": "Gmail", "gmail": "Gmail",
+    "whatsapp": "WhatsApp", "discord": "Discord", "slack": "Slack", "telegram": "Telegram",
+    "matrix": "Matrix", "mastodon": "Mastodon", "signal": "Signal", "messenger": "Messenger",
+    "instagram": "Instagram", "manual": "Notes",
+}
+
+
+def kind_name(kind: str) -> str:
+    return KIND_NAMES.get(kind, kind.capitalize())

@@ -1,2 +1,2 @@
-{% if result.error %}<p class="bad">{{ result.error }}</p>
-{% else %}<p class="ok">{{ name }}: {{ "{:,}".format(result.new) }} new messages. It'll be re-read by every sync.</p>{% endif %}
+{% if result.error %}<span class="bad">{{ result.error }}</span>
+{% else %}<b>{{ filename }}:</b> {{ "{:,}".format(result.new) }} new message{{ "" if result.new == 1 else "s" }}.{% endif %}

@@ -1,11 +1,17 @@
 {% extends "base.html" %}
+{% block title %}Clients · Memoreei{% endblock %}
 {% block main %}
-<h1>Clients</h1>
-<p>Every app that searches your memories — Claude Code, Claude Desktop, another computer —
-gets its own key. If you lose a laptop, revoke its key and nothing else changes.</p>
-<form class="card inline" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">
-  <label for="name">New key for</label>
-  <input id="name" name="name" placeholder="e.g. laptop" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off">
+<div class="page-head">
+  <div>
+    <h1>Clients</h1>
+    <p>One key per app or computer. Lose a laptop? Revoke its key; nothing else changes.</p>
+  </div>
+</div>
+<form class="new-key" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">
+  <div class="field">
+    <label for="name">New key for</label>
+    <input id="name" name="name" placeholder="e.g. laptop" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off">
+  </div>
   <button>Create key</button>
 </form>
 <div id="created"></div>

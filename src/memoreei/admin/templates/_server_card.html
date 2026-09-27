@@ -1,0 +1,38 @@
+<section class="card" id="service">
+  <h2>Server</h2>
+  <dl class="facts">
+    {% if service %}
+    <dt>Start at login</dt>
+    <dd><form method="post" action="/admin/service/autostart">
+      <input type="hidden" name="on" value="{{ 0 if service.enabled else 1 }}">
+      <button class="switch" aria-pressed="{{ 'true' if service.enabled else 'false' }}" aria-label="Start at login"><span></span></button>
+    </form></dd>
+    {% if service.linger is defined %}
+    <dt>Start at boot</dt>
+    <dd><div class="switch-row">
+      {% if service.linger %}
+      <span class="switch" role="img" aria-label="Start at boot: on"><span></span></span>
+      <span class="caption">On: starts before anyone logs in</span>
+      {% elif service.linger is none %}
+      <span class="caption">Unknown</span>
+      {% else %}
+      <form method="post" action="/admin/service/linger">
+        <button class="switch" aria-pressed="false" aria-label="Start at boot"><span></span></button>
+      </form>
+      <span class="caption">Off: waits for you to log in</span>
+      {% endif %}
+    </div>
+    {% if linger_failed %}<p class="caption"><span class="bad">That needs an administrator,</span> who can run:</p>
+      <pre>{{ service.linger_command }}</pre>{% endif %}</dd>
+    {% endif %}
+    {% endif %}
+    <dt>Address</dt><dd class="mono">{{ address }}</dd>
+    {% if service %}<dt>Log</dt><dd><a href="/admin/log">View log</a></dd>{% endif %}
+  </dl>
+  {% if service %}
+  <form method="post" action="/admin/service/stop" class="row">
+    <button class="danger">Stop Memoreei</button>
+    <span class="caption">Clients can't search while it's off.</span>
+  </form>
+  {% endif %}
+</section>

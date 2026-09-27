@@ -1,24 +1,48 @@
 {% extends "base.html" %}
+{% block title %}{{ c.short }} · Memoreei{% endblock %}
+{% block main_class %} class="narrow"{% endblock %}
 {% block main %}
-<h1>{{ c.icon }} {{ c.name }}</h1>
+<a class="back" href="/admin/sources">← Sources</a>
+<div class="source-head">
+  <span class="tile big {{ 'on' if configured }}" aria-hidden="true">{{ c.icon }}</span>
+  <div>
+    <h1>{{ c.short }}</h1>
+    {% if c.blurb %}<p>{{ c.blurb }}</p>{% endif %}
+  </div>
+</div>
+
 {% if fda is not none %}
-<p class="card">{% if fda %}<span class="ok">Full Disk Access is granted.</span> Memoreei can read your Messages.
-{% else %}<span class="bad">Full Disk Access is missing.</span> Memoreei can't read your Messages until it's granted.
-{% if in_app() %}Choose <b>Set Up Full Disk Access…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}; you can save these settings first.{% endif %}</p>
+<section class="card">
+  <dl class="facts">
+    <dt>Full Disk Access</dt>
+    <dd>{% if fda %}<span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Granted</span> Memoreei can read your Messages.
+    {% else %}<span class="pill warn">Missing</span> Memoreei can't read your Messages until it's granted.
+    {% if in_app() %}Choose <b>Allow Access to Messages…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}; you can save these settings first.{% endif %}</dd>
+  </dl>
+</section>
 {% endif %}
-<form method="post" class="card">
+
+<form method="post" class="card stack">
   {% for f in fields %}
-  <label for="{{ f.var }}">{{ f.label }}</label>
-  <input id="{{ f.var }}" name="{{ f.var }}" {% if f.secret %}type="password" placeholder="{{ 'saved — leave blank to keep' if f.is_set else '' }}"{% else %}value="{{ f.value }}"{% endif %} autocomplete="off">
-  <p class="hint">{{ f.hint }}</p>
+  <div class="field">
+    <label for="{{ f.var }}">{{ f.label }}</label>
+    <input id="{{ f.var }}" name="{{ f.var }}" {% if f.secret %}type="password" placeholder="{{ 'Saved. Leave blank to keep it.' if f.is_set else '' }}"{% else %}value="{{ f.value }}"{% endif %} autocomplete="off">
+    {% if f.hint %}<p class="hint">{{ f.hint|linkify }}</p>{% endif %}
+  </div>
   {% endfor %}
-  <button>Save</button>
-  <a href="/admin/sources">Cancel</a>
+  <div class="row">
+    <button>Save</button>
+    <a href="/admin/sources">Cancel</a>
+  </div>
 </form>
+
 {% if configured %}
-<form method="post" action="/admin/sources/{{ c.key }}/remove" class="remove">
-  <button class="danger">Stop reading {{ c.name }}</button>
-  <span class="muted">Messages already stored stay searchable.</span>
+<form method="post" action="/admin/sources/{{ c.key }}/remove" class="aside">
+  <div>
+    <b>Stop reading {{ c.short }}</b>
+    <span class="caption">{{ "Mail" if c.key == "gmail" else "Messages" }} already saved stay{{ "s" if c.key == "gmail" }} searchable.</span>
+  </div>
+  <button class="danger">Stop reading</button>
 </form>
 {% endif %}
 {% endblock %}
