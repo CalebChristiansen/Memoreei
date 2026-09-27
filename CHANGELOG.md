@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-26
+
+memoreei is a network server that asks for a key, and on a Mac an app: Memoreei.app,
+with the server, its Python and the search model inside, set up from a dashboard in
+the browser. The release candidates below are the detail; nothing changed since
+0.3.0rc6.
+
 ## [0.3.0rc6] - 2026-09-26
 
 ### Fixed
@@ -188,7 +195,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc6...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0
 [0.3.0rc6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc5...v0.3.0rc6
 [0.3.0rc5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc4...v0.3.0rc5
 [0.3.0rc4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc3...v0.3.0rc4
