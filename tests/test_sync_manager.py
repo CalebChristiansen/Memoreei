@@ -68,6 +68,25 @@ async def test_sync_source_imessage_error_logged_to_stderr(capsys):
 
 
 @pytest.mark.asyncio
+async def test_imessage_access_ok_logged_once_then_again_after_a_failure(capsys):
+    from memoreei.service._macos_access import ACCESS_OK
+
+    manager = SyncManager()
+    tools = _FakeTools(imessage_result={"synced": 1})
+    await manager.sync_source("imessage", tools)
+    await manager.sync_source("imessage", tools)
+    assert capsys.readouterr().err.count(ACCESS_OK) == 1
+
+    tools._imessage_result = {"synced": 0, "error": "Operation not permitted"}
+    await manager.sync_source("imessage", tools)
+    assert ACCESS_OK not in capsys.readouterr().err
+
+    tools._imessage_result = {"synced": 0}
+    await manager.sync_source("imessage", tools)
+    assert capsys.readouterr().err.count(ACCESS_OK) == 1
+
+
+@pytest.mark.asyncio
 async def test_sync_source_imessage_exception_returns_zero(capsys):
     """If sync_imessage_tool raises unexpectedly, returns 0 without propagating."""
     manager = SyncManager()

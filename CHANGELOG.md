@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- The log says `Full Disk Access: ok` when an iMessage sync first reads the Messages
+  database, and again after one that couldn't. Access was checked only at startup, so a
+  grant made after it left `missing` as the log's last word.
+
 ## [0.4.0] - 2026-09-27
 
 Memoreei for Linux: a `.deb`, an `.rpm` and a tarball with the server, its Python and

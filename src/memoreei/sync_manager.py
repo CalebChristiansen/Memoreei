@@ -5,6 +5,8 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from memoreei.service._macos_access import ACCESS_OK
+
 if TYPE_CHECKING:
     from memoreei.config import Config
     from memoreei.tools.memory_tools import MemoryTools
@@ -19,6 +21,8 @@ class SyncManager:
         self._last_sync: dict[str, float] = {}
         # The last sync_everything: {"finished_at": epoch seconds, "result": …}, for status.
         self.last_run: dict[str, Any] | None = None
+        # Whether the last iMessage sync could read chat.db; None until one has run.
+        self._imessage_ok: bool | None = None
 
     @property
     def running(self) -> bool:
@@ -88,8 +92,15 @@ class SyncManager:
                     result = await tools.sync_imessage_tool()
                     count = result.get("synced", 0)
                     if "error" in result:
+                        self._imessage_ok = False
                         print(f"[sync_manager] iMessage sync error: {result['error']}", file=sys.stderr)
+                    elif not self._imessage_ok:
+                        # The startup check runs once, so a grant made after it would
+                        # otherwise leave "missing" as the log's last word on access.
+                        self._imessage_ok = True
+                        print(f"{ACCESS_OK} (the iMessage sync read the Messages database)", file=sys.stderr)
                 except Exception as e:
+                    self._imessage_ok = False
                     print(f"[sync_manager] iMessage sync error: {e}", file=sys.stderr)
             else:
                 print(f"[sync_manager] Unknown source: {source_name}", file=sys.stderr)
