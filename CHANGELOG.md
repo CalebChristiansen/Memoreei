@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+Memoreei for Linux: a `.deb`, an `.rpm` and a tarball with the server, its Python and
+the search model inside, running as a user service with the same dashboard as the Mac
+app. The release candidate below is the detail; since 0.4.0rc1 only the README changed,
+now shorter and corrected.
+
 ## [0.4.0rc1] - 2026-09-27
 
 ### Added
@@ -248,7 +255,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0rc1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0
 [0.4.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0rc1
 [0.3.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0
