@@ -134,11 +134,14 @@ in your browser.
    [latest release](https://github.com/CalebChristiansen/Memoreei/releases/latest):
    `Memoreei-arm64.dmg` for Apple silicon (Apple menu → About This Mac says *Chip
    Apple M…*), `Memoreei-x86_64.dmg` for Intel. macOS 12 or newer.
-2. **Drag Memoreei into Applications** and open it.
-3. **"Memoreei can't be opened"?** The app isn't signed by Apple yet. Open System
-   Settings → Privacy & Security, scroll down, and click **Open Anyway** next to the
-   message about Memoreei. (On macOS 12–14, right-clicking the app and choosing
-   **Open** also works.) You do this once per download.
+2. **Drag Memoreei into Applications.**
+3. **Open it the first time from Finder**, in the Applications folder. The app isn't
+   signed by Apple yet, so macOS won't open it with a double-click, and opening it from
+   Launchpad or Spotlight only says it can't be opened, with no way past. On macOS
+   12–14, **right-click Memoreei → Open**, then **Open** in the dialog. On macOS 15 and
+   later, double-click it once, then go to System Settings → Privacy & Security, scroll
+   down, and click **Open Anyway** next to the message about Memoreei. You do this once
+   per download.
 4. **Full Disk Access.** A window walks you through it: macOS gives apps no way to ask,
    so you drag Memoreei's icon into the Full Disk Access list yourself. The window
    notices when it's done. If macOS offers to *Quit & Reopen* Memoreei, go ahead.

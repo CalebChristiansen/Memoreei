@@ -20,6 +20,7 @@ enum DiskAccess {
 /// for. It watches for the grant and moves on by itself once it lands.
 final class OnboardingWindow: NSWindowController, NSWindowDelegate {
     private var timer: Timer?
+    private var promptObserver: NSObjectProtocol?
     private let statusLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
     private let continueButton = NSButton(title: "Continue", target: nil, action: nil)
@@ -136,6 +137,7 @@ final class OnboardingWindow: NSWindowController, NSWindowDelegate {
     func show() {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        watchForSystemPrompts()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.poll()
@@ -156,6 +158,33 @@ final class OnboardingWindow: NSWindowController, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    /// The firewall's "accept incoming connections?" prompt appears as the server starts,
+    /// over this window, and when it's answered macOS brings back whatever app was in
+    /// front before (the browser the DMG came from), burying this window. The prompt is
+    /// UserNotificationCenter's, so come back to the front when that steps aside.
+    private func watchForSystemPrompts() {
+        guard promptObserver == nil else { return }
+        promptObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didDeactivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard app?.bundleIdentifier == "com.apple.UserNotificationCenter" else { return }
+            // After macOS has finished handing the front back to the previous app.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                guard let window = self?.window, window.isVisible else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
+    }
+
+    private func stopWatching() {
+        if let observer = promptObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            promptObserver = nil
+        }
+    }
+
     @objc private func openSettings() {
         NSWorkspace.shared.open(DiskAccess.paneURL)
     }
@@ -165,6 +194,7 @@ final class OnboardingWindow: NSWindowController, NSWindowDelegate {
 
     private func close(granted: Bool) {
         timer?.invalidate()
+        stopWatching()
         window?.delegate = nil
         window?.close()
         onDone(granted)
@@ -172,6 +202,7 @@ final class OnboardingWindow: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         timer?.invalidate()
+        stopWatching()
         onDone(DiskAccess.check() == .granted)
     }
 }
