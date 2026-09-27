@@ -28,8 +28,9 @@ jobs:
       - name: Run tests
         run: pytest -x -q
 
+  # After the DMGs build as well: a release is PyPI and both DMGs, or nothing.
   publish:
-    needs: test
+    needs: [test, macos]
     runs-on: ubuntu-latest
     environment: pypi
 
