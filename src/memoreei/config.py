@@ -30,12 +30,33 @@ def default_home(platform: str | None = None) -> str:
     """Where memoreei keeps its data when nothing says otherwise.
 
     macOS follows the Mac convention (and is where Memoreei.app looks), so the app and
-    the pip-installed CLI share one set of keys and one database. Elsewhere, a dot
-    directory in the home folder. Docker sets MEMOREEI_HOME=/data.
+    the pip-installed CLI share one set of keys and one database. Linux follows XDG,
+    which is where the packages' user unit looks. Elsewhere, a dot directory in the
+    home folder.
     """
-    if (platform or sys.platform) == "darwin":
+    platform = platform or sys.platform
+    if platform == "darwin":
         return "~/Library/Application Support/Memoreei"
+    if platform.startswith("linux"):
+        # The spec says a relative XDG_DATA_HOME is invalid and to be ignored.
+        xdg = os.environ.get("XDG_DATA_HOME", "")
+        return f"{xdg}/memoreei" if xdg.startswith("/") else "~/.local/share/memoreei"
     return "~/.memoreei"
+
+
+def legacy_home() -> Path | None:
+    """``~/.memoreei`` on Linux, if it holds data from before 0.4 and isn't in use.
+
+    Nothing moves it: the dashboard says where it is, and the person decides.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    old = Path("~/.memoreei").expanduser()
+    if old.resolve() == memoreei_home().resolve():
+        return None
+    if (old / "memoreei.db").is_file() or (old / "config.env").is_file():
+        return old
+    return None
 
 
 def model_cache_dir(platform: str | None = None) -> Path:
@@ -43,7 +64,7 @@ def model_cache_dir(platform: str | None = None) -> Path:
 
     fastembed's own default is /tmp/fastembed_cache, which one user's download makes
     unwritable for every other user on the machine, and a reboot empties. The
-    ``FASTEMBED_CACHE_PATH`` variable (which Memoreei.app and the Docker image set)
+    ``FASTEMBED_CACHE_PATH`` variable (which Memoreei.app and the Linux packages set)
     still wins.
     """
     if custom := os.environ.get("FASTEMBED_CACHE_PATH"):
@@ -81,6 +102,9 @@ def load_env() -> None:
     Real environment variables win, then a ``.env`` in the current directory (for
     development), then ``$MEMOREEI_HOME/config.env``. The cwd ``.env`` is read first so it
     may itself set MEMOREEI_HOME.
+
+    The Linux packages (MEMOREEI_BUNDLE) skip the cwd ``.env``: their service runs in the
+    home folder, where a ``.env`` is more likely some other project's than memoreei's.
     """
     global _env_loaded, _process_env_keys
     if _env_loaded:
@@ -88,7 +112,7 @@ def load_env() -> None:
     _env_loaded = True
     _process_env_keys = frozenset(os.environ)
     cwd_env = Path(".env")
-    if cwd_env.is_file():
+    if not os.environ.get("MEMOREEI_BUNDLE") and cwd_env.is_file():
         load_dotenv(cwd_env)
     home_env = config_env_path()
     if home_env.is_file():

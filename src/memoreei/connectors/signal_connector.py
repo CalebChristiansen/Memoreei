@@ -72,6 +72,12 @@ def _read_key(config_path: str) -> str:
     with open(config_path, "r") as f:
         config = json.load(f)
     key = config.get("key")
+    if not key and config.get("encryptedKey"):
+        raise RuntimeError(
+            "Signal Desktop now locks its database key in the system keyring "
+            "(encryptedKey in config.json), and Memoreei can't read it from there yet. "
+            "Signal isn't supported until it can."
+        )
     if not key:
         raise RuntimeError(
             f"No 'key' field found in Signal config.json at {config_path}"

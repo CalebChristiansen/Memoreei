@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
@@ -32,7 +33,14 @@ from memoreei.catalog import (
     read_env_lines,
     write_env_updates,
 )
-from memoreei.config import config_env_path, ensure_home, get_config, memoreei_home, reload_config
+from memoreei.config import (
+    config_env_path,
+    ensure_home,
+    get_config,
+    legacy_home,
+    memoreei_home,
+    reload_config,
+)
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -70,7 +78,7 @@ class AdminGuard:
         host = request.headers.get("host", "")
         client = request.client.host if request.client else None
 
-        if not auth.remote_allowed() and not auth.local_request(client, host):
+        if not auth.local_request(client, host):
             log.warning("%s %s from %s refused: not loopback (Host %s)",
                         request.method, scope.get("path", ""), client, host)
             await _plain(403, "The Memoreei dashboard only answers on the computer it runs on.")(
@@ -156,12 +164,21 @@ def _env_vars() -> dict[str, str]:
     return parse_env_vars(read_env_lines(config_env_path()))
 
 
+def _on_mac() -> bool:
+    return sys.platform == "darwin"
+
+
+def _dashboard_connectors() -> tuple[str, ...]:
+    """The connectors the dashboard offers on this platform: iMessage only exists on a Mac."""
+    return tuple(k for k in DASHBOARD_CONNECTORS if k != "imessage" or _on_mac())
+
+
 def _rows() -> list[dict[str, Any]]:
     """Everything the dashboard offers, config and upload kinds alike, as table rows."""
     env = _env_vars()
     rows = [
         {"key": k, "kind": "config", **CONNECTORS[k], "configured": is_connector_configured(k, env)}
-        for k in DASHBOARD_CONNECTORS
+        for k in _dashboard_connectors()
     ]
     rows += [{"key": k, "kind": "upload", **UPLOADS[k], "configured": False} for k in DASHBOARD_UPLOADS]
     return rows
@@ -191,6 +208,37 @@ async def _status_context() -> dict[str, Any]:
         "keys": len(await db.list_api_keys()),
         # As the Sources page counts it, so the two never disagree.
         "has_source": any(r["configured"] for r in _rows()) or bool(sources),
+    }
+
+
+async def _service_context() -> dict[str, Any] | None:
+    """The Linux service's switches, as the Mac app's menu has them. None where there's no
+    systemd user unit to switch (macOS, a container, `serve` run by hand without one)."""
+    if not sys.platform.startswith("linux"):
+        return None
+    from memoreei.service import _systemd as sd
+
+    def read() -> dict[str, Any] | None:
+        if not sd.manager_available():
+            return None
+        state = sd.unit_state()
+        if not state["installed"]:
+            return None
+        return {**state, "linger": sd.linger(), "linger_command": sd.linger_command()}
+
+    return await asyncio.to_thread(read)
+
+
+def _page_notices() -> dict[str, Any]:
+    """What the status page mentions above everything else."""
+    from memoreei import updates
+    from memoreei.service._systemd import bundle_root
+
+    legacy = legacy_home()
+    return {
+        "update": updates.available(),
+        "legacy": str(legacy) if legacy else None,
+        "bundle": bundle_root() is not None,
     }
 
 
@@ -230,7 +278,10 @@ async def logout(request: Request) -> Response:
 
 
 async def status(request: Request) -> Response:
-    return _page(request, "status.html", nav="status", **await _status_context())
+    return _page(
+        request, "status.html", nav="status", **await _status_context(), **_page_notices(),
+        service=await _service_context(), linger_failed="linger" in request.query_params,
+    )
 
 
 async def status_fragment(request: Request) -> Response:
@@ -251,6 +302,50 @@ async def _start_sync() -> None:
 async def sync_now(request: Request) -> Response:
     await _start_sync()
     return await status_fragment(request)
+
+
+# ── The Linux service (the Mac app's menu items, for a desktop without a tray) ──
+
+
+async def service_autostart(request: Request) -> Response:
+    from memoreei.service import _systemd as sd
+
+    on = str((await request.form()).get("on", "")) == "1"
+    await asyncio.to_thread(sd.set_enabled, on)
+    # `memoreei open` turns this on the first time only; from now on it's this switch.
+    (ensure_home() / ".start-at-login-chosen").touch()
+    return RedirectResponse("/admin/", status_code=303)
+
+
+async def service_linger(request: Request) -> Response:
+    from memoreei.service import _systemd as sd
+
+    ok = await asyncio.to_thread(sd.enable_linger)
+    return RedirectResponse("/admin/" if ok else "/admin/?linger=failed", status_code=303)
+
+
+async def service_stop(request: Request) -> Response:
+    """Stop the server, after this page has been sent: the page is its last word."""
+    from memoreei.service import _systemd as sd
+
+    def stop() -> None:
+        if sd.running_as_unit():
+            sd.stop_soon()  # so systemd knows it was asked, and doesn't restart it
+        else:
+            import signal
+
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    response = _page(request, "stopped.html", nav="none")
+    response.background = BackgroundTask(stop)
+    return response
+
+
+async def log_page(request: Request) -> Response:
+    from memoreei.service import _systemd as sd
+
+    text = await asyncio.to_thread(sd.journal, 300)
+    return _page(request, "log.html", nav="status", log=text)
 
 
 async def keys_page(request: Request) -> Response:
@@ -296,12 +391,15 @@ async def key_revoke(request: Request) -> Response:
 
 
 async def sources_page(request: Request) -> Response:
-    return _page(request, "sources.html", nav="sources", rows=_rows(), fda=_full_disk_access())
+    return _page(
+        request, "sources.html", nav="sources", rows=_rows(), fda=_full_disk_access(),
+        linux=not _on_mac() and sys.platform.startswith("linux"),
+    )
 
 
 def _enabled_connector(request: Request) -> dict[str, Any] | None:
     key = request.path_params["key"]
-    if key not in DASHBOARD_CONNECTORS:
+    if key not in _dashboard_connectors():
         return None
     return {"key": key, **CONNECTORS[key]}
 
@@ -412,6 +510,10 @@ def build_admin_app() -> Any:
         Route("/sources/{key}", source_save, methods=["POST"]),
         Route("/sources/{key}/remove", source_remove, methods=["POST"]),
         Route("/upload/{kind}", upload, methods=["POST"]),
+        Route("/service/autostart", service_autostart, methods=["POST"]),
+        Route("/service/linger", service_linger, methods=["POST"]),
+        Route("/service/stop", service_stop, methods=["POST"]),
+        Route("/log", log_page),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),
     ]
     return AdminGuard(Starlette(routes=routes))

@@ -42,8 +42,17 @@ def test_model_cache_is_per_user_not_tmp(monkeypatch, tmp_path):
     assert cfg_module.model_cache_dir("darwin") == Path("/opt/models")
 
 
+def test_default_home_on_linux_is_xdg_data_home(monkeypatch, tmp_path):
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert cfg_module.default_home("linux") == "~/.local/share/memoreei"
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert cfg_module.default_home("linux") == f"{tmp_path}/memoreei"
+    monkeypatch.setenv("XDG_DATA_HOME", "relative/data")  # invalid per the spec: ignored
+    assert cfg_module.default_home("linux") == "~/.local/share/memoreei"
+
+
 def test_default_home_is_a_dot_directory_elsewhere():
-    assert cfg_module.default_home("linux") == "~/.memoreei"
+    assert cfg_module.default_home("win32") == "~/.memoreei"
 
 
 def test_home_without_env_uses_platform_default(monkeypatch):
@@ -51,7 +60,8 @@ def test_home_without_env_uses_platform_default(monkeypatch):
     monkeypatch.setattr(cfg_module.sys, "platform", "darwin")
     assert str(cfg_module.memoreei_home()).endswith("Library/Application Support/Memoreei")
     monkeypatch.setattr(cfg_module.sys, "platform", "linux")
-    assert str(cfg_module.memoreei_home()).endswith("/.memoreei")
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert str(cfg_module.memoreei_home()).endswith("/.local/share/memoreei")
 
 
 def test_reload_picks_up_edited_config_env(isolated_home, monkeypatch):
@@ -270,9 +280,29 @@ def scratch_environ(monkeypatch):
     return env
 
 
-def test_home_default_is_dot_memoreei(scratch_environ, monkeypatch, tmp_path):
+def test_home_default_follows_the_platform(scratch_environ, monkeypatch, tmp_path):
     scratch_environ["HOME"] = str(tmp_path)
+    scratch_environ.pop("XDG_DATA_HOME", None)
+    monkeypatch.setattr(cfg_module.sys, "platform", "linux")
+    assert cfg_module.memoreei_home() == tmp_path / ".local/share/memoreei"
+    monkeypatch.setattr(cfg_module.sys, "platform", "win32")
     assert cfg_module.memoreei_home() == tmp_path / ".memoreei"
+
+
+def test_legacy_home_is_reported_only_on_linux_with_data(scratch_environ, monkeypatch, tmp_path):
+    scratch_environ["HOME"] = str(tmp_path)
+    scratch_environ.pop("XDG_DATA_HOME", None)
+    monkeypatch.setattr(cfg_module.sys, "platform", "linux")
+    assert cfg_module.legacy_home() is None  # nothing there
+    (tmp_path / ".memoreei").mkdir()
+    assert cfg_module.legacy_home() is None  # an empty directory isn't data
+    (tmp_path / ".memoreei" / "memoreei.db").write_bytes(b"")
+    assert cfg_module.legacy_home() == tmp_path / ".memoreei"
+    scratch_environ["MEMOREEI_HOME"] = str(tmp_path / ".memoreei")
+    assert cfg_module.legacy_home() is None  # still in use, so not "old"
+    del scratch_environ["MEMOREEI_HOME"]
+    monkeypatch.setattr(cfg_module.sys, "platform", "darwin")
+    assert cfg_module.legacy_home() is None
 
 
 def test_home_from_env(scratch_environ, tmp_path):
@@ -338,3 +368,15 @@ def test_cwd_env_can_set_home(scratch_environ, tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"MEMOREEI_HOME={home}\n")
     monkeypatch.chdir(tmp_path)
     assert get_config().port == 4100
+
+
+def test_packaged_build_ignores_a_cwd_env(scratch_environ, tmp_path, monkeypatch):
+    """The packaged service runs in the home folder, where a .env is someone else's."""
+    home = tmp_path / "h"
+    home.mkdir()
+    (home / "config.env").write_text("MEMOREEI_PORT=4000\n")
+    (tmp_path / ".env").write_text("MEMOREEI_PORT=5000\n")
+    scratch_environ["MEMOREEI_HOME"] = str(home)
+    scratch_environ["MEMOREEI_BUNDLE"] = "/opt/memoreei"
+    monkeypatch.chdir(tmp_path)
+    assert get_config().port == 4000

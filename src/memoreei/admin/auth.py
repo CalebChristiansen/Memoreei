@@ -7,8 +7,8 @@ reads, so it has three locks:
 1. **Loopback only.** Requests must come from this machine and name it in ``Host``
    (``localhost``, ``127.0.0.1`` or ``[::1]``), which also stops DNS rebinding: a web page
    on ``evil.example`` that resolves to 127.0.0.1 still sends ``Host: evil.example``.
-   ``MEMOREEI_ADMIN_REMOTE=true`` lifts this, for Docker, where the host's browser is
-   never on the container's loopback.
+   A headless server's dashboard is reached through ``ssh -L``, which arrives on loopback
+   (``memoreei admin-url`` prints the command).
 2. **A session**, started by a one-time login link (``memoreei admin-url``, or the menu
    in Memoreei.app). The link's token works once and for a few minutes; the session
    cookie it's swapped for lasts a month. Only hashes are stored, as for API keys.
@@ -21,7 +21,6 @@ reads, so it has three locks:
 from __future__ import annotations
 
 import ipaddress
-import os
 import secrets
 from typing import TYPE_CHECKING
 
@@ -34,10 +33,6 @@ LOGIN_TTL = 5 * 60
 SESSION_TTL = 30 * 24 * 3600
 COOKIE = "memoreei_admin"
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
-
-
-def remote_allowed() -> bool:
-    return os.environ.get("MEMOREEI_ADMIN_REMOTE", "").lower() in ("1", "true", "yes")
 
 
 def host_name(host_header: str) -> str:

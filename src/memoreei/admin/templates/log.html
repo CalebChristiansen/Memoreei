@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Log · Memoreei{% endblock %}
+{% block main %}
+<h1>Log</h1>
+<p class="muted">The newest lines are at the bottom. In a terminal: <code>memoreei service logs</code></p>
+{% if log %}<pre class="log">{{ log }}</pre>
+{% else %}<p>Nothing here. The system may not keep logs that you can read
+(<code>journalctl --user</code> needs a persistent journal).</p>{% endif %}
+{% endblock %}

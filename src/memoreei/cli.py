@@ -34,7 +34,7 @@ def main(
         "--home",
         help="Memoreei's home directory, holding config.env and memoreei.db "
         "(default: $MEMOREEI_HOME, else ~/Library/Application Support/Memoreei on macOS, "
-        "~/.memoreei elsewhere)",
+        "~/.local/share/memoreei on Linux, ~/.memoreei elsewhere)",
     ),
     version: bool = typer.Option(False, "--version", help="Print the version and exit."),
 ) -> None:
@@ -121,6 +121,19 @@ def serve(
     async def _key_names() -> list[str]:
         async with _open_db() as db:
             return [k["name"] for k in await db.list_api_keys()]
+
+    from memoreei.service._port import describe_holder, port_free
+
+    if not port_free(host, port):
+        from memoreei.config import config_env_path
+
+        typer.echo(
+            f"memoreei: port {port} is in use by {describe_holder(port)}, so this one won't "
+            f"start. To run on another port, set MEMOREEI_PORT in {config_env_path()} "
+            "(and give clients the new port).",
+            err=True,
+        )
+        raise typer.Exit(75)  # the shipped unit doesn't restart on 75: waiting won't free it
 
     names = asyncio.run(_key_names())
     if not names:
@@ -351,10 +364,13 @@ def service_install(
     from memoreei.config import config_env_path, get_config
     from memoreei.service._detect import get_backend
 
+    from memoreei.service._systemd import bundle_root
+
     backend = get_backend()  # platform guard — exits early on unsupported OS
 
     env_path = config_env_path().resolve()
-    if not env_path.exists():
+    # The packaged server starts without one: its dashboard is where setup happens.
+    if not env_path.exists() and not bundle_root():
         typer.echo(f"No config at {env_path}. Run 'memoreei setup' first.")
         raise typer.Exit(1)
 
@@ -717,14 +733,9 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     return updates
 
 
-@app.command(name="admin-url")
-def admin_url() -> None:
-    """Print a one-time link that signs this browser in to the dashboard.
-
-    The link works once, within five minutes, on the computer the server runs on (or
-    from anywhere, if MEMOREEI_ADMIN_REMOTE=true, as the Docker image sets).
-    """
-    from memoreei.admin.auth import LOGIN_TTL, create_login_token, login_url
+def _login_link() -> str:
+    """A fresh one-time dashboard link, for this home's server."""
+    from memoreei.admin.auth import create_login_token, login_url
     from memoreei.config import get_config
 
     async def _run() -> str:
@@ -732,8 +743,152 @@ def admin_url() -> None:
             return await create_login_token(db)
 
     cfg = get_config()
-    typer.echo(login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert)))
+    return login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert))
+
+
+def _has_display() -> bool:
+    """Whether a browser could open here. macOS always has one; elsewhere, X or Wayland."""
+    import os
+    import sys
+
+    return sys.platform == "darwin" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _tunnel_hint(port: int) -> str:
+    """How to reach a headless machine's loopback-only dashboard from a laptop."""
+    import getpass
+    import socket
+
+    return (
+        "There's no display here, and the dashboard only answers on this computer. From\n"
+        "your own computer, forward the port over SSH:\n\n"
+        f"  ssh -L {port}:localhost:{port} {getpass.getuser()}@{socket.gethostname()}\n\n"
+        "then open this link there, in a browser:\n"
+    )
+
+
+@app.command(name="admin-url")
+def admin_url() -> None:
+    """Print a one-time link that signs a browser in to the dashboard.
+
+    The link works once, within five minutes, on the computer the server runs on. With no
+    display (a headless server), it also prints the ssh -L that brings the dashboard to
+    your own computer.
+    """
+    from memoreei.admin.auth import LOGIN_TTL
+    from memoreei.config import get_config
+
+    link = _login_link()
+    if not _has_display():
+        typer.echo(_tunnel_hint(get_config().port), err=True)
+    typer.echo(link)
     typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
+
+
+def _tell(title: str, text: str) -> None:
+    """Say something to whoever opened Memoreei: a dialog when it came from the desktop
+    launcher (there's no terminal to read), and stderr always."""
+    import shutil
+    import subprocess
+
+    typer.echo(f"memoreei: {title}. {text}", err=True)
+    if not _has_display():
+        return
+    for cmd in (
+        ["zenity", "--warning", "--title", "Memoreei", "--no-wrap", "--text", f"<b>{title}</b>\n\n{text}"],
+        ["kdialog", "--title", "Memoreei", "--sorry", f"{title}\n\n{text}"],
+        ["notify-send", "-i", "cafe.caleb.Memoreei", title, text],
+    ):
+        if shutil.which(cmd[0]):
+            subprocess.run(cmd, capture_output=True)
+            return
+
+
+def _browser_env() -> dict[str, str]:
+    """The environment for a browser we start: without what the bundle's own Python needs."""
+    import os
+
+    env = dict(os.environ)
+    for name in ("MEMOREEI_BUNDLE", "FASTEMBED_CACHE_PATH", "HF_HUB_OFFLINE"):
+        env.pop(name, None)
+    return env
+
+
+@app.command(name="open")
+def open_dashboard(
+    wait: int = typer.Option(60, "--wait", help="Seconds to wait for the server to start"),
+) -> None:
+    """Open the dashboard in a browser, starting Memoreei first if it isn't running.
+
+    This is what the desktop launcher runs. The first time, it also sets Memoreei to
+    start at login (the dashboard can switch that off).
+    """
+    import os
+    import shutil
+    import subprocess
+    import sys
+    import time
+
+    from memoreei.config import config_env_path, ensure_home, get_config
+    from memoreei.service import _port
+    from memoreei.service import _systemd as sd
+
+    port = get_config().port
+    owner = _port.port_owner(port)  # always None off Linux: there, only is_memoreei() tells
+    if owner is None and not sys.platform.startswith("linux"):
+        if not _port.is_memoreei(port):
+            _tell("Memoreei isn't running", "Start Memoreei.app, or: memoreei service install")
+            raise typer.Exit(1)
+    elif owner is None:
+        if not (sd.manager_available() and sd.unit_state()["installed"]):
+            _tell(
+                "Memoreei isn't running",
+                "There's no Memoreei service here to start. Run: memoreei service install",
+            )
+            raise typer.Exit(1)
+        # The first open turns on Start at Login; after that, the dashboard's switch decides.
+        chosen = ensure_home() / ".start-at-login-chosen"
+        result = sd.systemctl("start", sd.UNIT) if chosen.exists() else sd.start()
+        chosen.touch()
+        if result.returncode != 0:
+            _tell("Memoreei couldn't start", result.stderr.strip() or "See: memoreei service logs")
+            raise typer.Exit(1)
+        if not sd.wait_until_listening(port, wait):
+            log = sd.journal(8)
+            _tell("Memoreei couldn't start", f"Its log ends:\n\n{log}" if log else
+                  "See: memoreei service logs")
+            raise typer.Exit(1)
+        owner = os.getuid()
+
+    if owner is not None and owner != os.getuid():
+        _tell(
+            f"Port {port} is taken",
+            f"Memoreei's port is in use by {_port.describe_holder(port)}. Two people on "
+            f"one computer each need their own: add a line such as MEMOREEI_PORT={port + 1} "
+            f"to {config_env_path()}, then open Memoreei again.",
+        )
+        raise typer.Exit(75)
+    if not _port.is_memoreei(port):
+        # Ours, but not (yet) answering as Memoreei: a server still starting, or another
+        # of this user's programs.
+        deadline = time.monotonic() + 15
+        while not _port.is_memoreei(port):
+            if time.monotonic() > deadline:
+                _tell(f"Port {port} is taken", f"Memoreei's port is in use by {_port.describe_holder(port)}.")
+                raise typer.Exit(75)
+            time.sleep(0.5)
+
+    link = _login_link()
+    opener = shutil.which("xdg-open") or shutil.which("open")
+    if not _has_display() or not opener:
+        if not _has_display():
+            typer.echo(_tunnel_hint(port), err=True)
+        typer.echo(link)
+        return
+    subprocess.Popen(
+        [opener, link], env=_browser_env(), start_new_session=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
 
 
 @app.command()

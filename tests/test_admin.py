@@ -26,8 +26,15 @@ def server(tmp_path, mock_embedder, monkeypatch):
     """The whole HTTP app (MCP and dashboard) on a fresh DB with one API key."""
     db_path = str(tmp_path / "admin.db")
     monkeypatch.setenv("MEMOREEI_DB_PATH", db_path)
-    monkeypatch.delenv("MEMOREEI_ADMIN_REMOTE", raising=False)
     monkeypatch.delenv("MEMOREEI_APP", raising=False)
+    # These tests are about the Mac's dashboard, with iMessage, and no systemd to ask.
+    # tests/test_linux_app.py covers what Linux shows instead.
+    monkeypatch.setattr("memoreei.admin.app._on_mac", lambda: True)
+
+    async def no_service():
+        return None
+
+    monkeypatch.setattr("memoreei.admin.app._service_context", no_service)
     monkeypatch.setattr(server_module, "get_provider", lambda: mock_embedder)
     monkeypatch.setattr(server_module, "_db", None)
     monkeypatch.setattr(server_module, "_tools", None)
@@ -175,14 +182,6 @@ def test_host_name_strips_port(host, name):
     # Starlette's TestClient can't send an IPv6 Host, so [::1] is checked here.
     assert auth.host_name(host) == name
     assert auth.local_request("::1", host) == (name in auth.LOOPBACK_HOSTS)
-
-
-def test_remote_opt_in_lets_other_machines_in(server, monkeypatch):
-    monkeypatch.setenv("MEMOREEI_ADMIN_REMOTE", "true")
-    client = server(client=("192.0.2.50", 50000), base_url="http://192.0.2.10:3679")
-    token = _login_token(server.db_path)
-    client.get(f"/admin/login?token={token}")
-    assert client.get("/admin/").status_code == 200
 
 
 def test_mcp_is_still_open_to_other_machines(server):

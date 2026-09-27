@@ -55,3 +55,9 @@ button.link { background: none; border: none; color: var(--muted); padding: 0; }
 .steps li:last-child { border-bottom: none; }
 .steps li > div { margin-bottom: .45rem; }
 .steps li.done > div { color: var(--muted); }
+.notice { border-color: var(--accent); }
+.notice pre { margin: .6rem 0 0; }
+form.switch { display: inline; margin: 0 0 0 .5rem; }
+dd form.switch:first-child { margin: 0; }
+form.switch button.link { color: var(--accent); }
+pre.log { white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; font-size: 12px; max-height: 70vh; overflow: auto; }

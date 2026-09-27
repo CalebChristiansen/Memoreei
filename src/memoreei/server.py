@@ -559,13 +559,17 @@ def build_http_app(verify: "Verifier") -> Any:
     """
     from memoreei.admin.app import build_admin_app
     from memoreei.auth import BearerAuthMiddleware
+    from memoreei.service._systemd import bundle_root
+    from memoreei.updates import update_checks
 
     app = build_network_server().streamable_http_app()
     inner_lifespan = app.router.lifespan_context
 
     @asynccontextmanager
     async def lifespan(a: Any) -> AsyncIterator[None]:
-        async with inner_lifespan(a), _auto_sync(), _warm_search():
+        # Only the Linux packages look for updates here; Memoreei.app does its own.
+        async with inner_lifespan(a), _auto_sync(), _warm_search(), \
+                update_checks(enabled=bundle_root() is not None):
             yield
 
     app.router.lifespan_context = lifespan

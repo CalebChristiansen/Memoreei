@@ -1,12 +1,29 @@
 {% extends "base.html" %}
 {% block main %}
 <h1>Status</h1>
+{% if update %}
+<section class="card notice">
+  <b>Memoreei {{ update.version }} is out.</b> This is {{ version }}.
+  <a href="{{ update.url }}">Download it</a>{% if bundle %} and install it the way you installed
+  this one; Memoreei restarts on the new version by itself{% endif %}.
+</section>
+{% endif %}
+{% if legacy %}
+<section class="card notice">
+  <b>There's data from an earlier Memoreei in <code>{{ legacy }}</code>.</b> This version
+  keeps its data in <code>{{ home }}</code> and leaves the old folder alone. To go on using the
+  old data where it is, add this line to <code>~/.config/memoreei/env</code>{% if not bundle %}
+  (or set it wherever your service gets its environment){% endif %}, then stop Memoreei and open
+  it again:
+  <pre>MEMOREEI_HOME={{ legacy }}</pre>
+</section>
+{% endif %}
 {% if not has_source or not keys %}
 <section class="card setup">
   <h2>Get started</h2>
   <ol class="steps">
     <li{% if has_source %} class="done"{% endif %}>
-      <div><b>Add a source.</b> Choose what Memoreei reads, like your iMessages.</div>
+      <div><b>Add a source.</b> Choose what Memoreei reads, like your {{ "iMessages" if fda is not none or in_app() else "email or chats" }}.</div>
       {% if has_source %}<span class="ok">✓ Done</span>{% else %}<a class="button" href="/admin/sources">Add a source</a>{% endif %}
     </li>
     <li{% if keys %} class="done"{% endif %}>
@@ -18,4 +35,27 @@
 </section>
 {% endif %}
 {% include "_status_card.html" %}
+{% if service %}
+<section class="card" id="service">
+  <dl>
+    <dt>Server</dt>
+    <dd>{% if service.active %}<span class="ok">running</span> on port {{ port }}{% else %}not running as a service{% endif %}</dd>
+    <dt>Start at login</dt>
+    <dd><form method="post" action="/admin/service/autostart" class="switch">
+      {% if service.enabled %}on <input type="hidden" name="on" value="0"><button class="link">Turn off</button>
+      {% else %}off <input type="hidden" name="on" value="1"><button class="link">Turn on</button>{% endif %}
+    </form></dd>
+    <dt>Start at boot</dt>
+    <dd>{% if service.linger %}on: Memoreei starts before anyone logs in
+      {% elif service.linger is none %}<span class="muted">unknown</span>
+      {% else %}off: Memoreei waits for you to log in
+        <form method="post" action="/admin/service/linger" class="switch"><button class="link">Turn on</button></form>
+        {% if linger_failed %}<br><span class="bad">That needs an administrator,</span> who can run:
+          <pre>{{ service.linger_command }}</pre>{% endif %}
+      {% endif %}</dd>
+    <dt>Log</dt><dd><a href="/admin/log">Show the log</a></dd>
+  </dl>
+  <form method="post" action="/admin/service/stop"><button class="danger">Stop Memoreei</button></form>
+</section>
+{% endif %}
 {% endblock %}

@@ -20,10 +20,22 @@ def isolated_home(tmp_path_factory, monkeypatch):
     monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
     monkeypatch.setenv("MEMOREEI_HOME", str(home))
     monkeypatch.delenv("MEMOREEI_DB_PATH", raising=False)
+    monkeypatch.delenv("MEMOREEI_BUNDLE", raising=False)  # as if pip-installed
     monkeypatch.setattr(config_module, "_home_override", None)
     monkeypatch.setattr(config_module, "_env_loaded", True)
     monkeypatch.setattr(config_module, "_config", None)
     return home
+
+
+@pytest.fixture(autouse=True)
+def port_is_free(monkeypatch):
+    """`serve` checks its port before binding it. Tests that mock uvicorn shouldn't fail
+    because the machine running them has a Memoreei of its own on 3679."""
+    from memoreei.service import _port
+
+    real = _port.port_free
+    monkeypatch.setattr(_port, "port_free", lambda host, port: True)
+    return real
 
 
 @pytest.fixture(autouse=True)

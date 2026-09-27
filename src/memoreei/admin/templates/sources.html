@@ -2,6 +2,16 @@
 {% block main %}
 <h1>Sources</h1>
 <p>Where Memoreei reads your messages from. More are coming; the command line has the rest.</p>
+{% if linux %}
+<section class="card">
+  <p>On Linux, set sources up from a terminal for now:</p>
+  <pre>memoreei setup</pre>
+  <p class="hint">Gmail, Discord, Slack, Telegram, Matrix and Mastodon. For a chat export (WhatsApp,
+  Messenger, Instagram, Android SMS), <code>memoreei import --help</code>.</p>
+  <p class="hint">🔒 Signal Desktop isn't supported yet: Signal now locks its database key in your
+  keyring, and Memoreei can't read it from there.</p>
+</section>
+{% endif %}
 <table>
   <tbody>
   {% for r in rows %}

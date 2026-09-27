@@ -494,3 +494,10 @@ async def test_sync_signal_config_not_found_returns_error(mem_db, embedder, sign
     # config.json at default path doesn't exist on this machine
     assert "error" in result
     assert result["synced"] == 0
+
+
+def test_read_key_explains_signals_encrypted_key(tmp_path):
+    config_path = str(tmp_path / "config.json")
+    Path(config_path).write_text(json.dumps({"encryptedKey": "763130deadbeef"}))
+    with pytest.raises(RuntimeError, match="keyring"):
+        _read_key(config_path)
