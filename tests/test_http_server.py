@@ -377,10 +377,10 @@ def test_container_bridges_are_not_offered_as_server_addresses(monkeypatch):
         "2: eth0    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0\n"
         "3: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0\n"
         "4: br-3f2a    inet 172.18.0.1/16 scope global br-3f2a\n"
-        "5: tailscale0    inet 100.64.0.5/32 scope global tailscale0\n"
+        "5: wg0    inet 203.0.113.5/32 scope global wg0\n"
     )
     monkeypatch.setattr(
         auth_module.subprocess, "run",
         lambda cmd, **kw: type("R", (), {"stdout": ip_output})(),
     )
-    assert auth_module.local_ipv4_addresses() == ["192.0.2.10", "100.64.0.5"]
+    assert auth_module.local_ipv4_addresses() == ["192.0.2.10", "203.0.113.5"]
