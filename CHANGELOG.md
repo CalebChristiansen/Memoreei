@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-27
+
 ### Added
 - The log says `Full Disk Access: ok` when an iMessage sync first reads the Messages
   database, and again after one that couldn't. Access was checked only at startup, so a
@@ -271,7 +273,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0
 [0.4.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0rc1
 [0.3.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...v0.3.1
