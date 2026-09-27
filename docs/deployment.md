@@ -105,7 +105,7 @@ memoreei key list # API keys and when each was last used
 memoreei service install
 ```
 
-On macOS this writes `~/Library/LaunchAgents/com.memoreei.server.plist`, which runs
+On macOS this writes `~/Library/LaunchAgents/cafe.caleb.Memoreei.service.plist`, which runs
 `memoreei serve --http` directly (no wrapper script, so that Full Disk Access is granted
 to Python rather than to a shell). On Linux it writes `~/.config/systemd/user/memoreei.service`:
 

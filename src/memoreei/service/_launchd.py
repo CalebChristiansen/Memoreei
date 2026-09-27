@@ -10,7 +10,10 @@ from memoreei.config import memoreei_home
 
 from ._base import ServiceBackend, print_installed
 
-_LABEL = "com.memoreei.server"
+# Named under Memoreei.app's bundle identifier (cafe.caleb.Memoreei), the maintainer's
+# domain. The app and this service run the same server on the same port: use one or
+# the other.
+_LABEL = "cafe.caleb.Memoreei.service"
 
 
 def _launchd_paths() -> tuple[Path, Path, Path]:

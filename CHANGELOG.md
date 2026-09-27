@@ -27,6 +27,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   install, move `~/.memoreei` there by hand, or set `MEMOREEI_HOME=~/.memoreei`.
 - `serve --http` starts with no API keys, and refuses every client until one exists, so
   the first key can be made in the dashboard.
+- The macOS service's launchd label is now `cafe.caleb.Memoreei.service` (was
+  `com.memoreei.server`, a domain the project doesn't own). Run `memoreei service
+  uninstall` with the old version before upgrading, then `service install` again.
 - Background sync picks up `AUTO_SYNC` and the interval from `config.env` each round, so
   changing them (as the dashboard does) needs no restart.
 

@@ -114,7 +114,7 @@ def test_startup_report_only_counts_lines_after_offset(tmp_path):
 
 
 def _fake_paths(tmp_path):
-    plist = tmp_path / "com.memoreei.server.plist"
+    plist = tmp_path / "cafe.caleb.Memoreei.service.plist"
     plist.write_text("")
     return tmp_path, plist, tmp_path / "memoreei.log"
 

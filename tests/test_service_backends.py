@@ -28,7 +28,7 @@ def _ok(*args, **kwargs):
 
 def _fake_launchd_paths(tmp_path: Path):
     memoreei_dir = tmp_path / ".memoreei"
-    plist_path = tmp_path / "LaunchAgents" / "com.memoreei.server.plist"
+    plist_path = tmp_path / "LaunchAgents" / "cafe.caleb.Memoreei.service.plist"
     log_path = memoreei_dir / "memoreei.log"
     return memoreei_dir, plist_path, log_path
 
@@ -85,7 +85,7 @@ class TestLaunchdInstall:
         _, plist_path, _ = _fake_launchd_paths(tmp_path)
         assert plist_path.exists()
         content = plist_path.read_text()
-        assert "com.memoreei.server" in content
+        assert "cafe.caleb.Memoreei.service" in content
         assert "<key>RunAtLoad</key>" in content
         assert "<key>KeepAlive</key>" in content
         assert "<true/>" in content
