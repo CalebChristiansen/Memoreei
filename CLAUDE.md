@@ -40,8 +40,9 @@ src/memoreei/
 ```
 
 ## Key Paths
-- **Home:** `~/.memoreei/`, or `~/Library/Application Support/Memoreei` on macOS (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
+- **Home:** `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
 - **Mac app:** `macos/` (Swift menu-bar app, build script, lock file); see `macos/README.md`
-- **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx, loopback-only by default)
+- **Linux packages:** `linux/` (.deb, .rpm, tarball of one `/opt/memoreei` tree; build, lock, smoke test); see `linux/README.md`
+- **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx, loopback-only; `ssh -L` for a headless box)
 - **Dev config:** a `.env` in the checkout overrides `config.env` while you work here
 - **Venv:** `.venv/bin/python`, with memoreei installed editable (`pip install -e '.[dev]'`)

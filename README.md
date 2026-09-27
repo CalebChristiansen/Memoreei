@@ -38,7 +38,7 @@ Memoreei isn't just a memory server — any app can be built on top of it. Two o
 - **MCP-native** — every tool over stdio for a local client; a key-protected, read-only surface over the network for everything else
 - **Hybrid search** — BM25 keyword search + vector semantic search, fused with Reciprocal Rank Fusion
 - **No mandatory cloud** — default embedding model runs fully offline via ONNX
-- **Runs anywhere** — `pip install memoreei` on a laptop, a home server or in Docker; reach it from any machine on your network
+- **Runs anywhere** — a package for Linux, an app for the Mac, `pip install memoreei` elsewhere; reach it from any machine on your network
 
 ---
 
@@ -70,9 +70,14 @@ Memoreei isn't just a memory server — any app can be built on top of it. Two o
 
 ## Quick Start
 
+**On Linux?** [Download the package](#on-linux-a-package) for your distribution and
+open Memoreei from your applications. Python and the search model are inside.
+
 **On a Mac?** [Memoreei.app](#on-a-mac-memoreeiapp) is the easy way: nothing to
 install first, no Terminal, and it's the only way to read iMessage without granting
 Full Disk Access to Python itself.
+
+**Anywhere else** (Windows, for now), with Python 3.10 or newer:
 
 ```bash
 pip install memoreei
@@ -91,9 +96,9 @@ pip install -e '.[dev]'
 
 Everything memoreei knows lives in one directory: `config.env` for settings and
 credentials, `memoreei.db` for the memories. It's `~/Library/Application
-Support/Memoreei` on macOS (shared with Memoreei.app) and `~/.memoreei` everywhere
-else. Every command finds it from wherever you run it. Point it elsewhere with
-`--home <dir>` or `MEMOREEI_HOME`.
+Support/Memoreei` on macOS (shared with Memoreei.app), `~/.local/share/memoreei` on
+Linux and `~/.memoreei` everywhere else. Every command finds it from wherever you run
+it. Point it elsewhere with `--home <dir>` or `MEMOREEI_HOME`.
 
 Then connect an AI client, either on the same machine or over the network.
 
@@ -121,6 +126,69 @@ your client doesn't know about. For Claude Code:
 ### From other machines (network server)
 
 See [Run it as a network server](#run-it-as-a-network-server), next.
+
+---
+
+## On Linux: a package
+
+The whole server in one download, Python and the search model included. It runs as a
+service for you, not as root, with the same dashboard as the Mac app. Ubuntu 20.04,
+Debian 11, RHEL and Rocky 8, current Fedora, or newer; x86_64 or ARM64.
+
+1. **Download** from the [latest release](https://github.com/CalebChristiansen/Memoreei/releases/latest):
+   - Ubuntu, Debian: `memoreei_X.Y.Z_amd64.deb` (`arm64` on a Raspberry Pi or other ARM machine)
+   - Fedora, RHEL, Rocky: `memoreei-X.Y.Z.x86_64.rpm` (`aarch64` on ARM)
+   - anything else, or without root: `memoreei-X.Y.Z-linux-x86_64.tar.gz` (`aarch64` on ARM)
+2. **Install it.** Double-click the file to open it in your software center, or:
+   ```bash
+   sudo apt install ./memoreei_*.deb        # Ubuntu, Debian
+   sudo dnf install ./memoreei-*.rpm        # Fedora, RHEL, Rocky
+   tar xzf memoreei-*-linux-*.tar.gz && memoreei-*-linux-*/install.sh   # into ~/.local, no root
+   ```
+3. **Open Memoreei** from your applications. It starts the server, sets it to start
+   when you log in, and opens the dashboard in your browser. Under **Clients**, create a
+   key for each machine or app that will search your memories. The key is shown once,
+   with ready-to-paste setup for Claude Code and `.mcp.json`.
+4. **Sources** are set up in a terminal for now: `memoreei setup` for Gmail, Discord,
+   Slack, Telegram, Matrix and Mastodon, and `memoreei import …` for chat exports.
+   Signal Desktop isn't supported yet: it now keeps its database key in the system
+   keyring, where Memoreei can't read it.
+
+**A server with no desktop.** The same package, from a terminal:
+
+```bash
+memoreei service install     # starts it now and at every login, and offers to start it at boot
+memoreei key create laptop   # a key per client; see "Connect a client" below
+memoreei admin-url           # how to reach the dashboard from your own computer
+```
+
+The dashboard only answers on the machine itself. With no display, `admin-url` prints
+the `ssh -L 3679:localhost:3679 you@server` that brings it to your laptop, and a
+one-time link to open there.
+
+**The dashboard** shows whether the server is running, switches *Start at login* and
+*Start at boot* on and off, shows the log, and stops the server. It also says when
+there's a new release. Download that and install it the same way; a running Memoreei
+restarts on the new version by itself.
+
+**Where things are.** Data in `~/.local/share/memoreei`, caches in `~/.cache/memoreei`,
+the program in `/opt/memoreei` (or `~/.local/opt/memoreei` from the tarball). The server
+is the systemd user unit `memoreei.service`: `memoreei service status`, `memoreei service
+logs`. Settings go in `config.env`, except the few needed before memoreei can find it
+(`MEMOREEI_HOME`), which go in `~/.config/memoreei/env`; the service and the command
+both read that.
+
+**Two people, one computer.** Each runs their own Memoreei, and the first to start gets
+port 3679. The second needs another: `MEMOREEI_PORT=3680` in their `config.env`. Clients
+of theirs use that port too.
+
+**Coming from pip?** Versions before 0.4 kept data in `~/.memoreei` on Linux, and nothing
+moves it: the dashboard says where it is, and `MEMOREEI_HOME=~/.memoreei` in
+`~/.config/memoreei/env` keeps using it there. `memoreei service install` from the
+package sets aside the unit the pip install wrote.
+
+**Uninstall** with `sudo apt remove memoreei`, `sudo dnf remove memoreei`, or
+`install.sh --uninstall` from the tarball's folder. Your data stays where it is.
 
 ---
 
@@ -173,6 +241,10 @@ so rather than fight over it.
 Run memoreei on one always-on machine (a home server, a desktop, a Mac that never
 sleeps) and query your memories from every other one. It serves MCP's Streamable HTTP
 transport at `/mcp`, and every request needs an API key.
+
+This section installs it with pip, which works anywhere Python does. On Linux the
+[package](#on-linux-a-package) does steps 1 and 4 for you, and on a Mac the
+[app](#on-a-mac-memoreeiapp) does; the rest is the same.
 
 ### 1. Install
 
@@ -281,7 +353,8 @@ memoreei admin-url     # prints http://localhost:3679/admin/login?token=…
 
 Open the link in a browser on that machine. It works once, within five minutes, and
 signs that browser in for a month. The dashboard never accepts API keys, and API keys
-never open it.
+never open it. On a machine with no display, `admin-url` also prints the `ssh -L` that
+brings the dashboard to the computer you're sitting at.
 
 ### 5. Connect a client
 
@@ -363,6 +436,11 @@ source ~/memoreei-venv/bin/activate
 pip install --upgrade memoreei
 memoreei service install   # rewrites the service for the new version and restarts it
 ```
+
+**Upgrading on Linux from before 0.4:** the home directory moved from `~/.memoreei` to
+`~/.local/share/memoreei`, and nothing moves your data. Before `service install`, either
+`mv ~/.memoreei ~/.local/share/memoreei`, or `export MEMOREEI_HOME=~/.memoreei` (and keep
+it in your shell's profile), or the service starts over on an empty home.
 
 ---
 
@@ -734,7 +812,7 @@ precedence:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MEMOREEI_HOME` | `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere | Home directory, holding `config.env` and `memoreei.db`; `--home` overrides it |
+| `MEMOREEI_HOME` | `~/Library/Application Support/Memoreei` on macOS, `$XDG_DATA_HOME/memoreei` (`~/.local/share/memoreei`) on Linux, `~/.memoreei` elsewhere | Home directory, holding `config.env` and `memoreei.db`; `--home` overrides it |
 | `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | SQLite database path |
 | `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local ONNX, no API key) or `openai` |
 | `OPENAI_API_KEY` | — | Required only if `EMBEDDING_PROVIDER=openai` |
@@ -750,7 +828,6 @@ precedence:
 | `MEMOREEI_PUBLIC_URL` | — | The URL clients use, e.g. behind a reverse proxy. Only used to print client config |
 | `MEMOREEI_TLS_CERT` | — | TLS certificate (PEM), to serve HTTPS directly |
 | `MEMOREEI_TLS_KEY` | — | TLS private key (PEM) |
-| `MEMOREEI_ADMIN_REMOTE` | `false` | Let the dashboard answer other machines, not just this one. The Docker image sets it, since a container's loopback isn't the host's |
 
 API keys aren't settings: they live, hashed, in the database. See `memoreei key`.
 
@@ -832,28 +909,6 @@ API keys aren't settings: they live, hashed, in the database. See `memoreei key`
 - `EMBEDDING_PROVIDER=openai` sends message text to OpenAI's API for embedding
 
 The home directory is created readable only by you, and `config.env` is written mode 600.
-
----
-
-## Docker
-
-The image keeps everything in `/data` (`MEMOREEI_HOME=/data`) and runs the network
-server on port 3679. Make a key first, or use the dashboard:
-
-```bash
-docker compose run --rm memoreei setup              # optional: connectors, into ./data/config.env
-docker compose run --rm memoreei key create laptop
-docker compose up -d
-docker compose run --rm memoreei admin-url          # a sign-in link for the dashboard
-```
-
-The dashboard answers other machines in Docker (`MEMOREEI_ADMIN_REMOTE=true`), because
-the container's loopback isn't the host's. It still needs the one-time link. Don't
-publish port 3679 beyond your own network.
-
-Inside a container memoreei can't see the host's addresses, so set
-`MEMOREEI_PUBLIC_URL` in `docker-compose.yml` to the URL clients will use; `key create`
-then prints config with that URL in it.
 
 ---
 

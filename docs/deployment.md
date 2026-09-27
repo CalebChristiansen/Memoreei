@@ -1,5 +1,9 @@
 # Deployment Guide
 
+On Linux, the packages on the [releases page](https://github.com/CalebChristiansen/Memoreei/releases/latest)
+are the easy way: see the README's [On Linux: a package](../README.md#on-linux-a-package).
+This guide is the pip route, which works anywhere Python does.
+
 ## Bare Metal (pip install)
 
 ### Requirements
@@ -32,7 +36,7 @@ memoreei setup
 ```
 
 This walks you through choosing an embedding provider, background sync and connectors,
-and writes everything to `~/.memoreei/config.env` (mode 600). At the end it offers to
+and writes everything to `config.env` in the home directory (mode 600). At the end it offers to
 create the first API key for the network server.
 
 You can also configure a single connector directly:
@@ -42,11 +46,13 @@ memoreei setup gmail
 memoreei setup discord
 ```
 
-Or edit `~/.memoreei/config.env` by hand (see `.env.example` for all variables).
+Or edit `config.env` by hand (see `.env.example` for all variables).
 
 ### Home directory
 
-Everything lives in one directory, `~/.memoreei/`:
+Everything lives in one directory: `~/.local/share/memoreei` on Linux
+(`$XDG_DATA_HOME/memoreei`), `~/Library/Application Support/Memoreei` on macOS, and
+`~/.memoreei` elsewhere.
 
 | File | What |
 |------|------|
@@ -114,8 +120,8 @@ to Python rather than to a shell). On Linux it writes `~/.config/systemd/user/me
 Description=Memoreei MCP server
 
 [Service]
-EnvironmentFile=%h/.memoreei/config.env
-Environment=MEMOREEI_HOME=%h/.memoreei
+EnvironmentFile=%h/.local/share/memoreei/config.env
+Environment=MEMOREEI_HOME=%h/.local/share/memoreei
 ExecStart=/path/to/.venv/bin/memoreei serve --http --port 3679
 Restart=always
 RestartSec=5
@@ -124,35 +130,9 @@ RestartSec=5
 WantedBy=default.target
 ```
 
-On a headless Linux box, `loginctl enable-linger $USER` makes the user service start at
-boot. `memoreei service status`, `logs` and `uninstall` do what they say.
-
----
-
-## Docker
-
-The image sets `MEMOREEI_HOME=/data`, so `config.env` and `memoreei.db` both live in the
-one volume, and runs `memoreei serve --http` on port 3679.
-
-### docker-compose
-
-```bash
-docker compose run --rm memoreei setup
-docker compose run --rm memoreei key create laptop
-docker compose up -d
-```
-
-Set `MEMOREEI_PUBLIC_URL` in `docker-compose.yml` to the URL clients will use: inside
-the container memoreei can't see the host's addresses. Everything is persisted in
-`./data/` on the host.
-
-### Without compose
-
-```bash
-docker build -t memoreei .
-docker run --rm -it -v $(pwd)/data:/data memoreei key create laptop
-docker run -d -p 3679:3679 -v $(pwd)/data:/data memoreei
-```
+The Linux packages ship their own unit, and there `service install` enables it rather
+than writing one. On a headless Linux box, `loginctl enable-linger $USER` makes the user
+service start at boot. `memoreei service status`, `logs` and `uninstall` do what they say.
 
 ---
 
@@ -166,7 +146,7 @@ then a `.env` in the current directory (for development), then
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MEMOREEI_HOME` | `~/.memoreei` | Directory holding `config.env` and `memoreei.db` |
+| `MEMOREEI_HOME` | `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere | Directory holding `config.env` and `memoreei.db` |
 | `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | Path to SQLite database file |
 | `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local) or `openai` |
 | `OPENAI_API_KEY` | — | Required if `EMBEDDING_PROVIDER=openai` |

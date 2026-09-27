@@ -7,6 +7,40 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Linux packages**: a `.deb`, an `.rpm` and a tarball for x86_64 and aarch64, each with
+  its own Python and the search model inside, for Ubuntu 20.04, Debian 11, RHEL 8,
+  current Fedora and newer. The server runs as a systemd user unit for the person whose
+  messages it reads, shipped disabled; the tarball installs into `~/.local` without root.
+  See the README's *On Linux: a package*.
+- `memoreei open`, which the Linux launcher runs: starts the service if it isn't
+  running (the first time, also at login), waits for it, and opens the dashboard with a
+  one-time link. When the port belongs to another user's Memoreei, it says so and how to
+  pick another.
+- On Linux the dashboard switches *Start at login* and *Start at boot* (linger), shows
+  the service's log, stops the server, and says when a new release is out (packaged
+  installs only).
+- `memoreei admin-url` on a machine with no display also prints the `ssh -L` that brings
+  the dashboard to the computer you're at.
+
+### Changed
+- **The Linux home directory is `~/.local/share/memoreei`** (`$XDG_DATA_HOME/memoreei`),
+  not `~/.memoreei`. Nothing is moved: to keep using `~/.memoreei`, set
+  `MEMOREEI_HOME=~/.memoreei` (in `~/.config/memoreei/env` for the packages). A pip
+  service installed before this version keeps running on `~/.memoreei`, but the
+  `memoreei` command now looks in the new place, and so would a `memoreei service
+  install`: move the data, or export `MEMOREEI_HOME=~/.memoreei`, before running it. The
+  dashboard says where the old data is.
+- `memoreei serve --http` won't start when its port is taken, and says by whom. It exits
+  75, which the packaged unit doesn't restart on.
+- The Signal connector says that Signal Desktop's `encryptedKey` can't be read yet,
+  instead of failing on a missing `key`.
+
+### Removed
+- The Docker image and `docker-compose.yml`, which had never been run, and with them
+  `MEMOREEI_ADMIN_REMOTE`. The dashboard only answers on the machine it runs on; reach a
+  headless one through `ssh -L`.
+
 ## [0.3.1] - 2026-09-26
 
 ### Fixed
