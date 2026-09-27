@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=Memoreei
-GenericName=Personal Memory Server
-Comment=Search your messages from any AI client
+GenericName=Message Search
+Comment=Search your messages from any AI app
 Exec=/usr/bin/memoreei open
 Icon=cafe.caleb.Memoreei
 Terminal=false

@@ -1,63 +1,86 @@
-// Draws AppIcon.icns: a speech bubble with a magnifier, on a deep blue squircle.
-// Run on a Mac: swift macos/make-icon.swift && iconutil -c icns AppIcon.iconset -o macos/AppIcon.icns
+// Draws every raster of the Memoreei mark (assets/icon.svg): an amber speech bubble
+// holding two dots and an i, on a teal tile. Flat fills, no gradient or shadow.
+// At 32 px and under it draws the favicon cut (assets/favicon.svg) instead: bigger
+// glyphs, tighter bubble, so the i survives. Run on a Mac, from the repo root:
+//   swift macos/make-icon.swift && iconutil -c icns macos/build/AppIcon.iconset -o macos/AppIcon.icns
+// Writes macos/build/AppIcon.iconset, linux/icons/<size>.png and the dashboard's icon.png.
 import AppKit
 
-func draw(size: CGFloat) -> NSBitmapImageRep {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size), pixelsHigh: Int(size),
+let teal = NSColor(srgbRed: 0x17 / 255, green: 0x70 / 255, blue: 0x6A / 255, alpha: 1)
+let amber = NSColor(srgbRed: 0xF2 / 255, green: 0xA3 / 255, blue: 0x3A / 255, alpha: 1)
+let deepTeal = NSColor(srgbRed: 0x0E / 255, green: 0x3B / 255, blue: 0x38 / 255, alpha: 1)
+
+/// The mark in its own units, y down: 128 across, or 32 for the favicon cut.
+func drawMark(small: Bool) {
+    if small {
+        teal.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: 32, height: 32), xRadius: 7, yRadius: 7).fill()
+        let bubble = NSBezierPath(roundedRect: NSRect(x: 3, y: 6, width: 26, height: 18), xRadius: 7, yRadius: 7)
+        bubble.move(to: NSPoint(x: 9, y: 23))
+        bubble.line(to: NSPoint(x: 14, y: 23.9))
+        bubble.line(to: NSPoint(x: 9, y: 28))
+        bubble.close()
+        amber.setFill()
+        bubble.fill()
+        deepTeal.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 7.2, y: 12.7, width: 5.6, height: 5.6)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 13.2, y: 12.7, width: 5.6, height: 5.6)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 20, y: 8.8, width: 4, height: 4)).fill()
+        NSBezierPath(roundedRect: NSRect(x: 20, y: 13.6, width: 4, height: 6.4), xRadius: 2, yRadius: 2).fill()
+    } else {
+        teal.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: 128, height: 128), xRadius: 28, yRadius: 28).fill()
+        let bubble = NSBezierPath(roundedRect: NSRect(x: 18, y: 30, width: 92, height: 60), xRadius: 26, yRadius: 26)
+        bubble.move(to: NSPoint(x: 43.76, y: 89))
+        bubble.line(to: NSPoint(x: 57.76, y: 89))
+        bubble.line(to: NSPoint(x: 43.76, y: 102))
+        bubble.close()
+        amber.setFill()
+        bubble.fill()
+        deepTeal.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 34, y: 54, width: 16, height: 16)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 56, y: 54, width: 16, height: 16)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 80, y: 42, width: 12, height: 12)).fill()
+        NSBezierPath(roundedRect: NSRect(x: 80, y: 58, width: 12, height: 18), xRadius: 6, yRadius: 6).fill()
+    }
+}
+
+/// One square PNG, `pixels` across. `inset`: the tile sits inside Apple's icon grid (824
+/// of 1024, so it lines up with other apps in the Dock); otherwise it fills the square.
+func render(pixels: Int, inset: Bool) -> Data {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
                                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    let s = size / 1024
-    // Squircle, inset like Apple's template (824 of 1024).
-    let tile = NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
-    let body = NSBezierPath(roundedRect: tile, xRadius: 185 * s, yRadius: 185 * s)
-    NSGraphicsContext.current?.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-    shadow.shadowOffset = NSSize(width: 0, height: -10 * s)
-    shadow.shadowBlurRadius = 20 * s
-    shadow.set()
-    NSColor(red: 0.16, green: 0.22, blue: 0.62, alpha: 1).setFill()
-    body.fill()
-    NSGraphicsContext.current?.restoreGraphicsState()
-    NSGradient(starting: NSColor(red: 0.33, green: 0.45, blue: 0.95, alpha: 1),
-               ending: NSColor(red: 0.13, green: 0.17, blue: 0.52, alpha: 1))!.draw(in: body, angle: -90)
-
-    // Speech bubble.
-    let bubble = NSBezierPath(roundedRect: NSRect(x: 230 * s, y: 330 * s, width: 564 * s, height: 420 * s),
-                              xRadius: 150 * s, yRadius: 150 * s)
-    let tail = NSBezierPath()
-    tail.move(to: NSPoint(x: 330 * s, y: 380 * s))
-    tail.line(to: NSPoint(x: 280 * s, y: 250 * s))
-    tail.line(to: NSPoint(x: 450 * s, y: 340 * s))
-    tail.close()
-    bubble.append(tail)
-    NSColor.white.setFill()
-    bubble.fill()
-
-    // Magnifier inside it.
-    let blue = NSColor(red: 0.20, green: 0.30, blue: 0.78, alpha: 1)
-    blue.setStroke()
-    let lens = NSBezierPath(ovalIn: NSRect(x: 395 * s, y: 450 * s, width: 190 * s, height: 190 * s))
-    lens.lineWidth = 44 * s
-    lens.stroke()
-    let handle = NSBezierPath()
-    handle.move(to: NSPoint(x: 568 * s, y: 468 * s))
-    handle.line(to: NSPoint(x: 648 * s, y: 388 * s))
-    handle.lineWidth = 56 * s
-    handle.lineCapStyle = .round
-    handle.stroke()
+    let context = NSGraphicsContext(bitmapImageRep: rep)!
+    NSGraphicsContext.current = context
+    context.imageInterpolation = .high
+    let size = CGFloat(pixels)
+    let tile = inset ? size * 824 / 1024 : size
+    let origin = inset ? size * 100 / 1024 : 0
+    let small = tile <= 32
+    let units: CGFloat = small ? 32 : 128
+    // Flip to y down, then scale the mark's units onto the tile.
+    let t = NSAffineTransform()
+    t.translateX(by: origin, yBy: size - origin)
+    t.scaleX(by: tile / units, yBy: -tile / units)
+    t.concat()
+    drawMark(small: small)
     NSGraphicsContext.restoreGraphicsState()
-    return rep
+    return rep.representation(using: .png, properties: [:])!
 }
 
-let dir = URL(fileURLWithPath: "AppIcon.iconset")
-try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+let fm = FileManager.default
+let iconset = URL(fileURLWithPath: "macos/build/AppIcon.iconset")
+try? fm.removeItem(at: iconset)
+try! fm.createDirectory(at: iconset, withIntermediateDirectories: true)
 for base in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
         let name = scale == 1 ? "icon_\(base)x\(base).png" : "icon_\(base)x\(base)@2x.png"
-        let data = draw(size: CGFloat(base * scale)).representation(using: .png, properties: [:])!
-        try! data.write(to: dir.appendingPathComponent(name))
+        try! render(pixels: base * scale, inset: true).write(to: iconset.appendingPathComponent(name))
     }
 }
+for size in [16, 32, 48, 64, 128, 256, 512] {
+    try! render(pixels: size, inset: false).write(to: URL(fileURLWithPath: "linux/icons/\(size).png"))
+}
+try! render(pixels: 64, inset: false).write(to: URL(fileURLWithPath: "src/memoreei/admin/static/icon.png"))

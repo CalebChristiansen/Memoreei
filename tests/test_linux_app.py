@@ -207,7 +207,7 @@ def test_open_when_another_user_holds_the_port(desktop, monkeypatch):
     assert result.exit_code == 75 and not opened
     (title, text), = told
     assert title == "Port 3679 is taken"
-    assert "another Memoreei, belonging to hans" in text and "MEMOREEI_PORT=3680" in text
+    assert "Another Memoreei, belonging to hans is using it" in text and "MEMOREEI_PORT=3680" in text
 
 
 def test_open_says_why_the_service_didnt_start(desktop, monkeypatch):

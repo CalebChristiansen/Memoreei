@@ -3,8 +3,8 @@
 #   dmgbuild -s macos/dmg-settings.py -D app=… -D background=… -D icon=… Memoreei out.dmg
 #
 # hdiutil can't lay a window out: that's a .DS_Store, which only Finder writes. dmgbuild
-# writes one itself, so this runs without a screen (CI). The layout and background are
-# create-dmg's, captioned by make-dmg-background.swift (see dmg-background/LICENSE).
+# writes one itself, so this runs without a screen (CI). The background, arrow and
+# caption are make-dmg-background.swift's, drawn around these icon positions.
 import os.path
 
 app = defines["app"]  # noqa: F821 (dmgbuild provides `defines`)

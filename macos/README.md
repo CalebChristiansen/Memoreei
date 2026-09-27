@@ -7,13 +7,17 @@ its own Python and every dependency inside the bundle. Users never see a Termina
 macos/build.sh x86_64|arm64 [--dmg]      # on a Mac with Xcode's tools and uv
 macos/smoke-test.sh macos/build/arm64/Memoreei.app
 macos/lock.sh [--check]                  # re-pin, or prove the pins still fit
-swift macos/make-icon.swift && iconutil -c icns AppIcon.iconset -o macos/AppIcon.icns
+swift macos/make-icon.swift && iconutil -c icns macos/build/AppIcon.iconset -o macos/AppIcon.icns
 swift macos/make-dmg-background.swift && tiffutil -cathidpicheck \
   macos/build/dmg-bg.png macos/build/dmg-bg@2x.png -out macos/dmg-background.tiff
 ```
 
+`make-icon.swift` draws the mark (`assets/icon.svg`) at every size: the `.icns`, the Linux
+icons and the dashboard's PNG, so they can't drift apart. The menu-bar icon is drawn in
+`Memoreei/Brand.swift`, since macOS 12 can't load an SVG.
+
 The DMG window (app, arrow, Applications, a line saying what to do) is laid out by
-`dmgbuild` from `dmg-settings.py`, on create-dmg's background (`dmg-background/`).
+`dmgbuild` from `dmg-settings.py`, on the background `make-dmg-background.swift` draws.
 
 CI (`.github/workflows/macos.yml`) builds both DMGs on every tag and attaches them to
 the GitHub Release; run it by hand for test builds. Only arm64 is smoke-tested there.

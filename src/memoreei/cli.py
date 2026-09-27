@@ -794,14 +794,43 @@ def _tell(title: str, text: str) -> None:
     typer.echo(f"memoreei: {title}. {text}", err=True)
     if not _has_display():
         return
+    from xml.sax.saxutils import escape
+
     for cmd in (
-        ["zenity", "--warning", "--title", "Memoreei", "--no-wrap", "--text", f"<b>{title}</b>\n\n{text}"],
+        ["zenity", "--warning", "--title", "Memoreei", *_zenity_icon(), "--no-wrap",
+         "--text", f"<b>{escape(title)}</b>\n\n{escape(text)}"],
         ["kdialog", "--title", "Memoreei", "--sorry", f"{title}\n\n{text}"],
         ["notify-send", "-i", "cafe.caleb.Memoreei", title, text],
     ):
         if shutil.which(cmd[0]):
             subprocess.run(cmd, capture_output=True)
             return
+
+
+def _zenity_icon() -> list[str]:
+    """The app's icon in a zenity dialog: --icon from zenity 4, --icon-name before it.
+    A flag it doesn't know stops zenity showing anything, so ask which it is first."""
+    import subprocess
+
+    try:
+        version = subprocess.run(["zenity", "--version"], capture_output=True, text=True, timeout=5).stdout
+        major = int(version.strip().split(".")[0])
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+    return ["--icon=cafe.caleb.Memoreei" if major >= 4 else "--icon-name=cafe.caleb.Memoreei"]
+
+
+def _log_says_why(tail: str) -> str:
+    """The launcher's "couldn't start" dialog: where to look, and what's there already."""
+    text = "The log says why. In a terminal: memoreei service logs"
+    return f"{text}\n\nIts log ends:\n\n{tail.strip()}" if tail.strip() else text
+
+
+def _tilde(path) -> str:
+    import os
+
+    home, path = os.path.expanduser("~"), str(path)
+    return "~" + path[len(home):] if path.startswith(home + os.sep) else path
 
 
 def _browser_env() -> dict[str, str]:
@@ -851,21 +880,20 @@ def open_dashboard(
         result = sd.systemctl("start", sd.UNIT) if chosen.exists() else sd.start()
         chosen.touch()
         if result.returncode != 0:
-            _tell("Memoreei couldn't start", result.stderr.strip() or "See: memoreei service logs")
+            _tell("Memoreei couldn't start", _log_says_why(result.stderr.strip()))
             raise typer.Exit(1)
         if not sd.wait_until_listening(port, wait):
-            log = sd.journal(8)
-            _tell("Memoreei couldn't start", f"Its log ends:\n\n{log}" if log else
-                  "See: memoreei service logs")
+            _tell("Memoreei couldn't start", _log_says_why(sd.journal(8)))
             raise typer.Exit(1)
         owner = os.getuid()
 
     if owner is not None and owner != os.getuid():
+        holder = _port.describe_holder(port)
         _tell(
             f"Port {port} is taken",
-            f"Memoreei's port is in use by {_port.describe_holder(port)}. Two people on "
-            f"one computer each need their own: add a line such as MEMOREEI_PORT={port + 1} "
-            f"to {config_env_path()}, then open Memoreei again.",
+            f"{holder[:1].upper()}{holder[1:]} is using it. Give yours its own port by adding "
+            f"this line, then open Memoreei again:\n\nMEMOREEI_PORT={port + 1}\n\n"
+            f"to {_tilde(config_env_path())}",
         )
         raise typer.Exit(75)
     if not _port.is_memoreei(port):

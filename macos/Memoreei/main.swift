@@ -10,12 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var openWhenReady = false
 
     private let statusLine = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
-    private let accessItem = NSMenuItem(title: "Set Up Full Disk Access…", action: #selector(showOnboarding), keyEquivalent: "")
-    private let openItem = NSMenuItem(title: "Open Memoreei…", action: #selector(openDashboard), keyEquivalent: "o")
+    private let accessNote = NSMenuItem(title: "Can't read Messages yet", action: nil, keyEquivalent: "")
+    private let accessItem = NSMenuItem(title: "Allow Access to Messages…", action: #selector(showOnboarding), keyEquivalent: "")
+    private let openItem = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard), keyEquivalent: "o")
     private let retryItem = NSMenuItem(title: "Start Server", action: #selector(retry), keyEquivalent: "")
     private let loginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleLogin), keyEquivalent: "")
     private let logItem = NSMenuItem(title: "Show Log", action: #selector(showLog), keyEquivalent: "")
-    private let updateItem = NSMenuItem(title: "Update Available…", action: #selector(openUpdate), keyEquivalent: "")
+    private let updateItem = NSMenuItem(title: "Update…", action: #selector(openUpdate), keyEquivalent: "")
     private let aboutItem = NSMenuItem(title: "About Memoreei", action: #selector(about), keyEquivalent: "")
     private let quitItem = NSMenuItem(title: "Quit Memoreei", action: #selector(quit), keyEquivalent: "q")
 
@@ -25,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         buildMenu()
         server.onChange = { [weak self] _ in self?.serverChanged() }
+        server.onAskedToQuit = {
+            Log.app("quit from the dashboard")
+            exit(0)  // a clean exit: launchd leaves it quit
+        }
         updates.onChange = { [weak self] in self?.refreshMenu() }
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(otherCopyAskedToShow), name: Signals.show, object: nil,
@@ -54,9 +59,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // app from until it's moved: Start at Login would point at a path that goes away.
         if !LaunchAgent.launchedByLaunchd && Paths.bundleIsReadOnly {
             Log.app("running from a read-only volume (\(Bundle.main.bundlePath)); asking to be moved")
-            alert("Move Memoreei to Applications first",
-                  "Memoreei is running from the disk image, or from a temporary copy macOS " +
-                  "made of it. Drag it into the Applications folder and open it from there.")
+            NSApp.activate(ignoringOtherApps: true)
+            let a = NSAlert()
+            a.messageText = "Move Memoreei to Applications"
+            a.informativeText = "It can\u{2019}t run from the disk image. Drag it into Applications, " +
+                "then open it from there."
+            a.addButton(withTitle: "Show in Finder")
+            a.addButton(withTitle: "Quit")
+            if a.runModal() == .alertFirstButtonReturn {
+                // Side by side: this copy (in the disk image's window) and where it goes.
+                NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications"))
+            }
             exit(0)
         }
         if LaunchAgent.launchedByLaunchd {
@@ -91,24 +105,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            if let image = NSImage(systemSymbolName: "brain", accessibilityDescription: "Memoreei") {
-                image.isTemplate = true
-                button.image = image
-            } else {
-                button.title = "M"
-            }
-            button.toolTip = "Memoreei"
-        }
+        statusItem.button?.toolTip = "Memoreei"
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
         statusLine.isEnabled = false
+        accessNote.isEnabled = false
+        accessNote.indentationLevel = 1
+        accessNote.attributedTitle = NSAttributedString(string: accessNote.title, attributes: [
+            .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        accessItem.image = Brand.dot(Brand.amber)
+        updateItem.image = Brand.dot(Brand.amber)
         for item in [accessItem, openItem, retryItem, loginItem, logItem, updateItem, aboutItem, quitItem] {
             item.target = self
         }
-        for item in [statusLine, accessItem, openItem, retryItem, .separator(), loginItem, logItem,
-                     updateItem, .separator(), aboutItem, quitItem] {
+        for item in [statusLine, accessNote, retryItem, .separator(), accessItem, openItem, updateItem,
+                     .separator(), loginItem, logItem, .separator(), aboutItem, quitItem] {
             menu.addItem(item)
         }
         statusItem.menu = menu
@@ -121,20 +135,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch server.state {
         case .starting: statusLine.title = "Starting…"
         case .running: statusLine.title = "Running on port \(server.port)"
-        case .portInUse(let holder): statusLine.title = "Port \(server.port) is in use by \(holder)"
+        case .portInUse: statusLine.title = "Port \(server.port) is taken"
         case .stopped(let reason): statusLine.title = reason
         }
+        statusLine.image = Brand.dot(server.state == .running ? Brand.teal : NSColor.tertiaryLabelColor)
         openItem.isEnabled = server.state == .running
         retryItem.isHidden = server.state == .running || server.state == .starting
-        accessItem.isHidden = DiskAccess.check() != .missing
+        let needsAccess = DiskAccess.check() == .missing
+        accessItem.isHidden = !needsAccess
+        accessNote.isHidden = !needsAccess
         loginItem.state = LaunchAgent.isInstalled ? .on : .off
         if let release = updates.available {
-            updateItem.title = "Update Available: \(release.version)…"
+            updateItem.title = "Update to \(release.version)…"
             updateItem.isHidden = false
         } else {
             updateItem.isHidden = true
         }
-        aboutItem.title = "About Memoreei \(AppInfo.version)"
+        statusItem.button?.image = Brand.menuBarImage(attention: needsAccess)
     }
 
     private func serverChanged() {
@@ -146,10 +163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 openDashboard()
             }
         case .portInUse(let holder):
-            alert("Memoreei can't start",
-                  "Port \(server.port) is already in use by \(holder). Memoreei won't start its " +
-                  "server while something else holds it. Quit that program (or stop its service), " +
-                  "then choose Start Server from the Memoreei menu.")
+            alert("Port \(server.port) is taken",
+                  "\(holder.prefix(1).uppercased() + holder.dropFirst()) is using it. " +
+                  "Quit that, then choose Start Server in the Memoreei menu.")
         default:
             break
         }
@@ -255,8 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = "Quit Memoreei?"
-        a.informativeText = "Apps that search your memories through Memoreei lose access until " +
-            "you open it again" + (LaunchAgent.isInstalled ? ", or until you next log in." : ".")
+        a.informativeText = "Apps searching your memories lose access until you open it again."
         a.addButton(withTitle: "Quit")
         a.addButton(withTitle: "Cancel")
         guard a.runModal() == .alertFirstButtonReturn else { return }

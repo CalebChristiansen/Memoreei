@@ -114,6 +114,9 @@ enum Signals {
     static let show = Notification.Name("\(Paths.bundleID).show")
     /// One-shot: the next copy to start opens the dashboard once the server is up.
     static let openOnStart = Paths.state.appendingPathComponent("open-dashboard")
+    /// One-shot, written by the server (service/_app.py): its exit was the dashboard's
+    /// Stop, so the app quits instead of restarting it.
+    static let quitRequested = Paths.state.appendingPathComponent("quit-requested")
 
     static func postShow() {
         DistributedNotificationCenter.default().postNotificationName(

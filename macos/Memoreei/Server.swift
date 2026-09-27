@@ -13,6 +13,8 @@ final class Server {
     }
 
     var onChange: ((State) -> Void)?
+    /// The dashboard's Stop: the server left because it was asked to, and the app goes too.
+    var onAskedToQuit: (() -> Void)?
     private(set) var state: State = .stopped(reason: "Not started") {
         didSet { if state != oldValue { DispatchQueue.main.async { self.onChange?(self.state) } } }
     }
@@ -39,6 +41,8 @@ final class Server {
         env["FASTEMBED_CACHE_PATH"] = Paths.models.path
         env["HF_HUB_OFFLINE"] = "1"
         env["MEMOREEI_APP"] = "1"
+        // So the dashboard's Start at Login switch writes the agent this app would.
+        env["MEMOREEI_APP_EXECUTABLE"] = Bundle.main.executablePath
         env["MEMOREEI_HOME"] = Paths.home.path
         env["MEMOREEI_PARENT_PID"] = String(getpid())
         return env
@@ -62,6 +66,7 @@ final class Server {
         }
         state = .starting
         Log.rotateIfLarge()
+        try? FileManager.default.removeItem(at: Signals.quitRequested)  // a stale request
 
         let p = Process()
         p.executableURL = Paths.serverExecutable
@@ -111,6 +116,12 @@ final class Server {
         readyTimer?.invalidate()
         process = nil
         if stopping { return }
+        if FileManager.default.fileExists(atPath: Signals.quitRequested.path) {
+            try? FileManager.default.removeItem(at: Signals.quitRequested)
+            state = .stopped(reason: "Stopped")
+            onAskedToQuit?()
+            return
+        }
         let code = proc.terminationStatus
         Log.app("server exited unexpectedly (status \(code))")
         restarts += 1
