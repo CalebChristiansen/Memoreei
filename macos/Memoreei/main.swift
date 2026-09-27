@@ -50,6 +50,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// a hand-opened copy with Start at Login on hands over to launchd's copy, so the
     /// running server is always the one launchd restarts after a crash.
     private func claimInstance() -> Bool {
+        // Straight off the disk image, or from the read-only copy macOS runs a downloaded
+        // app from until it's moved: Start at Login would point at a path that goes away.
+        if !LaunchAgent.launchedByLaunchd && Paths.bundleIsReadOnly {
+            Log.app("running from a read-only volume (\(Bundle.main.bundlePath)); asking to be moved")
+            alert("Move Memoreei to Applications first",
+                  "Memoreei is running from the disk image, or from a temporary copy macOS " +
+                  "made of it. Drag it into the Applications folder and open it from there.")
+            exit(0)
+        }
         if LaunchAgent.launchedByLaunchd {
             if InstanceLock.acquire(waiting: 15) { return true }
             Log.app("another copy is running; launchd's copy is leaving")
@@ -60,6 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             exit(0)
         }
         if LaunchAgent.isInstalled {
+            // The agent starts another copy (this one was moved, or is a newer one kept
+            // somewhere else): the copy that was opened is the one that runs from now on.
+            if !LaunchAgent.startsThisCopy {
+                do {
+                    try LaunchAgent.repoint()
+                    Log.app("Start at Login now starts \(Bundle.main.bundlePath)")
+                } catch {
+                    Log.app("couldn't point Start at Login here (\(error)); running without it")
+                    return true
+                }
+            }
             FileManager.default.createFile(atPath: Signals.openOnStart.path, contents: nil)
             LaunchAgent.handOver()
             exit(0)

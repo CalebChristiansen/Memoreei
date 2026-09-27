@@ -32,6 +32,11 @@ enum Paths {
     static let launchAgent = library.appendingPathComponent("LaunchAgents/\(bundleID).plist")
     static let messagesDB = library.appendingPathComponent("Messages/chat.db")
 
+    /// On a read-only volume: a mounted disk image, or App Translocation's copy.
+    static var bundleIsReadOnly: Bool {
+        (try? Bundle.main.bundleURL.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly ?? false
+    }
+
     /// Created before anything else runs; mode 700, like the CLI's ensure_home().
     static func ensureDirectories() {
         for dir in [home, logs, state] where !fileManager.fileExists(atPath: dir.path) {

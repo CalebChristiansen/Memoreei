@@ -171,3 +171,15 @@ def test_serve_reports_missing_access_at_startup(monkeypatch, tmp_path):
     assert result.exit_code == 0, result.output
     assert fda.ACCESS_MISSING in result.output
     assert "memoreei service grant-access" in result.output
+
+
+def test_serve_points_the_app_user_at_the_app(monkeypatch, tmp_path):
+    monkeypatch.setenv("IMESSAGE_DB_PATH", str(tmp_path / "no-access" / "chat.db"))
+    monkeypatch.setenv("MEMOREEI_APP", "1")
+    runner.invoke(app, ["key", "create", "laptop"])
+    with patch.object(sys, "platform", "darwin"), patch("uvicorn.run"):
+        result = runner.invoke(app, ["serve", "--http"])
+    assert result.exit_code == 0, result.output
+    assert fda.ACCESS_MISSING in result.output
+    assert "switch Memoreei on" in result.output
+    assert "grant-access" not in result.output

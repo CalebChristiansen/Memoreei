@@ -12,7 +12,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for macOS 12 or newer, as `Memoreei-arm64.dmg` and `Memoreei-x86_64.dmg` on each
   GitHub release. It walks you through Full Disk Access (granted to Memoreei, not to a
   Python interpreter), starts at login, restarts the server if it crashes, and says when
-  an update is out. Unsigned for now: open it the first time with *Open Anyway*.
+  an update is out. Unsigned for now: open it the first time with *Open Anyway*. Run it
+  from Applications (it asks to be moved there if opened from the disk image); if you
+  move it, the copy you open is the one that starts at login.
 - **A web dashboard at `/admin`**: status, sources, and client keys (create, show once
   with client setup, revoke), with *Sync now*. It answers only on the machine the server
   runs on, unless `MEMOREEI_ADMIN_REMOTE=true` (the Docker image sets it), and only

@@ -134,7 +134,7 @@ def serve(
         else:
             typer.echo(
                 f"{fda.ACCESS_MISSING}. iMessage sync will fail until it's granted: "
-                "memoreei service grant-access",
+                f"{fda.how_to_grant()}",
                 err=True,
             )
 

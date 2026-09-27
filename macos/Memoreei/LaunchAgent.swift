@@ -35,6 +35,32 @@ enum LaunchAgent {
         try data.write(to: Paths.launchAgent, options: .atomic)
     }
 
+    /// The executable the installed agent starts, or nil if there's no agent.
+    static var installedProgram: String? {
+        guard let data = try? Data(contentsOf: Paths.launchAgent),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let args = plist["ProgramArguments"] as? [String] else { return nil }
+        return args.first
+    }
+
+    /// Whether the agent starts this copy of the app, rather than one somewhere else.
+    static var startsThisCopy: Bool {
+        guard let program = installedProgram else { return false }
+        return URL(fileURLWithPath: program).resolvingSymlinksInPath().path
+            == URL(fileURLWithPath: Bundle.main.executablePath!).resolvingSymlinksInPath().path
+    }
+
+    /// Point the agent at this copy, keeping the rest of it (a custom home, say).
+    static func repoint() throws {
+        let data = try Data(contentsOf: Paths.launchAgent)
+        guard var plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            throw CocoaError(.propertyListReadCorrupt)
+        }
+        plist["ProgramArguments"] = [Bundle.main.executablePath!]
+        let out = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try out.write(to: Paths.launchAgent, options: .atomic)
+    }
+
     /// Off: remove the file, so nothing starts at the next login. The job stays loaded
     /// until then; unloading it now would stop this very app if launchd started it.
     static func remove() {
@@ -43,9 +69,13 @@ enum LaunchAgent {
 
     /// Hand this app over to launchd: ask it to start the agent's copy, which waits for
     /// this one to exit (see InstanceLock) before starting the server. The caller exits.
+    /// The job is unloaded first: launchd keeps the file it loaded, not the one on disk,
+    /// so a rewritten agent (repoint) only counts once it's loaded again. Nothing of the
+    /// job is running to be stopped by that: the caller holds the instance lock.
     static func handOver() {
         let script = """
             sleep 0.5
+            /bin/launchctl bootout \(domain)/\(Paths.bundleID) 2>/dev/null
             /bin/launchctl bootstrap \(domain) '\(Paths.launchAgent.path)' 2>/dev/null
             /bin/launchctl kickstart \(domain)/\(Paths.bundleID)
             """

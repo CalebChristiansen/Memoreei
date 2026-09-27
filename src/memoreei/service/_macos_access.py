@@ -9,6 +9,7 @@ The file to add isn't obvious: it's the real interpreter behind the virtualenv's
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 import subprocess
 import sys
@@ -20,6 +21,20 @@ FULL_DISK_ACCESS_PANE = "x-apple.systempreferences:com.apple.preference.security
 # Written to the service log at startup, so grant-access can tell whether it worked.
 ACCESS_OK = "memoreei: Full Disk Access: ok"
 ACCESS_MISSING = "memoreei: Full Disk Access: missing"
+
+
+def how_to_grant() -> str:
+    """Where to go to grant access: the app's own window, or the CLI walk-through.
+
+    Under Memoreei.app the grant belongs to the app, and the pip advice would point a
+    Terminal-free user at a command that grants the wrong program.
+    """
+    if os.environ.get("MEMOREEI_APP"):
+        return (
+            "switch Memoreei on in System Settings → Privacy & Security → "
+            "Full Disk Access (the app's setup window takes you there)"
+        )
+    return "run 'memoreei service grant-access'"
 
 
 def binary_needing_access(executable: str | None = None) -> Path:

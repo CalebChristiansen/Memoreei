@@ -106,10 +106,11 @@ class IMessageConnector:
         try:
             conn = self._open_chat_db()
         except sqlite3.OperationalError as exc:
+            from memoreei.service._macos_access import how_to_grant
+
             raise RuntimeError(
                 f"Cannot open iMessage database at {self.db_path}: {exc}. "
-                "This process needs Full Disk Access. Run 'memoreei service grant-access' "
-                "to open System Settings with the file to add already shown in Finder."
+                f"This process needs Full Disk Access: {how_to_grant()}."
             ) from exc
 
         try:
