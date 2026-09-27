@@ -149,7 +149,7 @@ jar=$(mktemp)
 curl -s --noproxy '*' -c "$jar" -o /dev/null "$link"
 code=$(curl -s --noproxy '*' -b "$jar" -o "$jar.html" -w '%{http_code}' "http://localhost:$PORT/admin/")
 [ "$code" = 200 ] || fail "signed-in dashboard: $code"
-grep -q 'Memories' "$jar.html" || fail "dashboard has no status"
+grep -q 'Running on port' "$jar.html" || fail "dashboard has no status"
 rm -f "$jar" "$jar.html"
 
 step "nothing wrote into the package's files"
