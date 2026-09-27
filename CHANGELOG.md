@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- The dashboard's home page walks a new install through setup: add a source, then add
+  a client, each a button, gone once both are done.
+- The DMG opens on the familiar window: Memoreei, an arrow, the Applications folder,
+  and a line saying to drag one onto the other. The layout is `dmgbuild`'s, on
+  create-dmg's background.
+
+### Changed
+- Saving a source in the dashboard starts its first sync at once and returns to the
+  status page, instead of waiting for the next automatic round.
+
 ## [0.3.0rc4] - 2026-09-26
 
 ### Fixed

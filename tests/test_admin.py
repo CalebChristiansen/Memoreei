@@ -318,6 +318,47 @@ def test_setting_up_imessage_writes_config_and_turns_on_auto_sync(server, monkey
     assert "set up" in client.get("/admin/sources").text
 
 
+def test_saving_a_source_starts_a_sync_and_shows_the_status_page(server, monkeypatch):
+    from memoreei.admin import app as admin_app
+
+    started = []
+
+    async def fake_start() -> None:
+        started.append(True)
+
+    monkeypatch.setattr(admin_app, "_start_sync", fake_start)
+    r = signed_in(server).post(
+        "/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"},
+        headers=ORIGIN, follow_redirects=False,
+    )
+    assert r.status_code == 303 and r.headers["location"] == "/admin/"
+    assert started == [True]
+
+
+def test_status_page_walks_a_new_install_through_setup(server, monkeypatch):
+    monkeypatch.delenv("IMESSAGE_DB_PATH", raising=False)
+    client = signed_in(server)
+    client.post("/admin/keys/laptop/revoke", headers=ORIGIN)  # the fixture's key
+    text = client.get("/admin/").text
+    assert "Get started" in text
+    assert 'href="/admin/sources">Add a source' in text
+    assert 'href="/admin/keys">Add a client' in text
+
+
+def test_setup_steps_disappear_once_a_source_and_a_client_exist(server, monkeypatch):
+    from memoreei.admin import app as admin_app
+
+    async def no_sync() -> None:
+        pass
+
+    monkeypatch.setattr(admin_app, "_start_sync", no_sync)
+    client = signed_in(server)
+    text = client.get("/admin/").text
+    assert "Get started" in text and "✓ Done" in text  # the fixture's key: step 2 done
+    client.post("/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"}, headers=ORIGIN)
+    assert "Get started" not in client.get("/admin/").text
+
+
 def test_removing_a_connector_clears_its_settings(server, monkeypatch):
     monkeypatch.delenv("IMESSAGE_DB_PATH", raising=False)
     client = signed_in(server)

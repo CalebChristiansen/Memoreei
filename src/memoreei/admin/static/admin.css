@@ -49,3 +49,9 @@ button.link { background: none; border: none; color: var(--muted); padding: 0; }
 .ok { color: var(--ok); font-weight: 600; }
 .bad { color: var(--bad); font-weight: 600; }
 .busy { color: var(--busy); font-weight: 600; }
+.setup h2 { font-size: 1.1rem; margin: 0 0 .6rem; }
+.steps { margin: 0; padding-left: 1.4rem; }
+.steps li { padding: .6rem 0; border-bottom: 1px solid var(--line); }
+.steps li:last-child { border-bottom: none; }
+.steps li > div { margin-bottom: .45rem; }
+.steps li.done > div { color: var(--muted); }

@@ -1,5 +1,21 @@
 {% extends "base.html" %}
 {% block main %}
 <h1>Status</h1>
+{% if not has_source or not keys %}
+<section class="card setup">
+  <h2>Get started</h2>
+  <ol class="steps">
+    <li{% if has_source %} class="done"{% endif %}>
+      <div><b>Add a source.</b> Choose what Memoreei reads, like your iMessages.</div>
+      {% if has_source %}<span class="ok">✓ Done</span>{% else %}<a class="button" href="/admin/sources">Add a source</a>{% endif %}
+    </li>
+    <li{% if keys %} class="done"{% endif %}>
+      <div><b>Add a client.</b> Make a key for each app or computer that will search your
+        memories, such as Claude Code on another machine.</div>
+      {% if keys %}<span class="ok">✓ Done</span>{% else %}<a class="button" href="/admin/keys">Add a client</a>{% endif %}
+    </li>
+  </ol>
+</section>
+{% endif %}
 {% include "_status_card.html" %}
 {% endblock %}

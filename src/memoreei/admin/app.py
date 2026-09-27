@@ -189,6 +189,8 @@ async def _status_context() -> dict[str, Any]:
         "running": _sync_manager.running,
         "last_run": _sync_manager.last_run,
         "keys": len(await db.list_api_keys()),
+        # As the Sources page counts it, so the two never disagree.
+        "has_source": any(r["configured"] for r in _rows()) or bool(sources),
     }
 
 
@@ -235,14 +237,19 @@ async def status_fragment(request: Request) -> Response:
     return _page(request, "_status_card.html", **await _status_context())
 
 
-async def sync_now(request: Request) -> Response:
+async def _start_sync() -> None:
+    """Sync everything in the background, unless a sync is already running."""
     from memoreei.server import _get_tools, _sync_manager
 
     if not _sync_manager.running:
         task = asyncio.create_task(_sync_manager.sync_everything(await _get_tools()))
         _background.add(task)
         task.add_done_callback(_background.discard)
-        await asyncio.sleep(0)  # let it take the lock, so the fragment says "Syncing"
+        await asyncio.sleep(0)  # let it take the lock, so the page says "Syncing"
+
+
+async def sync_now(request: Request) -> Response:
+    await _start_sync()
     return await status_fragment(request)
 
 
@@ -349,7 +356,9 @@ async def source_save(request: Request) -> Response:
     path = config_env_path()
     write_env_updates(path, read_env_lines(path), updates)
     reload_config()
-    return RedirectResponse("/admin/sources", status_code=303)
+    # Read it now rather than at the next round, and show that happening.
+    await _start_sync()
+    return RedirectResponse("/admin/", status_code=303)
 
 
 async def source_remove(request: Request) -> Response:
