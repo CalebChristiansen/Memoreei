@@ -14,8 +14,9 @@ reads, so it has three locks:
    cookie it's swapped for lasts a month. Only hashes are stored, as for API keys.
 3. **Same-origin writes.** Every POST must carry an ``Origin`` matching the ``Host`` it
    was sent to, so another site can't submit the dashboard's forms in the background.
-   A browser that leaves ``Origin`` off a same-origin form post is still let through
-   if it says ``Sec-Fetch-Site: same-origin``, a header pages can't set themselves.
+   A browser that leaves ``Origin`` off a same-origin form post, or sends ``null``
+   (which a ``no-referrer`` policy makes it do), is still let through if it says
+   ``Sec-Fetch-Site: same-origin``, a header pages can't set themselves.
 """
 from __future__ import annotations
 
@@ -65,10 +66,8 @@ def same_origin(
     origin: str | None, host_header: str, scheme: str, fetch_site: str | None = None
 ) -> bool:
     """Whether a browser's write request comes from the dashboard's own pages."""
-    if origin is None:
+    if origin is None or origin == "null":
         return fetch_site == "same-origin"
-    if origin == "null":
-        return False
     return origin.rstrip("/").lower() == f"{scheme}://{host_header}".lower()
 
 

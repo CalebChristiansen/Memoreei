@@ -210,6 +210,28 @@ def test_post_without_origin_but_same_origin_fetch_site_is_allowed(server):
     assert r.status_code == 200
 
 
+def test_null_origin_from_the_dashboard_itself_is_allowed(server):
+    # What Firefox sends for a plain form post under a no-referrer policy.
+    client = signed_in(server)
+    r = client.post("/admin/keys", data={"name": "x"},
+                    headers={"Origin": "null", "Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 200
+
+
+def test_null_origin_from_elsewhere_is_refused(server):
+    client = signed_in(server)
+    r = client.post("/admin/keys", data={"name": "x"},
+                    headers={"Origin": "null", "Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    r = client.post("/admin/keys", data={"name": "x"}, headers={"Origin": "null"})
+    assert r.status_code == 403
+
+
+def test_pages_keep_their_origin_on_form_posts(server):
+    r = signed_in(server).get("/admin/")
+    assert r.headers["referrer-policy"] == "same-origin"
+
+
 def test_cross_site_fetch_site_is_refused(server):
     client = signed_in(server)
     r = client.post("/admin/keys", data={"name": "x"}, headers={"Sec-Fetch-Site": "cross-site"})
@@ -375,3 +397,10 @@ def test_admin_url_prints_a_working_one_time_link(server):
     assert url.startswith("http://localhost:3679/admin/login?token=")
     client = server()
     assert client.get(url.replace("http://localhost:3679", "")).status_code == 200
+
+
+def test_refused_writes_are_logged(server, caplog):
+    client = signed_in(server)
+    with caplog.at_level("WARNING", logger="memoreei.admin"):
+        client.post("/admin/keys", data={"name": "x"}, headers={"Origin": "http://evil.example"})
+    assert "cross-origin" in caplog.text and "evil.example" in caplog.text

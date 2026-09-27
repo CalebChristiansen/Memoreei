@@ -6,6 +6,7 @@ behind AdminGuard (see admin/auth.py for the rules).
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 import time
@@ -42,10 +43,13 @@ SECURITY_HEADERS = {
     "frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
     "x-frame-options": "DENY",
     "x-content-type-options": "nosniff",
-    "referrer-policy": "no-referrer",
+    # Not no-referrer: under it, browsers send "Origin: null" on plain form posts, and
+    # the dashboard's own forms fail the same-origin check.
+    "referrer-policy": "same-origin",
     "cache-control": "no-store",
 }
 
+log = logging.getLogger("memoreei.admin")
 _background: set[asyncio.Task] = set()
 
 
@@ -67,6 +71,8 @@ class AdminGuard:
         client = request.client.host if request.client else None
 
         if not auth.remote_allowed() and not auth.local_request(client, host):
+            log.warning("%s %s from %s refused: not loopback (Host %s)",
+                        request.method, scope.get("path", ""), client, host)
             await _plain(403, "The Memoreei dashboard only answers on the computer it runs on.")(
                 scope, receive, send
             )
@@ -75,6 +81,9 @@ class AdminGuard:
             request.headers.get("origin"), host, request.url.scheme,
             request.headers.get("sec-fetch-site"),
         ):
+            log.warning("%s %s refused: cross-origin (Origin %s, Sec-Fetch-Site %s)",
+                        request.method, scope.get("path", ""), request.headers.get("origin"),
+                        request.headers.get("sec-fetch-site"))
             await _plain(403, "Cross-origin request refused.")(scope, receive, send)
             return
 
