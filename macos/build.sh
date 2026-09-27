@@ -146,13 +146,13 @@ du -sh "$APP" | awk '{print "app: "$1}'
 
 if [ "$MAKE_DMG" = 1 ]; then
   step "DMG"
-  STAGE="$OUT/dmg"
-  mkdir -p "$STAGE"
-  cp -R "$APP" "$STAGE/"
-  ln -s /Applications "$STAGE/Applications"
+  # The familiar window, laid out by dmgbuild (see macos/dmg-settings.py).
   DMG="$OUT/Memoreei-$ARCH.dmg"
-  hdiutil create -quiet -volname Memoreei -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
-  rm -rf "$STAGE"
+  # As a module: uv's command shims call realpath, which macOS 12 doesn't have.
+  "$UV" run -q --no-project --python 3.12 --with dmgbuild==1.6.7 python -m dmgbuild \
+    -s "$ROOT/macos/dmg-settings.py" \
+    -D app="$APP" -D background="$ROOT/macos/dmg-background.tiff" \
+    -D icon="$ROOT/macos/AppIcon.icns" Memoreei "$DMG" >/dev/null
   if [ "$SIGN_IDENTITY" != - ]; then codesign --force --timestamp -s "$SIGN_IDENTITY" "$DMG"; fi
   du -sh "$DMG" | awk '{print "dmg: "$1}'
 fi

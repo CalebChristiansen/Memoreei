@@ -8,7 +8,12 @@ macos/build.sh x86_64|arm64 [--dmg]      # on a Mac with Xcode's tools and uv
 macos/smoke-test.sh macos/build/arm64/Memoreei.app
 macos/lock.sh [--check]                  # re-pin, or prove the pins still fit
 swift macos/make-icon.swift && iconutil -c icns AppIcon.iconset -o macos/AppIcon.icns
+swift macos/make-dmg-background.swift && tiffutil -cathidpicheck \
+  macos/build/dmg-bg.png macos/build/dmg-bg@2x.png -out macos/dmg-background.tiff
 ```
+
+The DMG window (app, arrow, Applications, a line saying what to do) is laid out by
+`dmgbuild` from `dmg-settings.py`, on create-dmg's background (`dmg-background/`).
 
 CI (`.github/workflows/macos.yml`) builds both DMGs on every tag and attaches them to
 the GitHub Release; run it by hand for test builds. Only arm64 is smoke-tested there.
