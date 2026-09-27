@@ -1,0 +1,60 @@
+# The .deb and .rpm, from the tree linux/build.sh assembles. It sets the variables:
+#   ARCH (amd64 or arm64 for the .deb, x86_64 or aarch64 for the .rpm) and SEMVER
+#   (0.4.0, 0.4.0-rc1), which nfpm expands; build.sh fills in @TREE@, the assembled
+#   /opt/memoreei, since nfpm doesn't expand variables in file paths.
+name: memoreei
+arch: ${ARCH}
+platform: linux
+version: ${SEMVER}
+version_schema: semver
+release: "1"
+section: net
+priority: optional
+maintainer: Memoreei <bot@memoreei.dev>
+vendor: Memoreei
+homepage: https://github.com/CalebChristiansen/Memoreei
+license: MIT
+description: |-
+  Personal memory MCP server.
+  Search your messages (Gmail, Discord, Slack, WhatsApp exports and more) from any AI
+  client. Runs as a systemd user service for the person whose messages it reads, with
+  a dashboard at http://localhost:3679/admin/.
+recommends:
+  - xdg-utils
+
+contents:
+  - src: @TREE@
+    dst: /opt/memoreei
+    type: tree
+  - src: /opt/memoreei/bin/memoreei
+    dst: /usr/bin/memoreei
+    type: symlink
+  - src: @TREE@/share/memoreei.service
+    dst: /usr/lib/systemd/user/memoreei.service
+  - src: @TREE@/share/cafe.caleb.Memoreei.desktop
+    dst: /usr/share/applications/cafe.caleb.Memoreei.desktop
+  - src: @TREE@/share/icons/16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/cafe.caleb.Memoreei.png
+  - src: @TREE@/share/icons/512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/cafe.caleb.Memoreei.png
+
+scripts:
+  postinstall: linux/postinst
+  preremove: linux/prerm
+  postremove: linux/postrm
+
+# xz rather than zstd: Debian 11's dpkg and RHEL 8's rpm can't read zstd.
+deb:
+  compression: xz
+rpm:
+  compression: xz

@@ -1,0 +1,90 @@
+name: Linux packages
+
+# Builds the .deb, .rpm and tarball for x86_64 and aarch64, then installs each on the
+# distributions they promise to run on and smoke-tests it there. Called by release.yml
+# on a tag (which attaches the six files to the GitHub Release); run it by hand, or on a
+# pull request that touches the packaging, to get them as workflow artifacts.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "linux/**"
+      - "pyproject.toml"
+      - ".github/workflows/linux.yml"
+
+env:
+  NFPM_VERSION: "2.47.0"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04, nfpm: x86_64 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, nfpm: arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install nfpm
+        run: |
+          curl -sSLf "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_${{ matrix.nfpm }}.tar.gz" \
+            | sudo tar xz -C /usr/local/bin nfpm
+          nfpm --version | tail -1
+
+      - name: Check the lock still satisfies pyproject.toml
+        run: linux/lock.sh --check
+
+      - name: Build
+        run: linux/build.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            linux/build/${{ matrix.arch }}/*.deb
+            linux/build/${{ matrix.arch }}/*.rpm
+            linux/build/${{ matrix.arch }}/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0  # already compressed
+
+  # Install, import, key, serve, search, upgrade, remove: as a throwaway user in a clean
+  # container of each distribution. No systemd in a container, so the unit's ExecStart
+  # runs by itself; linux/smoke-test.sh runs the real user unit where systemd is there.
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+        target:
+          - { image: "ubuntu:20.04", pkg: deb }  # the glibc 2.28+ floor, and systemd 245
+          - { image: "ubuntu:24.04", pkg: deb }
+          - { image: "debian:12", pkg: deb }
+          - { image: "fedora:latest", pkg: rpm }
+          - { image: "rockylinux/rockylinux:8", pkg: rpm }  # RHEL 8: glibc 2.28, rpm 4.14
+          - { image: "ubuntu:20.04", pkg: tar.gz }
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist
+
+      - name: Smoke test on ${{ matrix.target.image }} (.${{ matrix.target.pkg }})
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "${{ matrix.target.image }}" bash -c '
+            set -e
+            if command -v apt-get >/dev/null; then
+              apt-get update -q >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends curl procps ca-certificates >/dev/null
+            else
+              dnf install -y -q procps-ng shadow-utils util-linux findutils >/dev/null
+              command -v curl >/dev/null || dnf install -y -q curl >/dev/null
+            fi
+            linux/smoke-test.sh dist/*.${{ matrix.target.pkg }}'

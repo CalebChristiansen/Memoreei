@@ -38,3 +38,6 @@ usecases/
 # macOS app build output
 macos/build/
 *.iconset/
+
+# Linux package build output
+linux/build/

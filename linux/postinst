@@ -1,0 +1,17 @@
+#!/bin/sh
+# After an install or upgrade: every running systemd user manager learns of the new
+# unit, and any Memoreei one was running restarts on the new build. try-restart leaves
+# stopped and never-enabled ones alone. Lingering managers count: they're running too.
+#
+# runuser rather than `systemctl --user -M user@`, which needs systemd 248 (Ubuntu
+# 20.04 has 245, RHEL 8 has 239).
+for dir in /run/user/*/systemd; do
+  [ -d "$dir" ] || continue
+  uid=${dir#/run/user/}; uid=${uid%/systemd}
+  user=$(getent passwd "$uid" | cut -d: -f1)
+  [ -n "$user" ] || continue
+  as_user() { runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
+  as_user systemctl --user daemon-reload >/dev/null 2>&1 || true
+  as_user systemctl --user try-restart memoreei.service >/dev/null 2>&1 || true
+done
+exit 0

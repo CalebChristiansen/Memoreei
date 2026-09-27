@@ -1,0 +1,12 @@
+#!/bin/sh
+# After removal: running user managers forget the unit file that's gone.
+case "$1" in remove | purge | 0) ;; *) exit 0 ;; esac
+for dir in /run/user/*/systemd; do
+  [ -d "$dir" ] || continue
+  uid=${dir#/run/user/}; uid=${uid%/systemd}
+  user=$(getent passwd "$uid" | cut -d: -f1)
+  [ -n "$user" ] || continue
+  runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+done
+exit 0

@@ -1,0 +1,21 @@
+# Memoreei, as the person whose messages it reads. Shipped disabled: the launcher, or
+# `memoreei service install`, enables it. With `loginctl enable-linger` it starts at
+# boot rather than at login.
+[Unit]
+Description=Memoreei personal memory server
+Documentation=https://github.com/CalebChristiansen/Memoreei
+
+[Service]
+Type=simple
+# MEMOREEI_HOME and anything else needed before config.env is found. Everything else
+# belongs in config.env, which memoreei reads itself.
+EnvironmentFile=-%E/memoreei/env
+ExecStart=/opt/memoreei/bin/memoreei serve --http
+Restart=on-failure
+RestartSec=5
+# 75: the port is held by something else. Retrying every five seconds won't free it.
+RestartPreventExitStatus=75
+SyslogIdentifier=memoreei
+
+[Install]
+WantedBy=default.target

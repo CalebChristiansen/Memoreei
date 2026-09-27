@@ -1,0 +1,14 @@
+#!/bin/sh
+# Before the package goes for good (not an upgrade: deb says "remove", rpm says 0),
+# stop and disable every running user's Memoreei, whose program is about to vanish.
+# Their data stays in ~/.local/share/memoreei.
+case "$1" in remove | 0) ;; *) exit 0 ;; esac
+for dir in /run/user/*/systemd; do
+  [ -d "$dir" ] || continue
+  uid=${dir#/run/user/}; uid=${uid%/systemd}
+  user=$(getent passwd "$uid" | cut -d: -f1)
+  [ -n "$user" ] || continue
+  runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user disable --now memoreei.service >/dev/null 2>&1 || true
+done
+exit 0

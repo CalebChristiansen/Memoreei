@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Memoreei
+GenericName=Personal Memory Server
+Comment=Search your messages from any AI client
+Exec=/usr/bin/memoreei open
+Icon=cafe.caleb.Memoreei
+Terminal=false
+Categories=Utility;
+Keywords=memory;search;mcp;messages;
+StartupNotify=false

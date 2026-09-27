@@ -28,9 +28,10 @@ jobs:
       - name: Run tests
         run: pytest -x -q
 
-  # After the DMGs build as well: a release is PyPI and both DMGs, or nothing.
+  # After the DMGs and the Linux packages build as well: a release is PyPI, both DMGs
+  # and the six Linux files, or nothing.
   publish:
-    needs: [test, macos]
+    needs: [test, macos, linux]
     runs-on: ubuntu-latest
     environment: pypi
 
@@ -55,8 +56,12 @@ jobs:
     needs: test
     uses: ./.github/workflows/macos.yml
 
+  linux:
+    needs: test
+    uses: ./.github/workflows/linux.yml
+
   github-release:
-    needs: [publish, macos]
+    needs: [publish, macos, linux]
     runs-on: ubuntu-latest
 
     steps:
@@ -69,9 +74,18 @@ jobs:
           pattern: Memoreei-*.dmg
           merge-multiple: true
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: linux-*
+          merge-multiple: true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, 'rc') }}
-          files: Memoreei-*.dmg
+          files: |
+            Memoreei-*.dmg
+            memoreei_*.deb
+            memoreei-*.rpm
+            memoreei-*-linux-*.tar.gz
