@@ -11,6 +11,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The log says `Full Disk Access: ok` when an iMessage sync first reads the Messages
   database, and again after one that couldn't. Access was checked only at startup, so a
   grant made after it left `missing` as the log's last word.
+- The dashboard's Server card on a Mac: Start at login, the log, and Stop, which quits
+  Memoreei.app. Until now those were only in the menu bar.
+
+### Changed
+- **A new look**, everywhere: a teal tile with an amber speech bubble for an icon, and
+  the dashboard, the Mac app's menu and windows, the disk image and the Linux dialogs
+  redrawn to match. The dashboard gains a sidebar, a status page that leads with what's
+  stored, and a welcome page for a new install; it follows the system into dark mode.
+- The Mac menu's items are *Open Dashboard*, *Allow Access to Messages…* and *Update to
+  X…*. Full Disk Access takes three steps now: current macOS has no padlock to click.
+- Setup's list of sources has no emoji.
 
 ## [0.4.0] - 2026-09-27
 

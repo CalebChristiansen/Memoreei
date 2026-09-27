@@ -61,10 +61,10 @@ elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
 6. **The dashboard** opens in your browser. Set up iMessage under **Sources**, and
    create a key under **Clients** for each machine or app that will search.
 
-Memoreei then lives in the menu bar and starts at login. **Open Memoreei…** signs you in
+Memoreei then lives in the menu bar and starts at login. **Open Dashboard** signs you in
 to the dashboard; **Quit** stops the server too.
 
-**Updates.** The menu says *Update Available*. Download the new DMG and replace the
+**Updates.** The menu says *Update to X…*. Download the new DMG and replace the
 app. Until Memoreei is signed, macOS treats each new version as a stranger and switches
 its Full Disk Access off; the setup window reopens, and you switch it back on.
 
