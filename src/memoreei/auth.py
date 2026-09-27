@@ -133,18 +133,27 @@ async def _send_401(send: Callable, reason: str) -> None:
 # ── Client config ───────────────────────────────────────────────────────────
 
 
+# Bridges that containers and VMs put on a host: no client elsewhere can reach them.
+VIRTUAL_INTERFACES = ("docker", "br-", "veth", "virbr", "podman", "cni", "lxcbr", "vboxnet", "vmnet")
+
+
 def local_ipv4_addresses() -> list[str]:
-    """Every non-loopback, non-link-local IPv4 address on this machine, best effort."""
+    """Every IPv4 address a client could reach this machine at, best effort.
+
+    Leaves out loopback, link-local, and container or VM bridges (when ``ip`` names them).
+    """
     found: list[str] = []
     for cmd, pattern in (
-        (["ip", "-4", "-o", "addr", "show"], r"inet (\d+\.\d+\.\d+\.\d+)/"),
+        (["ip", "-4", "-o", "addr", "show"],
+         r"^\d+:\s+(?!(?:%s))\S+\s+inet (\d+\.\d+\.\d+\.\d+)/" % "|".join(
+             re.escape(p) for p in VIRTUAL_INTERFACES)),
         (["ifconfig"], r"inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)"),
     ):
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
         except (OSError, subprocess.SubprocessError):
             continue
-        found = re.findall(pattern, out)
+        found = re.findall(pattern, out, re.MULTILINE)
         if found:
             break
     if not found:

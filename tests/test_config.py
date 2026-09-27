@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -27,6 +28,18 @@ def test_default_db_path_is_in_home(isolated_home, monkeypatch):
 
 def test_default_home_is_the_mac_convention_on_macos():
     assert cfg_module.default_home("darwin") == "~/Library/Application Support/Memoreei"
+
+
+def test_model_cache_is_per_user_not_tmp(monkeypatch, tmp_path):
+    monkeypatch.delenv("FASTEMBED_CACHE_PATH", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    home = Path.home()
+    assert cfg_module.model_cache_dir("linux") == home / ".cache/memoreei/models"
+    assert cfg_module.model_cache_dir("darwin") == home / "Library/Caches/Memoreei/models"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert cfg_module.model_cache_dir("linux") == tmp_path / "memoreei/models"
+    monkeypatch.setenv("FASTEMBED_CACHE_PATH", "/opt/models")  # the app, Docker
+    assert cfg_module.model_cache_dir("darwin") == Path("/opt/models")
 
 
 def test_default_home_is_a_dot_directory_elsewhere():

@@ -36,10 +36,16 @@ def main(
         "(default: $MEMOREEI_HOME, else ~/Library/Application Support/Memoreei on macOS, "
         "~/.memoreei elsewhere)",
     ),
+    version: bool = typer.Option(False, "--version", help="Print the version and exit."),
 ) -> None:
     """Memoreei — personal memory MCP server CLI."""
     from memoreei.config import set_home
 
+    if version:
+        from memoreei import __version__
+
+        typer.echo(f"memoreei {__version__}")
+        raise typer.Exit()
     if home:
         set_home(home)
     if ctx.invoked_subcommand is None:

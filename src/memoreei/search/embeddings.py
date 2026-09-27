@@ -35,7 +35,10 @@ class FastEmbedProvider(EmbeddingProvider):
     def _get_model(self) -> "fastembed.TextEmbedding":  # type: ignore[name-defined]
         if self._model is None:
             from fastembed import TextEmbedding  # type: ignore[import]
-            self._model = TextEmbedding(model_name=self.MODEL_NAME)
+
+            from memoreei.config import model_cache_dir
+
+            self._model = TextEmbedding(model_name=self.MODEL_NAME, cache_dir=str(model_cache_dir()))
         return self._model
 
     async def embed(self, texts: list[str]) -> list[list[float]]:

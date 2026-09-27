@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The embedding model was downloaded to `/tmp/fastembed_cache`, fastembed's default:
+  after one user's download no other user on the machine could write there (the first
+  import failed with "Could not load model … from any source"), and a reboot emptied it.
+  It now goes to a per-user cache, `~/.cache/memoreei/models` (`~/Library/Caches/Memoreei/models`
+  on macOS); `FASTEMBED_CACHE_PATH` still wins. The Docker image keeps it in `/data`.
+- Container and VM bridges (`docker0`, `br-…`, `veth…`, `virbr…`) are no longer offered
+  as server addresses in client setup.
+
+### Added
+- `memoreei --version`.
+- The README says Debian and Ubuntu need `python3-venv` before the first step.
+
 ## [0.3.0rc5] - 2026-09-26
 
 ### Added

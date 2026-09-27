@@ -38,6 +38,22 @@ def default_home(platform: str | None = None) -> str:
     return "~/.memoreei"
 
 
+def model_cache_dir(platform: str | None = None) -> Path:
+    """Where the fastembed model is downloaded to: a per-user cache.
+
+    fastembed's own default is /tmp/fastembed_cache, which one user's download makes
+    unwritable for every other user on the machine, and a reboot empties. The
+    ``FASTEMBED_CACHE_PATH`` variable (which Memoreei.app and the Docker image set)
+    still wins.
+    """
+    if custom := os.environ.get("FASTEMBED_CACHE_PATH"):
+        return Path(custom).expanduser()
+    if (platform or sys.platform) == "darwin":
+        return Path("~/Library/Caches/Memoreei/models").expanduser()
+    xdg = os.environ.get("XDG_CACHE_HOME") or "~/.cache"
+    return Path(xdg).expanduser() / "memoreei" / "models"
+
+
 def memoreei_home() -> Path:
     """The directory holding config.env and memoreei.db.
 

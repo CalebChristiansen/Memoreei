@@ -182,7 +182,8 @@ source ~/memoreei-venv/bin/activate
 pip install memoreei
 ```
 
-Python 3.10 or newer. On macOS, `python3 --version` first; the system Python may be older.
+Python 3.10 or newer. On Debian and Ubuntu, `sudo apt install python3-venv` first, or
+the first line fails. On macOS, `python3 --version` first; the system Python may be older.
 To try a release candidate, `pip install --pre memoreei`.
 
 ### 2. Configure
