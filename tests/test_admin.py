@@ -539,3 +539,10 @@ def test_a_finished_sync_reloads_the_page(server):
     r = client.get("/admin/status", headers={"HX-Request": "true"})
     assert r.headers["hx-refresh"] == "true"
     assert "hx-refresh" not in client.get("/admin/status").headers
+
+
+def test_static_urls_change_when_the_file_does(server):
+    """A browser holding the last version's stylesheet must not pair it with new pages."""
+    text = signed_in(server).get("/admin/").text
+    url = re.search(r'href="(/admin/static/admin\.css\?v=[0-9a-f]{10})"', text).group(1)
+    assert server().get(url).status_code == 200

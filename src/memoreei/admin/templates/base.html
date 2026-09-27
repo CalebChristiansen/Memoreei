@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
 <title>{% block title %}Memoreei{% endblock %}</title>
-<link rel="icon" href="/admin/static/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="/admin/static/icon.png" sizes="64x64">
-<link rel="stylesheet" href="/admin/static/admin.css">
-<script src="/admin/static/htmx.min.js" defer></script>
-<script src="/admin/static/admin.js" defer></script>
+<link rel="icon" href="{{ static("favicon.svg") }}" type="image/svg+xml">
+<link rel="icon" href="{{ static("icon.png") }}" sizes="64x64">
+<link rel="stylesheet" href="{{ static("admin.css") }}">
+<script src="{{ static("htmx.min.js") }}" defer></script>
+<script src="{{ static("admin.js") }}" defer></script>
 </head>
 <body>
 {% if nav == "none" %}
@@ -19,7 +19,7 @@
 {% else %}
 <div class="shell">
 <aside class="sidebar">
-  <a class="brand" href="/admin/"><img src="/admin/static/icon.svg" alt=""><span>Memoreei</span></a>
+  <a class="brand" href="/admin/"><img src="{{ static("icon.svg") }}" alt=""><span>Memoreei</span></a>
   <nav aria-label="Dashboard">
     <a href="/admin/" {% if nav == "status" %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Status</span></a>

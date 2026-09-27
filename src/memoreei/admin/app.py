@@ -6,6 +6,8 @@ behind AdminGuard (see admin/auth.py for the rules).
 from __future__ import annotations
 
 import asyncio
+import functools
+import hashlib
 import logging
 import os
 import re
@@ -181,7 +183,17 @@ def _connector_key(sync_name: str) -> str | None:
     return None
 
 
+@functools.lru_cache(maxsize=None)
+def _static(name: str) -> str:
+    """A static file's URL, fingerprinted by its content. Browsers keep these files
+    between versions (a test build can even share a version number), and a new page
+    on an old stylesheet is a sight nobody should see: a changed file is a new URL."""
+    digest = hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:10]
+    return f"/admin/static/{name}?v={digest}"
+
+
 templates.env.filters["ago"] = _ago
+templates.env.globals["static"] = _static
 templates.env.filters["tilde"] = _tilde
 templates.env.filters["linkify"] = _linkify
 templates.env.filters["kind_name"] = kind_name
