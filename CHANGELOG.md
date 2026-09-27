@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0rc6] - 2026-09-26
+
 ### Fixed
 - The embedding model was downloaded to `/tmp/fastembed_cache`, fastembed's default:
   after one user's download no other user on the machine could write there (the first
@@ -186,7 +188,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc5...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc6...HEAD
+[0.3.0rc6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc5...v0.3.0rc6
 [0.3.0rc5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc4...v0.3.0rc5
 [0.3.0rc4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc3...v0.3.0rc4
 [0.3.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc2...v0.3.0rc3
