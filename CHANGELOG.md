@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-26
+
 ### Fixed
 - `search_memory` took most of a minute on a database of 100k-odd messages, long enough
   for MCP clients to time out: every search read every embedding out of SQLite and
@@ -210,7 +212,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0
 [0.3.0rc6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc5...v0.3.0rc6
 [0.3.0rc5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc4...v0.3.0rc5
