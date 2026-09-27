@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0rc4] - 2026-09-26
+
+### Fixed
+- The dashboard refused its own plain forms ("Cross-origin request refused"), so
+  iMessage couldn't be set up and *Sign out* failed. Its `no-referrer` policy made
+  browsers send `Origin: null`; it's now `same-origin`, and a `null` origin falls back to
+  `Sec-Fetch-Site`. Refused dashboard requests are logged.
+- Memoreei.app's setup window comes back to the front after the firewall's "accept
+  incoming connections?" prompt, instead of staying behind the browser.
+- The README's first-launch step for the unsigned app: open it from Finder, since
+  Launchpad and Spotlight offer no way past Gatekeeper.
+
 ## [0.3.0rc3] - 2026-09-26
 
 ### Added
@@ -148,7 +160,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc3...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc4...HEAD
+[0.3.0rc4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc3...v0.3.0rc4
 [0.3.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc2...v0.3.0rc3
 [0.3.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0rc2
 [0.2.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.0...v0.2.1
