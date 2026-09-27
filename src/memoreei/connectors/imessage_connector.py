@@ -126,9 +126,10 @@ class IMessageConnector:
         if not chats:
             return 0
         total = 0
-        with tqdm(chats, desc="Chats", unit="chat", file=sys.stderr) as progress:
+        # disable=None: no bars when stderr isn't a terminal, as under the Mac app, whose
+        # stderr is its log. No chat names in them either way: they are personal data.
+        with tqdm(chats, desc="Chats", unit="chat", file=sys.stderr, disable=None) as progress:
             for chat_rowid, chat_identifier, chat_name in progress:
-                progress.set_postfix_str(chat_name[:40])
                 total += await self._sync_chat(conn, chat_rowid, chat_identifier, chat_name)
         return total
 
@@ -165,10 +166,11 @@ class IMessageConnector:
         total_stored = 0
         with tqdm(
             total=len(rows),
-            desc=f"  {chat_name[:40]}",
+            desc="  Messages",
             unit="msg",
             file=sys.stderr,
             leave=False,
+            disable=None,
         ) as progress:
             for i in range(0, len(rows), batch_size):
                 batch_rows = rows[i : i + batch_size]

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import sqlite3
+import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -133,14 +137,130 @@ END;
 """
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    va = np.array(a, dtype=np.float32)
-    vb = np.array(b, dtype=np.float32)
-    norm_a = np.linalg.norm(va)
-    norm_b = np.linalg.norm(vb)
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return float(np.dot(va, vb) / (norm_a * norm_b))
+def _stored_to_vector(stored: object) -> np.ndarray | None:
+    """An embedding as stored (float32 bytes, or JSON from older versions) as a vector."""
+    if isinstance(stored, (bytes, bytearray)) and stored:
+        return np.frombuffer(stored, dtype=np.float32)
+    if isinstance(stored, str) and stored:
+        return np.asarray(json.loads(stored), dtype=np.float32)
+    return None
+
+
+# Rows handled per step when building an index in a worker thread. A single C call over
+# 100k rows (fetchall, vstack) holds the GIL for a second or more on an Intel MacBook Air,
+# and the server's event loop stalls behind it; between steps, the loop gets a turn.
+_STEP = 4096
+
+
+def _norms(matrix: np.ndarray) -> np.ndarray:
+    norms = np.empty(len(matrix), np.float32)
+    for start in range(0, len(matrix), _STEP):
+        norms[start:start + _STEP] = np.linalg.norm(matrix[start:start + _STEP], axis=1)
+    return norms
+
+
+class _VectorIndex:
+    """The embeddings of the memories table, as a matrix, with ids and sources alongside."""
+
+    def __init__(self, ids: list[str], sources: np.ndarray, matrix: np.ndarray,
+                 count: int, max_rowid: int, norms: np.ndarray | None = None) -> None:
+        self.ids, self.sources, self.matrix = ids, sources, matrix
+        self.norms = _norms(matrix) if norms is None else norms
+        self.count, self.max_rowid = count, max_rowid
+        self.data_version = 0  # SQLite's, when this was read; set by the Database
+
+    @classmethod
+    def empty(cls) -> "_VectorIndex":
+        return cls([], np.array([], dtype=object), np.zeros((0, 0), np.float32), 0, 0)
+
+    def extend(self, rows: list, count: int, max_rowid: int) -> "_VectorIndex":
+        """A new index with *rows* (rowid, id, source, embedding) added."""
+        decoded = [(memory_id, source, _stored_to_vector(stored))
+                   for _rowid, memory_id, source, stored in rows]
+        decoded = [(i, s, v) for i, s, v in decoded if v is not None]
+        if len(self.matrix):
+            dim = self.matrix.shape[1]
+        elif decoded:  # the embedding model most rows came from
+            dim = Counter(v.shape[0] for _, _, v in decoded).most_common(1)[0][0]
+        else:
+            dim = 0
+        # another embedding model's vectors are not comparable
+        decoded = [(i, s, v) for i, s, v in decoded if v.shape[0] == dim]
+        if not decoded:
+            return _VectorIndex(self.ids, self.sources, self.matrix, count, max_rowid, self.norms)
+
+        old = len(self.matrix)
+        matrix = np.empty((old + len(decoded), dim), np.float32)
+        for start in range(0, old, _STEP):
+            matrix[start:start + _STEP] = self.matrix[start:start + _STEP]
+        for n, (_, _, vector) in enumerate(decoded, old):
+            matrix[n] = vector
+        norms = np.concatenate([self.norms, _norms(matrix[old:])])
+        return _VectorIndex(self.ids + [i for i, _, _ in decoded],
+                            np.concatenate([self.sources, np.array([s for _, s, _ in decoded], dtype=object)]),
+                            matrix, count, max_rowid, norms)
+
+    def without_source(self, source: str, count: int, max_rowid: int) -> "_VectorIndex":
+        """A new index without *source*'s rows."""
+        keep = self.sources != source
+        index = _VectorIndex([i for i, k in zip(self.ids, keep) if k], self.sources[keep],
+                             self.matrix[keep], count, max_rowid, self.norms[keep])
+        index.data_version = self.data_version
+        return index
+
+    def rank(self, query: np.ndarray, limit: int, source_filter: str | None) -> list[str]:
+        """The ids of the *limit* rows nearest *query* by cosine similarity, nearest first."""
+        if not self.ids or self.matrix.shape[1] != query.shape[0]:
+            return []
+        candidates = np.flatnonzero(self.sources == source_filter) if source_filter else None
+        matrix = self.matrix if candidates is None else self.matrix[candidates]
+        norms = (self.norms if candidates is None else self.norms[candidates]) * np.linalg.norm(query)
+        if not len(matrix):
+            return []
+        with np.errstate(divide="ignore", invalid="ignore"):
+            scores = np.where(norms > 0, (matrix @ query) / norms, 0.0)
+        k = min(limit, len(scores))
+        top = np.argpartition(-scores, k - 1)[:k]
+        top = top[np.argsort(-scores[top], kind="stable")]
+        if candidates is not None:
+            top = candidates[top]
+        return [self.ids[n] for n in top]
+
+
+def _read_vectors(db_path: str, base: _VectorIndex | None) -> _VectorIndex | None:
+    """Read embeddings into an index, on a connection of its own; runs in a worker thread.
+
+    With *base*, only the rows after its ``max_rowid`` are read and added, and None comes
+    back if the table changed in any way besides those appends. The rows, the count and
+    ``max(rowid)`` are read in one transaction, so the index describes one snapshot. WAL
+    mode means this read holds up neither the server's connection nor its writers.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("BEGIN")
+        count, max_rowid = conn.execute(
+            "SELECT count(*), coalesce(max(rowid), 0) FROM memories").fetchone()
+        cursor = conn.execute(
+            "SELECT rowid, id, source, embedding FROM memories WHERE rowid > ? ORDER BY rowid",
+            (base.max_rowid if base else 0,),
+        )
+        rows: list = []
+        while chunk := cursor.fetchmany(_STEP):
+            rows.extend(chunk)
+        conn.rollback()
+    finally:
+        conn.close()
+    if base is not None and base.count + len(rows) != count:
+        return None
+    index = (base or _VectorIndex.empty()).extend(rows, count, max_rowid)
+    if base is not None:
+        index.data_version = base.data_version
+    return index
+
+
+def _report_build_failure(task: "asyncio.Task[_VectorIndex]") -> None:
+    if not task.cancelled() and task.exception() is not None:
+        print(f"[database] Vector index build failed: {task.exception()!r}", file=sys.stderr)
 
 
 def _embedding_to_blob(embedding: list[float]) -> bytes:
@@ -151,6 +271,9 @@ class Database:
     def __init__(self, db_path: str = "./memoreei.db") -> None:
         self.db_path = str(Path(db_path).resolve())
         self._db: aiosqlite.Connection | None = None
+        self._vectors: _VectorIndex | None = None
+        self._vector_build: asyncio.Task[_VectorIndex] | None = None
+        self._vector_epoch = 0  # bumped by this connection's deletes
 
     async def connect(self) -> None:
         parent = Path(self.db_path).parent
@@ -163,6 +286,8 @@ class Database:
         await self.init_db()
 
     async def close(self) -> None:
+        if self._vector_build is not None:
+            self._vector_build.cancel()
         if self._db:
             await self._db.close()
             self._db = None
@@ -247,32 +372,93 @@ class Database:
     async def search_vector(
         self, embedding: list[float], limit: int = 10, source_filter: str | None = None
     ) -> list[MemoryItem]:
-        assert self._db is not None
-        # Numpy cosine similarity fallback (sqlite-vec optional)
-        if source_filter:
-            async with self._db.execute(
-                "SELECT * FROM memories WHERE embedding IS NOT NULL AND source = ?",
-                (source_filter,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with self._db.execute(
-                "SELECT * FROM memories WHERE embedding IS NOT NULL"
-            ) as cursor:
-                rows = await cursor.fetchall()
+        """The memories nearest *embedding* by cosine similarity.
 
-        if not rows:
+        Scored in one matrix product over every embedding, held in memory between
+        searches (see _vector_index); whole rows are fetched for the winners alone.
+        """
+        assert self._db is not None
+        index = await self._vector_index()
+        query = np.asarray(embedding, dtype=np.float32)
+        winners = await asyncio.to_thread(index.rank, query, limit, source_filter)
+        if not winners:
             return []
 
-        scored: list[tuple[float, MemoryItem]] = []
-        for row in rows:
-            item = MemoryItem.from_row(dict(row))
-            if item.embedding:
-                sim = _cosine_similarity(embedding, item.embedding)
-                scored.append((sim, item))
+        placeholders = ",".join("?" * len(winners))
+        async with self._db.execute(
+            f"SELECT * FROM memories WHERE id IN ({placeholders})", winners
+        ) as cursor:
+            by_id = {row["id"]: MemoryItem.from_row(dict(row)) for row in await cursor.fetchall()}
+        return [by_id[memory_id] for memory_id in winners if memory_id in by_id]
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in scored[:limit]]
+    async def warm_vectors(self) -> None:
+        """Build the vector index now, or bring it up to date, and wait until it is."""
+        await self._vector_index()
+        while self._vector_build is not None and not self._vector_build.done():
+            await asyncio.shield(self._vector_build)
+            await self._vector_index()
+
+    async def _vector_index(self) -> "_VectorIndex":
+        """Every embedding as one matrix, kept up to date without making searches wait.
+
+        Reading 100k-odd embeddings out of SQLite takes 5-20 s on an Intel MacBook Air (they
+        share pages with the message text); scoring them takes 20 ms. So the matrix stays
+        in memory, about 190 MB at that size, and each call costs two cheap queries.
+
+        This connection's inserts only append, so new rows are read and added before the
+        search. Its deletes are taken out of the index directly (delete_by_source).
+        Anything else, such as a commit from another process (a CLI import beside the
+        server, which changes ``data_version``), or a count that doesn't add up because
+        rowids can be reused after a delete, rebuilds the index in the background while
+        searches go on using the old one. Only the very first build makes a search wait.
+        """
+        assert self._db is not None
+        async with self._db.execute("PRAGMA data_version") as cursor:
+            (data_version,) = await cursor.fetchone()
+        index = self._vectors
+        if index is None:
+            return await asyncio.shield(self._rebuild_vectors())
+        if index.data_version != data_version:
+            self._rebuild_vectors()
+            return index
+        async with self._db.execute("SELECT count(*), coalesce(max(rowid), 0) FROM memories") as cursor:
+            count, max_rowid = await cursor.fetchone()
+        if (count, max_rowid) == (index.count, index.max_rowid) or self._rebuilding():
+            return index
+        if max_rowid > index.max_rowid:
+            epoch = self._vector_epoch
+            grown = await asyncio.to_thread(_read_vectors, self.db_path, index)
+            if grown is not None:
+                if self._vectors is index and self._vector_epoch == epoch:
+                    self._vectors = grown
+                return self._vectors or grown
+        self._rebuild_vectors()
+        return index
+
+    def _rebuilding(self) -> bool:
+        return self._vector_build is not None and not self._vector_build.done()
+
+    def _rebuild_vectors(self) -> "asyncio.Task[_VectorIndex]":
+        """Start reading the whole index again, unless that is already under way."""
+        if not self._rebuilding():
+            self._vector_build = asyncio.create_task(self._build_vectors())
+            self._vector_build.add_done_callback(_report_build_failure)
+        assert self._vector_build is not None
+        return self._vector_build
+
+    async def _build_vectors(self) -> "_VectorIndex":
+        assert self._db is not None
+        while True:
+            epoch = self._vector_epoch
+            async with self._db.execute("PRAGMA data_version") as cursor:
+                (data_version,) = await cursor.fetchone()
+            index = await asyncio.to_thread(_read_vectors, self.db_path, None)
+            assert index is not None
+            if epoch == self._vector_epoch:
+                break  # otherwise one of our deletes landed mid-read: read again
+        index.data_version = data_version  # from before the read: a commit since reads again
+        self._vectors = index
+        return index
 
     async def get_by_id(self, memory_id: str) -> MemoryItem | None:
         assert self._db is not None
@@ -326,6 +512,13 @@ class Database:
         count = row["cnt"] if row else 0
         await self._db.execute("DELETE FROM memories WHERE source = ?", (source,))
         await self._db.commit()
+        self._vector_epoch += 1
+        if self._vectors is not None:
+            async with self._db.execute(
+                "SELECT count(*), coalesce(max(rowid), 0) FROM memories"
+            ) as cursor:
+                remaining, max_rowid = await cursor.fetchone()
+            self._vectors = self._vectors.without_source(source, remaining, max_rowid)
         return count
 
     async def get_discord_checkpoint(self, channel_id: str) -> str | None:

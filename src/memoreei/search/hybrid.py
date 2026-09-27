@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -46,9 +47,11 @@ class HybridSearch:
         # Fetch more candidates than needed for better RRF fusion
         candidate_limit = max(limit * 3, 30)
 
-        # Run FTS and vector search in parallel (conceptually; we await them)
-        fts_results = await self.db.search_fts(query, limit=candidate_limit)
-        query_embedding = await self.embedder.embed_query(query)
+        # FTS runs on the database's thread while the query is embedded on another
+        fts_results, query_embedding = await asyncio.gather(
+            self.db.search_fts(query, limit=candidate_limit),
+            self.embedder.embed_query(query),
+        )
         vec_results = await self.db.search_vector(
             query_embedding, limit=candidate_limit, source_filter=source
         )

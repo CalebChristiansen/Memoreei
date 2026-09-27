@@ -55,6 +55,9 @@ class MockEmbedder:
     async def embed_query(self, text: str) -> list[float]:
         return [0.0] * self.dim
 
+    async def warm(self) -> None:
+        pass
+
 
 @pytest.fixture
 def mock_embedder() -> MockEmbedder:

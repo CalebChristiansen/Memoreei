@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -26,11 +27,25 @@ _sync_manager = SyncManager()
 async def _get_tools() -> MemoryTools:
     global _db, _tools
     if _tools is None:
-        cfg = get_config()
-        _db = Database(db_path=cfg.db_path)
-        await _db.connect()
-        embedder = get_provider()
-        _tools = MemoryTools(db=_db, embedder=embedder)
+        db = Database(db_path=get_config().db_path)
+        connecting = asyncio.ensure_future(db.connect())
+        try:
+            await asyncio.shield(connecting)
+        except asyncio.CancelledError:
+            # Finish connecting and close, rather than leave a connection's thread
+            # running with nobody to close it (startup warming is cancelled at shutdown).
+            try:
+                await connecting
+                await db.close()
+            except Exception:
+                pass
+            raise
+        # Startup warming, the sync loop and a request can all get here at once: the
+        # first to finish connecting wins, so there is one Database and one index.
+        if _tools is None:
+            _db, _tools = db, MemoryTools(db=db, embedder=get_provider())
+        else:
+            await db.close()
     return _tools
 
 
@@ -58,8 +73,35 @@ async def _auto_sync() -> AsyncIterator[None]:
 
 
 @asynccontextmanager
+async def _warm_search() -> AsyncIterator[None]:
+    """Load the embedding model and the vector index in the background at startup.
+
+    Otherwise the first search after a start pays for both: about 25 s for 100k-odd memories
+    on an Intel MacBook Air, which is most of what an MCP client will wait.
+    """
+
+    async def warm() -> None:
+        tools = await _get_tools()
+        await asyncio.gather(tools.embedder.warm(), tools.db.warm_vectors())
+
+    task = asyncio.create_task(warm())
+    task.add_done_callback(
+        lambda t: t.cancelled() or t.exception() is None
+        or print(f"[server] Warming search failed: {t.exception()!r}", file=sys.stderr)
+    )
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
+@asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[type-arg]
-    async with _auto_sync():
+    async with _auto_sync(), _warm_search():
         yield
 
 
@@ -523,7 +565,7 @@ def build_http_app(verify: "Verifier") -> Any:
 
     @asynccontextmanager
     async def lifespan(a: Any) -> AsyncIterator[None]:
-        async with inner_lifespan(a), _auto_sync():
+        async with inner_lifespan(a), _auto_sync(), _warm_search():
             yield
 
     app.router.lifespan_context = lifespan

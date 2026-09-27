@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -22,6 +24,9 @@ class EmbeddingProvider(ABC):
         """Embedding vector dimension."""
         ...
 
+    async def warm(self) -> None:
+        """Get ready to embed, so the first query doesn't pay for it. Optional."""
+
 
 class FastEmbedProvider(EmbeddingProvider):
     """Local ONNX embeddings via fastembed. No API key required."""
@@ -31,19 +36,33 @@ class FastEmbedProvider(EmbeddingProvider):
 
     def __init__(self) -> None:
         self._model: "fastembed.TextEmbedding | None" = None  # type: ignore[name-defined]
+        self._loading = threading.Lock()
 
     def _get_model(self) -> "fastembed.TextEmbedding":  # type: ignore[name-defined]
-        if self._model is None:
-            from fastembed import TextEmbedding  # type: ignore[import]
+        with self._loading:
+            if self._model is None:
+                from fastembed import TextEmbedding  # type: ignore[import]
 
-            from memoreei.config import model_cache_dir
+                from memoreei.config import model_cache_dir
 
-            self._model = TextEmbedding(model_name=self.MODEL_NAME, cache_dir=str(model_cache_dir()))
-        return self._model
+                cache_dir = str(model_cache_dir())
+                try:
+                    # Without this, every load asks Hugging Face about a model already on
+                    # disk: seconds, or a hang when the network is down.
+                    self._model = TextEmbedding(model_name=self.MODEL_NAME, cache_dir=cache_dir,
+                                                local_files_only=True)
+                except Exception:
+                    self._model = TextEmbedding(model_name=self.MODEL_NAME, cache_dir=cache_dir)
+            return self._model
+
+    async def warm(self) -> None:
+        await asyncio.to_thread(self._get_model)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        model = self._get_model()
-        return [emb.tolist() for emb in model.embed(texts)]
+        def run() -> list[list[float]]:
+            return [emb.tolist() for emb in self._get_model().embed(texts)]
+
+        return await asyncio.to_thread(run)
 
     async def embed_query(self, text: str) -> list[float]:
         results = await self.embed([text])

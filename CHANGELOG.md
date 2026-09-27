@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `search_memory` took most of a minute on a database of 100k-odd messages, long enough
+  for MCP clients to time out: every search read every embedding out of SQLite and
+  scored them one at a time in Python. The embeddings are now held in memory as one
+  matrix and scored in a single product, and whole rows are read for the winners alone.
+  A search takes about a tenth of a second on an Intel MacBook Air.
+- The server loads the embedding model and the vector index in the background as it
+  starts, so the first client after a restart doesn't wait for either. When another
+  process writes to the database (an import beside the server), the index is rebuilt in
+  the background and searches carry on meanwhile.
+- The model loads from its cache without asking Hugging Face first, and only downloads
+  when it isn't there.
+- The iMessage sync wrote chat names into the log through its progress bars. There are
+  no progress bars now when stderr isn't a terminal, and no chat names in them when it is.
+
 ## [0.3.0] - 2026-09-26
 
 memoreei is a network server that asks for a key, and on a Mac an app: Memoreei.app,
