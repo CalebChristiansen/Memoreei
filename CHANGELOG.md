@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0rc1] - 2026-09-27
+
 ### Added
 - **Linux packages**: a `.deb`, an `.rpm` and a tarball for x86_64 and aarch64, each with
   its own Python and the search model inside, for Ubuntu 20.04, Debian 11, RHEL 8,
@@ -246,7 +248,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0rc1...HEAD
+[0.4.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0rc1
 [0.3.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.2.2...v0.3.0
 [0.3.0rc6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.0rc5...v0.3.0rc6
