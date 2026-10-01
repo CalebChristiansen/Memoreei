@@ -130,7 +130,7 @@ The connector registry in `connectors/__init__.py` maps connector names to class
 ## MCP Tool Flow
 
 ```
-Claude calls search_memory("what did Zezima say about the meeting")
+Claude calls search_memoreei("what did Zezima say about the meeting")
         │
         ▼
 server.py: _get_tools() → lazy-init Database + HybridSearch

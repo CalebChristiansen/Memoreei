@@ -340,7 +340,7 @@ def search(
 
     async def _run() -> None:
         async with _open_tools() as tools:
-            results = await tools.search_memory(query=query, limit=limit, source=source)
+            results = await tools.search_memoreei(query=query, limit=limit, source=source)
         if not results:
             typer.echo("No results found.")
             return

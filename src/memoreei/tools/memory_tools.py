@@ -42,7 +42,7 @@ class MemoryTools:
         self.embedder = embedder
         self.search = HybridSearch(db=db, embedder=embedder)
 
-    async def search_memory(
+    async def search_memoreei(
         self,
         query: str,
         limit: int = 10,

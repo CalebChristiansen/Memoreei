@@ -134,10 +134,10 @@ code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' -X POST "http://127.
 
 step "tools/list"
 call '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | grep -q '"search_memory"' || { show_log; fail "no search_memory"; }
+  | grep -q '"search_memoreei"' || { show_log; fail "no search_memoreei"; }
 
 step "search"
-result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"the printer is plotting against us","limit":3}}}')
+result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memoreei","arguments":{"query":"the printer is plotting against us","limit":3}}}')
 echo "$result" | grep -q 'printer_conspiracy' || { echo "$result"; show_log; fail "search"; }
 
 step "dashboard: signed out, then in with admin-url's one-time link"

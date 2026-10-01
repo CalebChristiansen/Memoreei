@@ -298,7 +298,7 @@ def test_good_key_initializes_and_lists_exactly_four_tools(http_client):
     r = http_client.post("/mcp", json=TOOLS_LIST, headers=headers)
     assert r.status_code == 200, r.text
     names = sorted(t["name"] for t in r.json()["result"]["tools"])
-    assert names == ["get_context", "list_sources", "search_memory", "sync"]
+    assert names == ["get_context", "list_sources", "search_memoreei", "sync"]
 
 
 def test_lan_ip_host_header_is_accepted(http_client):
@@ -349,7 +349,7 @@ def test_last_used_updates_after_request(http_client):
 
 async def test_network_server_lists_exactly_four_tools():
     tools = await build_network_server().list_tools()
-    assert sorted(t.name for t in tools) == ["get_context", "list_sources", "search_memory", "sync"]
+    assert sorted(t.name for t in tools) == ["get_context", "list_sources", "search_memoreei", "sync"]
 
 
 async def test_sync_tool_takes_no_arguments():

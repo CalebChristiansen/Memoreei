@@ -119,7 +119,7 @@ def test_tools_list(initialized_proc):
 
     # The stdio server is the local one: every tool, including the ones that import files.
     assert tool_names == {fn.__name__ for fn in LOCAL_TOOLS}
-    assert {"search_memory", "get_context", "add_memory", "list_sources", "sync", "import_sms_backup"} <= tool_names
+    assert {"search_memoreei", "get_context", "add_memory", "list_sources", "sync", "import_sms_backup"} <= tool_names
 
 
 def test_search_memory_returns_content(initialized_proc):
@@ -127,7 +127,7 @@ def test_search_memory_returns_content(initialized_proc):
         "jsonrpc": "2.0",
         "id": 3,
         "method": "tools/call",
-        "params": {"name": "search_memory", "arguments": {"query": "quantum bagel"}},
+        "params": {"name": "search_memoreei", "arguments": {"query": "quantum bagel"}},
     })
     resp = _recv(initialized_proc, timeout=60)
     assert resp.get("id") == 3

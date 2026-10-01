@@ -96,24 +96,24 @@ def main():
         tool_names = [t["name"] for t in tools]
         print(f"    tools: {tool_names}")
         check(len(tools) == 6, f"6 tools registered (got {len(tools)})")
-        expected = {"search_memory", "get_context", "add_memory", "list_sources", "import_sms_backup", "sync_discord"}
+        expected = {"search_memoreei", "get_context", "add_memory", "list_sources", "import_sms_backup", "sync_discord"}
         check(set(tool_names) == expected, f"all expected tools present (got {set(tool_names)})")
 
-        # Step 4: search_memory
-        print("\n[4] search_memory(query='quantum bagel')")
+        # Step 4: search_memoreei
+        print("\n[4] search_memoreei(query='quantum bagel')")
         send(proc, {
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
-            "params": {"name": "search_memory", "arguments": {"query": "quantum bagel"}},
+            "params": {"name": "search_memoreei", "arguments": {"query": "quantum bagel"}},
         })
         resp = recv(proc, timeout=60)
-        check(resp.get("id") == 3, "search_memory id matches")
-        check("result" in resp, "search_memory has result")
+        check(resp.get("id") == 3, "search_memoreei id matches")
+        check("result" in resp, "search_memoreei has result")
         content = resp["result"].get("content", [])
         # The result may be a list or a text content block
         print(f"    result content blocks: {len(content)}")
-        check(isinstance(content, list), "search_memory returns content list")
+        check(isinstance(content, list), "search_memoreei returns content list")
 
         # Step 5: list_sources
         print("\n[5] list_sources")

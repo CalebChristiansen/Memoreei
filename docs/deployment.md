@@ -88,7 +88,7 @@ memoreei serve --http          # 0.0.0.0:3679, endpoint /mcp
 ```
 
 The server refuses to start with no keys. Over the network it offers only
-`search_memory`, `get_context`, `list_sources` and an argument-free `sync`. See the
+`search_memoreei`, `get_context`, `list_sources` and an argument-free `sync`. See the
 README's [Run it as a network server](../README.md#run-it-as-a-network-server) for
 connecting clients and HTTPS.
 

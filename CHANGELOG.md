@@ -17,6 +17,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The status page shows how old the newest WhatsApp message is, since a linked Mac
   whose phone has been offline for weeks stops syncing without saying so.
 
+### Changed
+- **`search_memory` is now `search_memoreei`.** Next to every other server's tools it
+  read as a generic "memory" search, which is easy to mistake for the client's own
+  memory. Clients that call it by name need the new name; nothing else changed.
+
 ### Removed
 - The WhatsApp `.txt` export importer: `memoreei import whatsapp`, the `ingest_whatsapp`
   tool and the dashboard's upload for it. It read only US-format dates, so an export

@@ -49,10 +49,10 @@ code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' -X POST "http://127.
 
 echo "--- tools/list"
 call '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | grep -q '"search_memory"' || { cat "$WORK/serve.log"; exit 1; }
+  | grep -q '"search_memoreei"' || { cat "$WORK/serve.log"; exit 1; }
 
 echo "--- search"
-result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"the printer is plotting against us","limit":3}}}')
+result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memoreei","arguments":{"query":"the printer is plotting against us","limit":3}}}')
 echo "$result" | grep -q 'printer_conspiracy' || { echo "$result"; cat "$WORK/serve.log"; exit 1; }
 
 echo "--- dashboard answers on loopback"

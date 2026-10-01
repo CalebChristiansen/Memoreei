@@ -35,7 +35,7 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 3. Switch to Claude Code
 4. Say: **"Sync my Discord and tell me what people have been talking about"**
    - Claude calls `sync_discord` → picks up all messages including the one just typed
-   - Claude calls `search_memory` → summarizes the conversation
+   - Claude calls `search_memoreei` → summarizes the conversation
 5. Say: **"What was the secret ingredient I just mentioned?"**
    - Returns: *"cardamom"* — with the exact message and timestamp
    - *This is the money shot — real-time memory from a message typed 30 seconds ago*
@@ -82,7 +82,7 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 | Tool | What it does |
 |------|-------------|
 | `sync_discord` | Pull new messages from Discord channel into memory |
-| `search_memory` | Hybrid keyword + semantic search across all sources |
+| `search_memoreei` | Hybrid keyword + semantic search across all sources |
 | `get_context` | Fetch surrounding messages around a memory hit |
 | `add_memory` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |

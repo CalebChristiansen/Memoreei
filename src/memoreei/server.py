@@ -105,7 +105,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[typ
         yield
 
 
-async def search_memory(
+async def search_memoreei(
     query: str,
     limit: int = 10,
     source: str | None = None,
@@ -124,7 +124,7 @@ async def search_memory(
         before: Only return memories before this date (ISO format, e.g. '2026-12-31')
     """
     tools = await _get_tools()
-    return await tools.search_memory(
+    return await tools.search_memoreei(
         query=query,
         limit=limit,
         source=source,
@@ -498,7 +498,7 @@ async def sync() -> dict:
 
 # Every tool, for the local (stdio) server.
 LOCAL_TOOLS = [
-    search_memory,
+    search_memoreei,
     get_context,
     add_memory,
     list_sources,
@@ -526,7 +526,7 @@ LOCAL_TOOLS = [
 
 # The network surface: read what is already stored, plus one argument-free refresh.
 # Nothing here takes a path, a token or new content.
-NETWORK_TOOLS = [search_memory, get_context, list_sources, sync]
+NETWORK_TOOLS = [search_memoreei, get_context, list_sources, sync]
 
 
 def build_local_server() -> FastMCP:

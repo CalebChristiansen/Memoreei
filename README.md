@@ -214,7 +214,7 @@ Change it with `--port` or `MEMOREEI_PORT`.
 
 ### What the network can do
 
-Search, and press one refresh button. A network client gets `search_memory`,
+Search, and press one refresh button. A network client gets `search_memoreei`,
 `get_context`, `list_sources` and `sync`, and nothing else. Several local tools take a
 path on the server, and a key holder shouldn't be able to point one at your SSH keys and
 search them back out. Filling the database is a local job.
@@ -293,7 +293,7 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 
 | Tool | Does | Network |
 |---|---|:---:|
-| `search_memory` | hybrid search, filtered by `source`, `participant`, `after`, `before` | ✅ |
+| `search_memoreei` | hybrid search, filtered by `source`, `participant`, `after`, `before` | ✅ |
 | `get_context` | the messages around a search result | ✅ |
 | `list_sources` | every source and its message count | ✅ |
 | `sync` | refresh everything configured on the server; no arguments | ✅ |

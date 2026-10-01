@@ -9,13 +9,13 @@ You have these tools via the `memoreei` MCP server:
 | Tool | What it does |
 |------|-------------|
 | `sync_discord` | Pull messages from Discord channel into memory DB |
-| `search_memory` | Hybrid keyword + semantic search across all sources |
+| `search_memoreei` | Hybrid keyword + semantic search across all sources |
 | `get_context` | Get surrounding messages around a search hit |
 | `add_memory` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |
 
 ## How to Use
-- **To search:** Use `search_memory` with a natural language query. It does hybrid BM25 + vector search with RRF fusion.
+- **To search:** Use `search_memoreei` with a natural language query. It does hybrid BM25 + vector search with RRF fusion.
 - **To sync Discord:** Use `sync_discord` — it reads the bot token and channel from the config automatically.
 - **To get context around a result:** Use `get_context` with the memory ID from search results.
 - **To see what's ingested:** Use `list_sources`.
