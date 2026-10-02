@@ -96,7 +96,7 @@ def main():
         tool_names = [t["name"] for t in tools]
         print(f"    tools: {tool_names}")
         check(len(tools) == 6, f"6 tools registered (got {len(tools)})")
-        expected = {"search_memoreei", "get_context", "add_memory", "list_sources", "import_sms_backup", "sync_discord"}
+        expected = {"search_memoreei", "get_context", "add_memoreei", "list_sources", "import_sms_backup", "sync_discord"}
         check(set(tool_names) == expected, f"all expected tools present (got {set(tool_names)})")
 
         # Step 4: search_memoreei
@@ -130,20 +130,20 @@ def main():
         print(f"    result: {content}")
         check(isinstance(content, list), "list_sources returns content list")
 
-        # Step 6: add_memory
-        print("\n[6] add_memory(content='manual test note')")
+        # Step 6: add_memoreei
+        print("\n[6] add_memoreei(content='manual test note')")
         send(proc, {
             "jsonrpc": "2.0",
             "id": 5,
             "method": "tools/call",
-            "params": {"name": "add_memory", "arguments": {"content": "manual test note"}},
+            "params": {"name": "add_memoreei", "arguments": {"content": "manual test note"}},
         })
         resp = recv(proc, timeout=60)
-        check(resp.get("id") == 5, "add_memory id matches")
-        check("result" in resp, "add_memory has result")
+        check(resp.get("id") == 5, "add_memoreei id matches")
+        check("result" in resp, "add_memoreei has result")
         content = resp["result"].get("content", [])
         print(f"    result: {content}")
-        check(isinstance(content, list), "add_memory returns content list")
+        check(isinstance(content, list), "add_memoreei returns content list")
         # Try to extract the returned ID from text content
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":

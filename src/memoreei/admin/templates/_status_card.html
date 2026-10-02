@@ -59,7 +59,7 @@
   <h2>Sync</h2>
   <dl class="facts">
     <dt>Last sync</dt>
-    <dd>{% if running %}Syncing now… {{ "{:,}".format(total) }} memories so far
+    <dd>{% if running %}Syncing now… {{ "{:,}".format(total) }} memoreeis so far
       {% elif last_run %}{{ last_run.finished_at|ago|capitalize }} · {{ "{:,}".format(last_run.result.new_messages) }} new
       {% else %}Not since the server started{% endif %}</dd>
     {{ auto_row("Automatic") }}

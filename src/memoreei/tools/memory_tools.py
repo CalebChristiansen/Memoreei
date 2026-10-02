@@ -73,7 +73,7 @@ class MemoryTools:
         items = await self.db.get_context(memory_id, before=before, after=after)
         return [item.to_dict() for item in items]
 
-    async def add_memory(
+    async def add_memoreei(
         self,
         content: str,
         source: str = "manual",

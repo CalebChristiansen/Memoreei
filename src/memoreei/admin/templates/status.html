@@ -59,7 +59,7 @@
     {% if keys %}
     <p>Done: {{ keys }} key{{ "" if keys == 1 else "s" }}. <a href="/admin/keys">Add another</a></p>
     {% else %}
-    <p>Give each app that searches your memories, like Claude Code, its own key.</p>
+    <p>Give each app that searches your memoreeis, like Claude Code, its own key.</p>
     <div><a class="button" href="/admin/keys">Add a client</a></div>
     {% endif %}
   </li>
@@ -70,7 +70,7 @@
 <div class="grid-3">
   <div class="card count hero">
     <div class="n">{{ "{:,}".format(total) }}</div>
-    <div>memor{{ "y" if total == 1 else "ies" }}</div>
+    <div>memoreei{{ "" if total == 1 else "s" }}</div>
     {% if by_kind %}<div class="chips">{% for kind, n in by_kind[:4] %}<span>{{ kind|kind_name }} {{ "{:,}".format(n) }}</span>{% endfor %}</div>{% endif %}
   </div>
   <a class="card count" href="/admin/sources">

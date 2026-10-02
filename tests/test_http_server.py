@@ -365,7 +365,7 @@ async def test_network_tools_take_no_paths():
 
 async def test_local_server_keeps_every_tool():
     names = {t.name for t in await server_module.mcp.list_tools()}
-    assert {"add_memory", "import_csv_file", "sync_discord", "sync"} <= names
+    assert {"add_memoreei", "import_csv_file", "sync_discord", "sync"} <= names
     assert {fn.__name__ for fn in NETWORK_TOOLS} <= names
 
 

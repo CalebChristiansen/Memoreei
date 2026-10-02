@@ -336,7 +336,7 @@ def search(
     limit: int = typer.Option(10, "--limit", "-n", help="Number of results"),
     source: Optional[str] = typer.Option(None, "--source", "-s", help="Filter by source"),
 ) -> None:
-    """Search memories from the CLI."""
+    """Search your memoreeis from the CLI."""
 
     async def _run() -> None:
         async with _open_tools() as tools:

@@ -297,9 +297,9 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 | `get_context` | the messages around a search result | ✅ |
 | `list_sources` | every source and its message count | ✅ |
 | `sync` | refresh everything configured on the server; no arguments | ✅ |
-| `add_memory` | store a note | — |
+| `add_memoreei` | store a note | — |
 | `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_whatsapp`, `_signal` | sync one connector | — |
-| `sync_all`, `refresh_memory` | sync every configured connector, without import files | — |
+| `sync_all`, `refresh_memoreei` | sync every configured connector, without import files | — |
 | `import_discord_package`, `import_messenger`, `import_instagram`, `import_sms_backup`, `import_json_file`, `import_csv_file` | import an export file | — |
 | `import_contacts_vcf`, `sync_contacts` | names for phone numbers, from a vCard or macOS Contacts | — |
 

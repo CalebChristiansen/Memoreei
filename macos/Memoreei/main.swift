@@ -271,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = "Quit Memoreei?"
-        a.informativeText = "Apps searching your memories lose access until you open it again."
+        a.informativeText = "Apps searching your memoreeis lose access until you open it again."
         a.addButton(withTitle: "Quit")
         a.addButton(withTitle: "Cancel")
         guard a.runModal() == .alertFirstButtonReturn else { return }

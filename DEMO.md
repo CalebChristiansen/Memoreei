@@ -84,7 +84,7 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 | `sync_discord` | Pull new messages from Discord channel into memory |
 | `search_memoreei` | Hybrid keyword + semantic search across all sources |
 | `get_context` | Fetch surrounding messages around a memory hit |
-| `add_memory` | Manually store a note or fact |
+| `add_memoreei` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |
 
 ---

@@ -146,7 +146,7 @@ async def get_context(memory_id: str, before: int = 5, after: int = 5) -> list[d
     return await tools.get_context(memory_id=memory_id, before=before, after=after)
 
 
-async def add_memory(
+async def add_memoreei(
     content: str,
     source: str = "manual",
     metadata: dict | None = None,
@@ -159,7 +159,7 @@ async def add_memory(
         metadata: Optional key-value metadata to attach
     """
     tools = await _get_tools()
-    return await tools.add_memory(content=content, source=source, metadata=metadata)
+    return await tools.add_memoreei(content=content, source=source, metadata=metadata)
 
 
 async def list_sources() -> dict:
@@ -168,7 +168,7 @@ async def list_sources() -> dict:
     return await tools.list_sources()
 
 
-async def refresh_memory() -> dict:
+async def refresh_memoreei() -> dict:
     """Trigger an immediate sync of all configured sources and return new message count."""
     tools = await _get_tools()
     count = await _sync_manager.refresh_all(tools)
@@ -500,10 +500,10 @@ async def sync() -> dict:
 LOCAL_TOOLS = [
     search_memoreei,
     get_context,
-    add_memory,
+    add_memoreei,
     list_sources,
     sync,
-    refresh_memory,
+    refresh_memoreei,
     sync_all,
     sync_discord,
     sync_telegram,

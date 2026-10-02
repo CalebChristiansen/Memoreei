@@ -11,7 +11,7 @@ You have these tools via the `memoreei` MCP server:
 | `sync_discord` | Pull messages from Discord channel into memory DB |
 | `search_memoreei` | Hybrid keyword + semantic search across all sources |
 | `get_context` | Get surrounding messages around a search hit |
-| `add_memory` | Manually store a note or fact |
+| `add_memoreei` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |
 
 ## How to Use
