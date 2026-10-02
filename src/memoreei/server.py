@@ -320,6 +320,17 @@ async def sync_imessage(chat_name: str | None = None) -> dict:
     return await tools.sync_imessage_tool(chat_name=chat_name)
 
 
+async def sync_whatsapp() -> dict:
+    """Sync WhatsApp chats from WhatsApp for Mac's database on this machine.
+
+    Reads ChatStorage.sqlite read-only: WhatsApp for Mac's, or the file WHATSAPP_DB_PATH
+    names, such as the one in an iPhone backup. Texts, captions, shared links and
+    document names are kept; stickers, voice notes and reactions have no words to keep.
+    """
+    tools = await _get_tools()
+    return await tools.sync_whatsapp_tool()
+
+
 async def sync_signal(conversation_id: str | None = None) -> dict:
     """Sync Signal Desktop messages from the local encrypted database.
     Requires Signal Desktop to be installed and pysqlcipher3 package.
@@ -501,6 +512,7 @@ LOCAL_TOOLS = [
     sync_email,
     sync_mastodon,
     sync_imessage,
+    sync_whatsapp,
     sync_signal,
     import_sms_backup,
     import_discord_package,

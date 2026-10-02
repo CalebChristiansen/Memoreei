@@ -2,6 +2,11 @@
 
 This guide walks through adding support for a new message source. As an example we'll add a hypothetical `irc` connector.
 
+A connector that reads a database on this computer rather than an API follows
+`connectors/imessage_connector.py` or `connectors/whatsapp/` instead of step 1: open the
+file read-only, keep a checkpoint on its row IDs, and return errors as a dict rather
+than raising. Steps 2 onwards, and step 7, apply either way.
+
 ## 1. Implement BaseConnector
 
 Create `src/memoreei/connectors/irc_connector.py`:
@@ -267,3 +272,16 @@ def test_irc_not_configured_without_env():
         mock_cfg.return_value.irc_channel = None
         assert IrcConnector.is_configured() is False
 ```
+
+## 7. Wire It Into Sync and Setup
+
+The MCP tool alone only syncs when asked. For `memoreei sync`, background sync and setup:
+
+- **`tools/memory_tools.py`**: a `sync_irc_tool()` method, which the tool and the sync
+  manager both call.
+- **`sync_manager.py`**: a branch in `sync_source()`. Raise when the sync fails, so
+  `sync_everything()` records it and the dashboard shows it as a problem with that source.
+- **`server.py`**: add the tool to `LOCAL_TOOLS`. Only `NETWORK_TOOLS` reach other
+  machines, and per-source syncs stay off it.
+- **`catalog.py`**: an entry in `CONNECTORS`, which `memoreei setup irc` uses. Add it to
+  `DASHBOARD_CONNECTORS` once it has been tried in the dashboard.

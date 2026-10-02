@@ -53,11 +53,14 @@ No formatter is enforced yet, but aim for PEP 8 style. A simple `ruff check src/
 
 See [docs/connectors.md](docs/connectors.md) for a step-by-step guide. The short version:
 
-1. Create `src/memoreei/connectors/yourplatform_connector.py` implementing `BaseConnector`
-2. Register it in `src/memoreei/connectors/__init__.py`
-3. Add config fields to `src/memoreei/config.py`
-4. Add an MCP tool in `src/memoreei/server.py`
-5. Write tests in `tests/test_yourplatform.py`
+1. Create `src/memoreei/connectors/yourplatform_connector.py`: a sync that stores what's
+   new since a checkpoint (`connectors/imessage_connector.py` and `connectors/whatsapp/`
+   are the models for reading a local database)
+2. Add config fields to `src/memoreei/config.py`, and the connector to `configured_connectors()`
+3. Wire it in: a `MemoryTools` method, a branch in `SyncManager.sync_source`, a tool in
+   `server.py`'s `LOCAL_TOOLS`, and a `catalog.py` entry for `memoreei setup` (plus
+   `DASHBOARD_CONNECTORS` to offer it in the dashboard)
+4. Write tests in `tests/test_yourplatform.py`, against fake data only
 
 ## PR Process
 

@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **WhatsApp**, read from WhatsApp for Mac's own database: texts, captions, shared links
+  and document names, with senders named from WhatsApp's address book, including group
+  members and people WhatsApp knows only by an anonymous ID. Set it up under Sources in
+  the dashboard (offered when WhatsApp for Mac is installed), or `memoreei setup
+  whatsapp`; `WHATSAPP_DB_PATH` can name an iPhone backup's `ChatStorage.sqlite`
+  instead. Each chat is a source, `whatsapp:<WhatsApp ID>`, shown by its name.
+- The status page shows how old the newest WhatsApp message is, since a linked Mac
+  whose phone has been offline for weeks stops syncing without saying so.
+
 ### Removed
 - The WhatsApp `.txt` export importer: `memoreei import whatsapp`, the `ingest_whatsapp`
   tool and the dashboard's upload for it. It read only US-format dates, so an export

@@ -8,6 +8,11 @@
   {% if in_app() %}Choose <b>Allow Access to Messages…</b> in the Memoreei menu{% else %}Run <code>memoreei service grant-access</code>{% endif %}.{% endif %}</dd>
 {% endif %}
 {%- endmacro -%}
+{%- macro whatsapp_row() -%}
+{% if "whatsapp" in connectors and whatsapp_newest %}
+<dt>WhatsApp</dt><dd>Newest message {{ whatsapp_newest|ago }}</dd>
+{% endif %}
+{%- endmacro -%}
 {%- macro auto_row(label) -%}
 <dt>{{ label }}</dt><dd>{% if auto_sync %}Every {{ interval_min }} minute{{ "" if interval_min == 1 else "s" }}{% else %}Off{% endif %}</dd>
 {%- endmacro -%}
@@ -40,6 +45,7 @@
       <dt>Last sync</dt>
       <dd>{% if last_run %}{{ last_run.finished_at|ago|capitalize }} · {{ "{:,}".format(last_run.result.new_messages) }} new{% else %}Not since the server started{% endif %}</dd>
       {{ problem_rows() }}
+      {{ whatsapp_row() }}
       {% endif %}
       {{ auto_row("Automatic sync") }}
       <dt>Server</dt><dd>Running on port {{ port }}</dd>
@@ -58,6 +64,7 @@
       {% else %}Not since the server started{% endif %}</dd>
     {{ auto_row("Automatic") }}
     {{ problem_rows() }}
+    {{ whatsapp_row() }}
     {{ fda_row() }}
     <dt>Data</dt><dd class="mono">{{ home|tilde }}</dd>
   </dl>

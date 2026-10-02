@@ -12,6 +12,7 @@ from memoreei.connectors.discord_connector import sync_discord
 from memoreei.connectors.generic_connector import import_json, import_csv
 from memoreei.connectors.discord_package_connector import import_discord_package as _import_discord_package
 from memoreei.connectors.imessage_connector import sync_imessage
+from memoreei.connectors.whatsapp import sync_whatsapp
 from memoreei.connectors.signal_connector import sync_signal
 from memoreei.connectors.email_connector import sync_email
 from memoreei.connectors.mastodon_connector import sync_mastodon
@@ -143,6 +144,10 @@ class MemoryTools:
     async def sync_imessage_tool(self, chat_name: str | None = None) -> dict[str, Any]:
         await sync_contacts(self.db)  # refresh contacts before syncing messages
         return await sync_imessage(db=self.db, embedder=self.embedder, chat_name=chat_name)
+
+    async def sync_whatsapp_tool(self) -> dict[str, Any]:
+        """Sync WhatsApp from WhatsApp for Mac's database (or WHATSAPP_DB_PATH)."""
+        return await sync_whatsapp(db=self.db, embedder=self.embedder)
 
     async def import_contacts_vcf(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)

@@ -30,6 +30,8 @@ def server(tmp_path, mock_embedder, monkeypatch):
     # These tests are about the Mac's dashboard, with iMessage, and no systemd to ask.
     # tests/test_linux_app.py covers what Linux shows instead.
     monkeypatch.setattr("memoreei.admin.app._on_mac", lambda: True)
+    # Without WhatsApp for Mac, whatever the machine running the tests has installed.
+    monkeypatch.setattr("memoreei.connectors.whatsapp.mac_app_present", lambda: False)
 
     async def no_service():
         return None
@@ -296,6 +298,61 @@ def test_upload_kind_not_enabled_is_unreachable(server):
     client = signed_in(server)
     r = client.post("/admin/upload/sms", files={"file": ("backup.xml", b"hi")}, headers=ORIGIN)
     assert r.status_code == 404
+
+
+def test_whatsapp_is_offered_only_where_whatsapp_for_mac_is(server, monkeypatch):
+    client = signed_in(server)
+    assert client.get("/admin/sources/whatsapp").status_code == 404
+    monkeypatch.setattr("memoreei.connectors.whatsapp.mac_app_present", lambda: True)
+    form = client.get("/admin/sources/whatsapp").text
+    assert "group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite" in form
+
+
+def test_whatsapp_form_says_whether_it_can_read(server, monkeypatch, tmp_path):
+    from tests.test_whatsapp import _make_chatstorage
+
+    monkeypatch.setattr("memoreei.connectors.whatsapp.mac_app_present", lambda: True)
+    client = signed_in(server)
+    monkeypatch.setenv("WHATSAPP_DB_PATH", str(tmp_path / "missing.sqlite"))
+    assert "Not found" in client.get("/admin/sources/whatsapp").text
+    (tmp_path / "wa").mkdir()
+    monkeypatch.setenv("WHATSAPP_DB_PATH", str(_make_chatstorage(tmp_path / "wa")))
+    assert "Readable" in client.get("/admin/sources/whatsapp").text
+    junk = tmp_path / "junk.sqlite"
+    junk.write_bytes(b"not a database")
+    monkeypatch.setenv("WHATSAPP_DB_PATH", str(junk))
+    assert "Can't read" in client.get("/admin/sources/whatsapp").text
+
+
+def test_status_shows_the_newest_whatsapp_message(server, monkeypatch):
+    import time as _time
+
+    from memoreei.admin import app as admin_app
+    from memoreei.storage.models import MemoryItem
+
+    async def no_sync() -> None:
+        return None
+
+    monkeypatch.setattr(admin_app, "_start_sync", no_sync)
+    monkeypatch.setattr("memoreei.connectors.whatsapp.mac_app_present", lambda: True)
+    client = signed_in(server)
+    client.post(
+        "/admin/sources/whatsapp", data={"WHATSAPP_DB_PATH": "/x/ChatStorage.sqlite"},
+        headers=ORIGIN, follow_redirects=False,
+    )
+    assert "Newest message" not in client.get("/admin/").text
+
+    async def seed() -> None:
+        db = await server_module._get_db()
+        await db.insert_memory(MemoryItem(
+            id="w1", source="whatsapp:12025550142@s.whatsapp.net", source_id="w1",
+            content="Zezima: selling lobsters", summary=None, participants=["Zezima"],
+            ts=int(_time.time()) - 3 * 3600, ingested_at=int(_time.time()), metadata={},
+            embedding=None,
+        ))
+
+    client.portal.call(seed)
+    assert "Newest message 3 hours ago" in client.get("/admin/").text
 
 
 def test_setting_up_imessage_writes_config_and_turns_on_auto_sync(server, monkeypatch):

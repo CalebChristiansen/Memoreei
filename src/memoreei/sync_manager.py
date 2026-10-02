@@ -102,6 +102,14 @@ class SyncManager:
                 except Exception as e:
                     self._imessage_ok = False
                     print(f"[sync_manager] iMessage sync error: {e}", file=sys.stderr)
+            elif source_name == "whatsapp":
+                result = await tools.sync_whatsapp_tool()
+                if "error" in result:
+                    # Raised, so the dashboard shows it as a problem with this source
+                    # rather than as a quiet zero.
+                    print(f"[sync_manager] WhatsApp sync error: {result['error']}", file=sys.stderr)
+                    raise RuntimeError(result["error"])
+                count = result.get("synced", 0)
             else:
                 print(f"[sync_manager] Unknown source: {source_name}", file=sys.stderr)
                 return 0

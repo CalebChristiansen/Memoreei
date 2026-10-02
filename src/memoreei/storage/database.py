@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS imessage_checkpoint (
     updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS whatsapp_checkpoint (
+    reader TEXT PRIMARY KEY,
+    position INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS signal_checkpoint (
     conversation_id TEXT PRIMARY KEY,
     last_rowid INTEGER NOT NULL,
@@ -503,6 +509,16 @@ class Database:
             rows = await cursor.fetchall()
         return {row["source"]: row["cnt"] for row in rows}
 
+    async def newest_ts(self, kind: str) -> int | None:
+        """The newest message time among sources of one kind ("whatsapp" for "whatsapp:…")."""
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT MAX(ts) AS ts FROM memories WHERE source = ? OR source LIKE ? ESCAPE '\\'",
+            (kind, kind.replace("_", "\\_").replace("%", "\\%") + ":%"),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["ts"] if row else None
+
     async def delete_by_source(self, source: str) -> int:
         assert self._db is not None
         async with self._db.execute(
@@ -657,6 +673,29 @@ class Database:
                 updated_at = excluded.updated_at
             """,
             (chat_id, last_rowid, int(time.time())),
+        )
+        await self._db.commit()
+
+    async def get_whatsapp_checkpoint(self, reader: str) -> int | None:
+        """How far a WhatsApp reader has got, in its own position units."""
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT position FROM whatsapp_checkpoint WHERE reader = ?", (reader,)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["position"] if row else None
+
+    async def set_whatsapp_checkpoint(self, reader: str, position: int) -> None:
+        assert self._db is not None
+        await self._db.execute(
+            """
+            INSERT INTO whatsapp_checkpoint (reader, position, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(reader) DO UPDATE SET
+                position = excluded.position,
+                updated_at = excluded.updated_at
+            """,
+            (reader, position, int(time.time())),
         )
         await self._db.commit()
 

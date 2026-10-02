@@ -177,6 +177,9 @@ class Config:
     # iMessage (macOS only)
     imessage_db_path: str | None = None
 
+    # WhatsApp: the Mac app's ChatStorage.sqlite, or the one in an iPhone backup
+    whatsapp_db_path: str | None = None
+
     # Signal Desktop (local encrypted DB)
     signal_db_path: str | None = None
     signal_config_path: str | None = None
@@ -199,6 +202,8 @@ class Config:
             connectors.append("mastodon")
         if sys.platform == "darwin" and self.imessage_db_path:
             connectors.append("imessage")
+        if self.whatsapp_db_path:
+            connectors.append("whatsapp")
         return connectors
 
 
@@ -238,6 +243,7 @@ def get_config() -> Config:
             mastodon_hashtag=os.environ.get("MASTODON_HASHTAG") or None,
             mastodon_access_token=os.environ.get("MASTODON_ACCESS_TOKEN") or None,
             imessage_db_path=os.environ.get("IMESSAGE_DB_PATH") or None,
+            whatsapp_db_path=os.environ.get("WHATSAPP_DB_PATH") or None,
             signal_db_path=os.environ.get("SIGNAL_DB_PATH") or None,
             signal_config_path=os.environ.get("SIGNAL_CONFIG_PATH") or None,
         )

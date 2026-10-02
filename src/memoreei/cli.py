@@ -253,7 +253,7 @@ def status() -> None:
 def sync(
     source: Optional[str] = typer.Argument(
         None,
-        help="Source to sync (discord, telegram, matrix, slack, email, mastodon, imessage). "
+        help="Source to sync (discord, telegram, matrix, slack, email, mastodon, imessage, whatsapp). "
         "Omit to sync every configured source and re-read changed import files.",
     ),
 ) -> None:
@@ -915,7 +915,7 @@ def open_dashboard(
 def setup(
     connector: Optional[str] = typer.Argument(
         None,
-        help="Connector to configure (gmail, discord, telegram, slack, matrix, mastodon, signal, imessage). Omit to choose interactively.",
+        help="Connector to configure (gmail, discord, telegram, slack, matrix, mastodon, signal, imessage, whatsapp). Omit to choose interactively.",
     ),
     reset: bool = typer.Option(False, "--reset", help="Clear existing values before reconfiguring"),
 ) -> None:

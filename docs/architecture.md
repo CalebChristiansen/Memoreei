@@ -94,6 +94,8 @@ Each connector has its own checkpoint table tracking the last successfully synce
 | `matrix_checkpoint` | `room_id` | pagination token (`prev_batch`) |
 | `slack_checkpoint` | `channel_id` | last message timestamp |
 | `email_checkpoint` | `"email:folder"` | last IMAP UID |
+| `imessage_checkpoint` | `chat.rowid` | last `message.rowid` |
+| `whatsapp_checkpoint` | reader (`chatstorage:<path>`) | last `ZWAMESSAGE.Z_PK`, read or skipped |
 
 On the next sync, the connector fetches only messages newer than its checkpoint.
 

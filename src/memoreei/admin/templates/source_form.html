@@ -22,6 +22,18 @@
 </section>
 {% endif %}
 
+{% if c.key == "whatsapp" %}
+<section class="card">
+  <dl class="facts">
+    <dt>WhatsApp for Mac</dt>
+    <dd>{% if readable %}<span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Readable</span> Memoreei can read its chats.
+    {% elif readable is none %}<span class="pill warn">Not found</span> No WhatsApp database at that path. WhatsApp for Mac keeps one once it's linked to your phone.
+    {% else %}<span class="pill warn">Can't read</span> Memoreei can't open WhatsApp's chats yet.
+    {% if in_app() %}Switch Memoreei on in System Settings → Privacy &amp; Security → <b>Full Disk Access</b>{% else %}Run <code>memoreei service grant-access</code> to give it Full Disk Access{% endif %}.{% endif %}</dd>
+  </dl>
+</section>
+{% endif %}
+
 <form method="post" class="card stack">
   {% for f in fields %}
   <div class="field">

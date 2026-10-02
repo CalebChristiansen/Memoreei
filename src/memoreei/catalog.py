@@ -104,6 +104,17 @@ CONNECTORS: dict[str, dict] = {
              "~/Library/Messages/chat.db"),
         ],
     },
+    "whatsapp": {
+        "name": "WhatsApp (from WhatsApp for Mac)",
+        "short": "WhatsApp",
+        "icon": "W",
+        "blurb": "Reads the chats WhatsApp for Mac keeps on this Mac. Nothing is sent anywhere.",
+        "vars": [
+            ("WHATSAPP_DB_PATH", "WhatsApp database path", False,
+             "Press Enter to use WhatsApp for Mac's. An iPhone backup's ChatStorage.sqlite works too.",
+             "~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite"),
+        ],
+    },
 }
 
 
@@ -167,7 +178,7 @@ UPLOADS: dict[str, dict] = {
 }
 
 # What the dashboard offers. The rest stay CLI-only until each is tested there.
-DASHBOARD_CONNECTORS: tuple[str, ...] = ("imessage",)
+DASHBOARD_CONNECTORS: tuple[str, ...] = ("imessage", "whatsapp")
 DASHBOARD_UPLOADS: tuple[str, ...] = ()
 
 

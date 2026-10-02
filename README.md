@@ -9,7 +9,7 @@
 [![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)
 
 Memoreei is an open-source [MCP](https://modelcontextprotocol.io/) server that gives
-your AI assistant a searchable memory of your messages: iMessage, Discord,
+your AI assistant a searchable memory of your messages: iMessage, WhatsApp, Discord,
 Telegram, Slack, Gmail, Instagram and more. It keeps them in one SQLite file on your
 machine and searches them by keyword and by meaning at once.
 
@@ -58,7 +58,8 @@ elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
    window walks you through dragging Memoreei into the list, and notices when it's done.
 5. **The firewall** may ask whether *Memoreei Server* may accept incoming connections.
    **Allow**, or other machines can't reach it.
-6. **The dashboard** opens in your browser. Set up iMessage under **Sources**, and
+6. **The dashboard** opens in your browser. Set up iMessage (and WhatsApp, if WhatsApp
+   for Mac is installed) under **Sources**, and
    create a key under **Clients** for each machine or app that will search.
 
 Memoreei then lives in the menu bar and starts at login. **Open Dashboard** signs you in
@@ -257,6 +258,7 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Source | How | Status |
 |---|---|---|
 | iMessage (macOS) | live, from `chat.db` | 🧪 Beta |
+| WhatsApp (WhatsApp for Mac, or an iPhone backup) | live, from `ChatStorage.sqlite` | 🧪 Beta |
 | Gmail (IMAP) | live | ✅ |
 | Discord (bot) | live | ✅ |
 | Telegram (bot) | live | ✅ |
@@ -270,6 +272,13 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Any JSON, JSON-lines, CSV or TSV | import | ✅ |
 | Contacts (vCard, or macOS Contacts) | names for phone numbers | ✅ |
 | Signal Desktop | live | ⛔ Blocked |
+
+**WhatsApp** is read from where WhatsApp for Mac keeps the chats it has synced from your
+phone: texts, photo and video captions, shared links and document names. Stickers, voice
+notes and reactions have no words to search, so they're skipped. Its database has the
+same layout as the one in an iPhone backup, so `WHATSAPP_DB_PATH` can point at that
+instead, on any OS. WhatsApp on Windows and Linux is WhatsApp Web, whose local copy is
+encrypted with a key held by WhatsApp's servers, so there is nothing there to read.
 
 **Live** sources sync incrementally, fetching only what's new. **Imports** are
 remembered: `memoreei sync` re-reads a file when it changes. Signal Desktop now keeps its
@@ -289,7 +298,7 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 | `list_sources` | every source and its message count | ✅ |
 | `sync` | refresh everything configured on the server; no arguments | ✅ |
 | `add_memory` | store a note | — |
-| `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_signal` | sync one connector | — |
+| `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_whatsapp`, `_signal` | sync one connector | — |
 | `sync_all`, `refresh_memory` | sync every configured connector, without import files | — |
 | `import_discord_package`, `import_messenger`, `import_instagram`, `import_sms_backup`, `import_json_file`, `import_csv_file` | import an export file | — |
 | `import_contacts_vcf`, `sync_contacts` | names for phone numbers, from a vCard or macOS Contacts | — |
@@ -312,7 +321,7 @@ memoreei service install | status | logs | uninstall | grant-access
 memoreei status                     # message counts, sources, last sync times
 memoreei config                     # settings, tokens masked
 memoreei sync [source]              # everything, or one of discord, telegram, matrix,
-                                    #   slack, email, mastodon, imessage
+                                    #   slack, email, mastodon, imessage, whatsapp
 memoreei search "printer issue" --limit 5 --source imessage:+12025550142
 memoreei import sms backup.xml      # also discord-package, messenger, instagram,
                                     #   json, csv, contacts
@@ -373,6 +382,7 @@ Connector settings:
 | Gmail | `GMAIL_EMAIL`, `GMAIL_APP_PASSWORD` ([an app password](https://myaccount.google.com/apppasswords)) |
 | Mastodon | `MASTODON_INSTANCE` (default `https://mastodon.social`), `MASTODON_HASHTAG`, `MASTODON_ACCESS_TOKEN` |
 | iMessage | `IMESSAGE_DB_PATH` (default `~/Library/Messages/chat.db`) |
+| WhatsApp | `WHATSAPP_DB_PATH` (default WhatsApp for Mac's, `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite`) |
 | Signal | `SIGNAL_DB_PATH`, `SIGNAL_CONFIG_PATH` |
 
 API keys aren't settings. They live in the database, hashed.

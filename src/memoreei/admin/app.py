@@ -11,6 +11,7 @@ import hashlib
 import logging
 import os
 import re
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -210,9 +211,35 @@ def _on_mac() -> bool:
     return sys.platform == "darwin"
 
 
+def _offered(key: str) -> bool:
+    if key == "imessage":
+        return _on_mac()
+    if key == "whatsapp":
+        # Where WhatsApp for Mac is, or wherever someone already pointed it.
+        from memoreei.connectors.whatsapp import mac_app_present
+
+        return (_on_mac() and mac_app_present()) or "WHATSAPP_DB_PATH" in _env_vars()
+    return True
+
+
 def _dashboard_connectors() -> tuple[str, ...]:
-    """The connectors the dashboard offers on this platform: iMessage only exists on a Mac."""
-    return tuple(k for k in DASHBOARD_CONNECTORS if k != "imessage" or _on_mac())
+    """The connectors the dashboard offers here: iMessage only exists on a Mac, and
+    WhatsApp only where WhatsApp for Mac keeps its chats."""
+    return tuple(k for k in DASHBOARD_CONNECTORS if _offered(k))
+
+
+def _whatsapp_readable(db_path: str | None) -> bool | None:
+    """Whether this process can open WhatsApp's database. None when it isn't there."""
+    from memoreei.connectors.whatsapp import ChatStorageReader, get_db_path
+
+    path = Path(db_path or get_db_path()).expanduser()
+    if not path.exists():
+        return None
+    try:
+        with ChatStorageReader(path):
+            return True
+    except sqlite3.Error:
+        return False
 
 
 def _accounts() -> list[dict[str, Any]]:
@@ -245,6 +272,9 @@ async def _status_context() -> dict[str, Any]:
     names += [a["short"] for a in accounts if a["configured"] and a["short"] not in names]
     names += [kind_name(k) for k in by_kind if kind_name(k) not in names]
     fda = _full_disk_access()
+    # A stale linked Mac (the phone offline for weeks, or WhatsApp dropping this macOS)
+    # syncs nothing without an error; the newest message's age is what gives it away.
+    whatsapp_newest = await db.newest_ts("whatsapp") if "whatsapp" in connectors else None
     last_run = _sync_manager.last_run
     failed = bool(last_run) and any(
         isinstance(r, dict) for r in last_run["result"].get("connectors", {}).values()
@@ -261,6 +291,7 @@ async def _status_context() -> dict[str, Any]:
         "auto_sync": cfg.auto_sync,
         "interval_min": max(1, cfg.sync_interval // 60),
         "fda": fda,
+        "whatsapp_newest": whatsapp_newest,
         "running": _sync_manager.running,
         "last_run": last_run,
         "keys": keys,
@@ -527,6 +558,9 @@ async def source_form(request: Request) -> Response:
         configured=is_connector_configured(connector["key"], env),
         fda=_full_disk_access(env.get("IMESSAGE_DB_PATH") or "~/Library/Messages/chat.db")
         if connector["key"] == "imessage"
+        else None,
+        readable=_whatsapp_readable(env.get("WHATSAPP_DB_PATH"))
+        if connector["key"] == "whatsapp"
         else None,
     )
 
