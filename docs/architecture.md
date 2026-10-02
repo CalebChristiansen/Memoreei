@@ -57,7 +57,7 @@ Post-fusion filters (`source`, `participant`, `after`, `before`) are applied to 
 ```sql
 CREATE TABLE memories (
     id          TEXT PRIMARY KEY,   -- ULID
-    source      TEXT NOT NULL,      -- "discord", "whatsapp:Chat Name", "manual"
+    source      TEXT NOT NULL,      -- "discord", "imessage:+1…", "manual"
     source_id   TEXT,               -- platform message ID (dedup key)
     content     TEXT NOT NULL,      -- full message text
     summary     TEXT,               -- optional short summary

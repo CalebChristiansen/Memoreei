@@ -9,7 +9,7 @@
 [![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)
 
 Memoreei is an open-source [MCP](https://modelcontextprotocol.io/) server that gives
-your AI assistant a searchable memory of your messages: iMessage, WhatsApp, Discord,
+your AI assistant a searchable memory of your messages: iMessage, Discord,
 Telegram, Slack, Gmail, Instagram and more. It keeps them in one SQLite file on your
 machine and searches them by keyword and by meaning at once.
 
@@ -263,7 +263,6 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Slack (bot) | live | ✅ |
 | Matrix | live | ✅ |
 | Mastodon | live | ✅ |
-| WhatsApp (`.txt` export) | import | ✅ |
 | Discord Data Package | import | ✅ |
 | Facebook Messenger (data download) | import | ✅ |
 | Instagram DMs (data download) | import | ✅ |
@@ -292,7 +291,7 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 | `add_memory` | store a note | — |
 | `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_signal` | sync one connector | — |
 | `sync_all`, `refresh_memory` | sync every configured connector, without import files | — |
-| `ingest_whatsapp`, `import_discord_package`, `import_messenger`, `import_instagram`, `import_sms_backup`, `import_json_file`, `import_csv_file` | import an export file | — |
+| `import_discord_package`, `import_messenger`, `import_instagram`, `import_sms_backup`, `import_json_file`, `import_csv_file` | import an export file | — |
 | `import_contacts_vcf`, `sync_contacts` | names for phone numbers, from a vCard or macOS Contacts | — |
 
 A local (stdio) client gets all of them. Each tool's parameters are in its MCP
@@ -314,9 +313,9 @@ memoreei status                     # message counts, sources, last sync times
 memoreei config                     # settings, tokens masked
 memoreei sync [source]              # everything, or one of discord, telegram, matrix,
                                     #   slack, email, mastodon, imessage
-memoreei search "printer issue" --limit 5 --source whatsapp:friends
-memoreei import whatsapp "WhatsApp Chat.txt"   # also sms, discord-package, messenger,
-                                               #   instagram, json, csv, contacts
+memoreei search "printer issue" --limit 5 --source imessage:+12025550142
+memoreei import sms backup.xml      # also discord-package, messenger, instagram,
+                                    #   json, csv, contacts
 memoreei import list | forget <id>  # the files `sync` re-reads
 ```
 

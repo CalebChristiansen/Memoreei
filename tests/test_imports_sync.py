@@ -31,16 +31,6 @@ def tools(temp_db, mock_embedder) -> MemoryTools:
 # ── One small export per importer ────────────────────────────────────────────
 
 
-def _whatsapp(tmp: Path) -> tuple[Path, dict]:
-    f = tmp / "hyrule_council.txt"
-    f.write_text(
-        "[03/20/26, 12:01:14] Link: has anyone seen my sword\n"
-        "[03/20/26, 12:02:38] Zelda: it's in the pedestal, where you left it\n"
-        "[03/20/26, 12:03:52] Impa: again\n"
-    )
-    return f, {}
-
-
 def _sms(tmp: Path) -> tuple[Path, dict]:
     f = tmp / "backup.xml"
     f.write_text(
@@ -125,6 +115,21 @@ def _csv(tmp: Path) -> tuple[Path, dict]:
     return f, {"content_column": "body", "sender_column": "who", "timestamp_column": "when", "source_label": "voyage"}
 
 
+def _council(tmp: Path) -> tuple[Path, dict]:
+    """A CSV the registration and re-read tests can append a row to."""
+    f = tmp / "hyrule_council.csv"
+    f.write_text(
+        "text,who,when\n"
+        "has anyone seen my sword,Link,2026-03-20 12:01:14\n"
+        "\"it's in the pedestal, where you left it\",Zelda,2026-03-20 12:02:38\n"
+        "again,Impa,2026-03-20 12:03:52\n"
+    )
+    return f, {"content_column": "text", "sender_column": "who", "timestamp_column": "when", "source_label": "hyrule_council"}
+
+
+COUNCIL_FLAGS = ["--content-column", "text", "--sender-column", "who", "--timestamp-column", "when", "--source-label", "hyrule_council"]
+
+
 def _vcf(tmp: Path) -> tuple[Path, dict]:
     f = tmp / "contacts.vcf"
     f.write_text(
@@ -134,7 +139,6 @@ def _vcf(tmp: Path) -> tuple[Path, dict]:
 
 
 BUILDERS = {
-    "whatsapp": _whatsapp,
     "sms": _sms,
     "discord-package": _discord_package,
     "messenger": _messenger,
@@ -187,21 +191,21 @@ async def test_import_registers_absolute_path_and_options(tools, tmp_path, monke
 
 
 async def test_failed_import_is_not_registered(tools, tmp_path):
-    result = await import_and_register(tools, "whatsapp", str(tmp_path / "nope.txt"))
+    result = await import_and_register(tools, "sms", str(tmp_path / "nope.xml"))
     assert "error" in result
     assert await tools.db.list_imports() == []
 
 
 async def test_reimporting_same_file_keeps_one_registration(tools, tmp_path):
-    path, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(path))
-    await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(path), options)
+    await import_and_register(tools, "csv", str(path), options)
     assert len(await tools.db.list_imports()) == 1
 
 
 async def test_forget_import(tools, tmp_path):
-    path, _ = _whatsapp(tmp_path)
-    result = await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    result = await import_and_register(tools, "csv", str(path), options)
     assert await tools.db.forget_import(result["import_id"]) is True
     assert await tools.db.list_imports() == []
     assert await tools.db.forget_import(result["import_id"]) is False
@@ -211,8 +215,8 @@ async def test_forget_import(tools, tmp_path):
 
 
 async def test_unchanged_file_is_skipped(tools, tmp_path):
-    path, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(path), options)
     with patch("memoreei.imports.run_import") as ran:
         report = await resync_imports(tools)
     ran.assert_not_called()
@@ -220,10 +224,10 @@ async def test_unchanged_file_is_skipped(tools, tmp_path):
 
 
 async def test_changed_file_is_reread(tools, tmp_path):
-    path, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(path), options)
     with path.open("a") as f:
-        f.write("[03/20/26, 12:09:00] Link: found it\n")
+        f.write("found it,Link,2026-03-20 12:09:00\n")
     st = path.stat()
     os.utime(path, (st.st_atime, st.st_mtime + 10))
 
@@ -255,8 +259,8 @@ async def test_changed_directory_is_reread(tools, tmp_path):
 
 
 async def test_missing_file_is_reported_not_fatal(tools, tmp_path):
-    gone, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(gone))
+    gone, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(gone), options)
     kept_dir = tmp_path / "kept"
     kept_dir.mkdir()
     kept, _ = _sms(kept_dir)
@@ -266,24 +270,24 @@ async def test_missing_file_is_reported_not_fatal(tools, tmp_path):
     os.utime(kept, (st.st_atime, st.st_mtime + 10))
 
     report = {r["kind"]: r for r in await resync_imports(tools)}
-    assert report["whatsapp"]["status"] == "missing"
+    assert report["csv"]["status"] == "missing"
     assert report["sms"]["status"] == "imported"
 
 
 async def test_report_names_files_not_paths(tools, tmp_path):
-    path, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(path), options)
     report = await resync_imports(tools)
     assert report[0]["file"] == path.name
     assert str(tmp_path) not in json.dumps(report)
 
 
 async def test_sync_everything_runs_connectors_and_imports(tools, tmp_path, monkeypatch):
-    path, _ = _whatsapp(tmp_path)
-    await import_and_register(tools, "whatsapp", str(path))
+    path, options = _council(tmp_path)
+    await import_and_register(tools, "csv", str(path), options)
     st = path.stat()
     os.utime(path, (st.st_atime, st.st_mtime + 10))
-    await tools.db.delete_by_source("whatsapp:hyrule_council")
+    await tools.db.delete_by_source("hyrule_council")
 
     manager = SyncManager()
 
@@ -311,12 +315,12 @@ def cli_env(monkeypatch, mock_embedder):
 
 
 def test_cli_import_registers_and_lists(tmp_path, cli_env):
-    path, _ = _whatsapp(tmp_path)
-    result = runner.invoke(app, ["import", "whatsapp", str(path)])
+    path, options = _council(tmp_path)
+    result = runner.invoke(app, ["import", "csv", str(path), *COUNCIL_FLAGS])
     assert result.exit_code == 0, result.output
     listed = runner.invoke(app, ["import", "list"])
     assert listed.exit_code == 0
-    assert "whatsapp" in listed.output
+    assert "csv" in listed.output
     assert str(path) in listed.output
 
 
@@ -331,15 +335,15 @@ def test_cli_import_csv_takes_column_options(tmp_path, cli_env):
 
 
 def test_cli_import_failure_exits_nonzero(tmp_path, cli_env):
-    result = runner.invoke(app, ["import", "whatsapp", str(tmp_path / "missing.txt")])
+    result = runner.invoke(app, ["import", "sms", str(tmp_path / "missing.xml")])
     assert result.exit_code == 1
     assert "not registered" not in result.output
     assert "No registered imports" in runner.invoke(app, ["import", "list"]).output
 
 
 def test_cli_import_forget(tmp_path, cli_env):
-    path, _ = _whatsapp(tmp_path)
-    runner.invoke(app, ["import", "whatsapp", str(path)])
+    path, options = _council(tmp_path)
+    runner.invoke(app, ["import", "csv", str(path), *COUNCIL_FLAGS])
     result = runner.invoke(app, ["import", "forget", "1"])
     assert result.exit_code == 0
     assert "No registered imports" in runner.invoke(app, ["import", "list"]).output
@@ -347,10 +351,10 @@ def test_cli_import_forget(tmp_path, cli_env):
 
 
 def test_cli_sync_rereads_registered_imports(tmp_path, cli_env):
-    path, _ = _whatsapp(tmp_path)
-    runner.invoke(app, ["import", "whatsapp", str(path)])
+    path, options = _council(tmp_path)
+    runner.invoke(app, ["import", "csv", str(path), *COUNCIL_FLAGS])
     with path.open("a") as f:
-        f.write("[03/20/26, 12:09:00] Link: found it\n")
+        f.write("found it,Link,2026-03-20 12:09:00\n")
     st = path.stat()
     os.utime(path, (st.st_atime, st.st_mtime + 10))
     result = runner.invoke(app, ["sync"])
@@ -378,3 +382,13 @@ async def test_json_without_timestamp_is_stable(tools, tmp_path):
     await run_import(tools, "json", str(path), options)
     second = await run_import(tools, "json", str(path), options)
     assert second["new"] == 0
+
+
+async def test_dropped_import_kind_says_how_to_forget_it(tools, tmp_path):
+    """A registration left by an older version reports itself instead of failing sync."""
+    old = tmp_path / "hyrule_council.txt"
+    old.write_text("[03/20/26, 12:01:14] Link: has anyone seen my sword\n")
+    import_id = await tools.db.register_import("whatsapp", str(old), {}, None)
+    report = await resync_imports(tools)
+    assert report[0]["status"] == "error"
+    assert f"memoreei import forget {import_id}" in report[0]["error"]

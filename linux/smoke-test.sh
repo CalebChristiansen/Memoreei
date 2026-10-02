@@ -16,7 +16,7 @@ PKG=$(readlink -f "$1")
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 U=${SMOKE_USER:-memsmoke}
 PORT=${SMOKE_PORT:-3697}
-SAMPLE="$ROOT/data/samples/whatsapp_printer_conspiracy.txt"
+SAMPLE="$ROOT/data/samples/printer_conspiracy.jsonl"
 
 [ "$(id -u)" = 0 ] || { echo "run as root (it installs a package and adds a user)" >&2; exit 2; }
 if id "$U" >/dev/null 2>&1; then
@@ -96,7 +96,8 @@ EOF
 
 step "import and key"
 cp "$SAMPLE" "$H/" && chown "$U:" "$H/$(basename "$SAMPLE")"
-as_user memoreei import whatsapp "$H/$(basename "$SAMPLE")" >/dev/null
+as_user memoreei import json "$H/$(basename "$SAMPLE")" \
+  --content-field text --sender-field sender --timestamp-field ts --source-label printer_conspiracy >/dev/null
 [ -f "$H/.local/share/memoreei/memoreei.db" ] || fail "no database in ~/.local/share/memoreei"
 KEY=$(as_user memoreei key create smoke | grep -o 'mem_[A-Za-z0-9_-]*' | head -1)
 [ -n "$KEY" ] || fail "no key created"
@@ -137,7 +138,7 @@ call '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 step "search"
 result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"the printer is plotting against us","limit":3}}}')
-echo "$result" | grep -q 'whatsapp_printer_conspiracy' || { echo "$result"; show_log; fail "search"; }
+echo "$result" | grep -q 'printer_conspiracy' || { echo "$result"; show_log; fail "search"; }
 
 step "dashboard: signed out, then in with admin-url's one-time link"
 code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/admin/")

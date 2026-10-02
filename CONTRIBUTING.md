@@ -1,6 +1,6 @@
 # Contributing to Memoreei
 
-Welcome! Memoreei is a personal memory search server that ingests messages from Discord, WhatsApp, Telegram, Matrix, Slack, and Gmail into a hybrid search database. Contributions are appreciated.
+Welcome! Memoreei is a personal memory search server that ingests messages from iMessage, Discord, Telegram, Matrix, Slack, Gmail and more into a hybrid search database. Contributions are appreciated.
 
 ## Dev Environment Setup
 

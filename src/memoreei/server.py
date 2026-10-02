@@ -118,7 +118,7 @@ async def search_memory(
     Args:
         query: Natural language search query
         limit: Maximum number of results to return (default: 10)
-        source: Filter by data source (e.g. 'whatsapp:printer_conspiracy', 'discord:1487...')
+        source: Filter by data source (e.g. 'imessage:+12025550142', 'discord:1487...')
         participant: Filter by participant name
         after: Only return memories after this date (ISO format, e.g. '2026-01-01')
         before: Only return memories before this date (ISO format, e.g. '2026-12-31')
@@ -166,16 +166,6 @@ async def list_sources() -> dict:
     """List all data sources and their message counts."""
     tools = await _get_tools()
     return await tools.list_sources()
-
-
-async def ingest_whatsapp(file_path: str) -> dict:
-    """Import a WhatsApp chat export .txt file into memory.
-
-    Args:
-        file_path: Absolute or relative path to the WhatsApp .txt export file
-    """
-    tools = await _get_tools()
-    return await import_and_register(tools, "whatsapp", file_path)
 
 
 async def refresh_memory() -> dict:
@@ -502,7 +492,6 @@ LOCAL_TOOLS = [
     add_memory,
     list_sources,
     sync,
-    ingest_whatsapp,
     refresh_memory,
     sync_all,
     sync_discord,

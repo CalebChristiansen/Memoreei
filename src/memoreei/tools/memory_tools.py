@@ -21,7 +21,6 @@ from memoreei.connectors.telegram_connector import sync_telegram
 from memoreei.connectors.instagram_connector import parse_instagram_export
 from memoreei.connectors.messenger_connector import parse_messenger_export
 from memoreei.connectors.sms_connector import parse_sms_backup
-from memoreei.connectors.whatsapp import parse_whatsapp_export
 from memoreei.search.embeddings import EmbeddingProvider
 from memoreei.search.hybrid import HybridSearch
 from memoreei.storage.database import Database
@@ -109,30 +108,6 @@ class MemoryTools:
     async def sync_contacts_tool(self) -> dict[str, Any]:
         """Sync contacts from macOS AddressBook into the contacts table."""
         return await sync_contacts(self.db)
-
-    async def ingest_whatsapp(self, file_path: str) -> dict[str, Any]:
-        path = Path(file_path)
-        if not path.exists():
-            return {"error": f"File not found: {file_path}", "ingested": 0}
-        if not path.suffix.lower() == ".txt":
-            return {"error": f"Expected a .txt file, got: {path.suffix}", "ingested": 0}
-
-        items = parse_whatsapp_export(path)
-        if not items:
-            return {"error": "No messages parsed from file", "ingested": 0}
-
-        # Embed in batches
-        texts = [item.content for item in items]
-        embeddings = await self.embedder.embed(texts)
-        for item, emb in zip(items, embeddings):
-            item.embedding = emb
-
-        count = await self.db.bulk_insert(items)
-        return {
-            "ingested": count,
-            "file": str(path),
-            "source": items[0].source if items else None,
-        }
 
     async def sync_discord_tool(self, channel_id: str | None = None) -> dict[str, Any]:
         return await sync_discord(db=self.db, embedder=self.embedder, channel_id=channel_id)

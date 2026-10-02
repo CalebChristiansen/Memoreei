@@ -158,9 +158,6 @@ def write_env_updates(
 
 # File imports, the "upload" kind: the importer (imports.py) and what the file is.
 UPLOADS: dict[str, dict] = {
-    "whatsapp": {"name": "WhatsApp chat export", "short": "WhatsApp chat", "icon": "W",
-                 "what": "An exported .txt", "accept": ".txt",
-                 "hint": "In a chat: ⋯ → More → Export chat → Without media"},
     "sms": {"name": "Android SMS backup", "short": "Android SMS", "icon": "S",
             "what": "A backup .xml", "accept": ".xml",
             "hint": "An XML file from SMS Backup & Restore"},

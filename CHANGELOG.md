@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- The WhatsApp `.txt` export importer: `memoreei import whatsapp`, the `ingest_whatsapp`
+  tool and the dashboard's upload for it. It read only US-format dates, so an export
+  from most of the world parsed as nothing. A registered `.txt` import from before now
+  says it's unsupported on each sync, and `memoreei import forget <id>` removes it.
+  Messages it already imported stay where they are.
+- The sample chats are JSON Lines now (`data/samples/*.jsonl`), and the smoke tests
+  import them with `memoreei import json`.
+
 ## [0.4.1] - 2026-09-27
 
 ### Added

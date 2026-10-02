@@ -21,7 +21,7 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 
 ### Opening (15 sec)
 
-> "This is Memoreei — a personal memory server. It ingests your conversations from anywhere — Discord, Telegram, WhatsApp, email — and makes them searchable by any AI model through MCP."
+> "This is Memoreei — a personal memory server. It ingests your conversations from anywhere — Discord, Telegram, iMessage, email — and makes them searchable by any AI model through MCP."
 
 ### Architecture (15 sec)
 
@@ -43,14 +43,14 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 ### Multi-Source Search (45 sec)
 
 6. Say: **"Search all my memories for anything about movies"**
-   - Returns results across Discord, WhatsApp, and manual notes — multiple sources, one query
+   - Returns results across Discord, the sample chats, and manual notes — multiple sources, one query
 7. Say: **"Who have I been talking to the most this week?"**
    - Returns participant stats fused across sources
 
 ### Show Sources (15 sec)
 
 8. Say: **"List all my memory sources"**
-   - Shows each source with message counts: `discord:...`, `whatsapp:...`, `manual`
+   - Shows each source with message counts: `discord:...`, `printer_conspiracy`, `manual`
    > *"One server. Every conversation. Any AI client."*
 
 ### Use Case Flash (if time — 15 sec)
@@ -71,7 +71,7 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 | Problem | Recovery |
 |---------|----------|
 | Claude Code is slow | Have pre-run query results ready to paste |
-| Discord sync fails | WhatsApp data is already seeded — search `whatsapp:printer_conspiracy` |
+| Discord sync fails | The sample chats are already seeded — search `printer_conspiracy` |
 | Embeddings slow on first sync | "First sync downloads the model — here's one I prepared earlier" → show pre-populated results |
 | MCP server not connected | Run `bash scripts/demo_setup.sh` and reconnect in Claude Code settings |
 
@@ -86,7 +86,6 @@ It will seed the database if empty, verify the MCP server starts, and print a re
 | `get_context` | Fetch surrounding messages around a memory hit |
 | `add_memory` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |
-| `ingest_whatsapp` | Import a WhatsApp chat export `.txt` file |
 
 ---
 

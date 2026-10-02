@@ -1,7 +1,7 @@
 # CLAUDE.md — Memoreei Project Context
 
 ## What This Is
-Memoreei is an MCP server for personal memory search. It ingests messages from Discord, WhatsApp, Telegram, Matrix, Slack, Gmail, and more — stores them in a hybrid search database (keyword + vector) — and exposes them via MCP tools.
+Memoreei is an MCP server for personal memory search. It ingests messages from iMessage, Discord, Telegram, Matrix, Slack, Gmail, and more — stores them in a hybrid search database (keyword + vector) — and exposes them via MCP tools.
 
 ## MCP Tools Available
 You have these tools via the `memoreei` MCP server:
@@ -13,7 +13,6 @@ You have these tools via the `memoreei` MCP server:
 | `get_context` | Get surrounding messages around a search hit |
 | `add_memory` | Manually store a note or fact |
 | `list_sources` | Show all ingested sources with message counts |
-| `ingest_whatsapp` | Import a WhatsApp chat export .txt file |
 
 ## How to Use
 - **To search:** Use `search_memory` with a natural language query. It does hybrid BM25 + vector search with RRF fusion.
@@ -35,7 +34,7 @@ src/memoreei/
 ├── admin/                 # the /admin dashboard and its login rules
 ├── storage/database.py    # SQLite + FTS5 + vector search
 ├── search/hybrid.py       # Hybrid search with RRF fusion
-├── connectors/            # Discord, WhatsApp, Telegram, Matrix, Slack, Email
+├── connectors/            # iMessage, Discord, Telegram, Matrix, Slack, Email, …
 └── tools/memory_tools.py  # MCP tool implementations
 ```
 

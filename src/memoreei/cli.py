@@ -499,14 +499,6 @@ def _run_import(kind: str, path: str, options: Optional[dict] = None) -> None:
         raise typer.Exit(1)
 
 
-@import_app.command(name="whatsapp")
-def import_whatsapp(
-    file: str = typer.Argument(..., help="Path to WhatsApp .txt export file"),
-) -> None:
-    """Import a WhatsApp chat export .txt file."""
-    _run_import("whatsapp", file)
-
-
 @import_app.command(name="sms")
 def import_sms(
     file: str = typer.Argument(..., help="Path to SMS Backup & Restore .xml file"),

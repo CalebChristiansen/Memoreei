@@ -294,7 +294,7 @@ def test_connector_not_enabled_is_unreachable(server):
 
 def test_upload_kind_not_enabled_is_unreachable(server):
     client = signed_in(server)
-    r = client.post("/admin/upload/whatsapp", files={"file": ("chat.txt", b"hi")}, headers=ORIGIN)
+    r = client.post("/admin/upload/sms", files={"file": ("backup.xml", b"hi")}, headers=ORIGIN)
     assert r.status_code == 404
 
 

@@ -96,7 +96,7 @@ def main():
         tool_names = [t["name"] for t in tools]
         print(f"    tools: {tool_names}")
         check(len(tools) == 6, f"6 tools registered (got {len(tools)})")
-        expected = {"search_memory", "get_context", "add_memory", "list_sources", "ingest_whatsapp", "sync_discord"}
+        expected = {"search_memory", "get_context", "add_memory", "list_sources", "import_sms_backup", "sync_discord"}
         check(set(tool_names) == expected, f"all expected tools present (got {set(tool_names)})")
 
         # Step 4: search_memory

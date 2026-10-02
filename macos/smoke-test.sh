@@ -24,7 +24,8 @@ cd "$WORK"
 mem() { "$SERVER" -m memoreei "$@"; }
 
 echo "--- import"
-mem import whatsapp "$ROOT/data/samples/whatsapp_printer_conspiracy.txt" >/dev/null
+mem import json "$ROOT/data/samples/printer_conspiracy.jsonl" \
+  --content-field text --sender-field sender --timestamp-field ts --source-label printer_conspiracy >/dev/null
 KEY=$(mem key create smoke | grep -o 'mem_[A-Za-z0-9_-]*' | head -1)
 [ -n "$KEY" ] || { echo "no key created"; exit 1; }
 
@@ -52,7 +53,7 @@ call '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 echo "--- search"
 result=$(call '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"the printer is plotting against us","limit":3}}}')
-echo "$result" | grep -q 'whatsapp_printer_conspiracy' || { echo "$result"; cat "$WORK/serve.log"; exit 1; }
+echo "$result" | grep -q 'printer_conspiracy' || { echo "$result"; cat "$WORK/serve.log"; exit 1; }
 
 echo "--- dashboard answers on loopback"
 code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/admin/")

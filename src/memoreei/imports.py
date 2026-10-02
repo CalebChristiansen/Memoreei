@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 # kind -> (MemoryTools method, name of its path argument)
 IMPORTERS: dict[str, tuple[str, str]] = {
-    "whatsapp": ("ingest_whatsapp", "file_path"),
     "sms": ("import_sms_backup", "file_path"),
     "discord-package": ("import_discord_package_tool", "package_path"),
     "messenger": ("import_messenger", "data_path"),
@@ -77,7 +76,11 @@ async def resync_imports(tools: "MemoryTools") -> list[dict[str, Any]]:
             item["status"] = "unchanged"
         elif entry["kind"] not in IMPORTERS:
             item["status"] = "error"
-            item["error"] = f"unknown import kind: {entry['kind']}"
+            # A kind this version dropped: say how to stop it coming back every sync.
+            item["error"] = (
+                f"{entry['kind']} imports are no longer supported; "
+                f"`memoreei import forget {entry['id']}` removes this one"
+            )
         else:
             try:
                 result = await run_import(tools, entry["kind"], str(path), entry["options"])

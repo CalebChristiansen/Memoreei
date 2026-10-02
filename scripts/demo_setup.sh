@@ -67,7 +67,7 @@ PYEOF
 if [[ "$MEMORY_COUNT" -gt 0 ]] 2>/dev/null; then
     ok "Database has $MEMORY_COUNT memories — skipping seed"
 else
-    warn "Database is empty — seeding with sample WhatsApp data..."
+    warn "Database is empty — seeding with the sample chats..."
     if "$PYTHON" scripts/seed_data.py; then
         ok "Database seeded successfully"
     else
@@ -163,7 +163,7 @@ fi
 if [[ -n "$DISCORD_TOKEN" && "$DISCORD_TOKEN" != "your_bot_token_here" ]]; then
     ok "Discord bot token configured"
 else
-    warn "DISCORD_BOT_TOKEN not set — sync_discord will fail (WhatsApp demo still works)"
+    warn "DISCORD_BOT_TOKEN not set — sync_discord will fail (the sample chats still work)"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

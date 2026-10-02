@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed the Memoreei database with sample WhatsApp chat exports."""
+"""Seed the Memoreei database with the sample chats in data/samples."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from memoreei.connectors.whatsapp import parse_whatsapp_export
+from memoreei.connectors.generic_connector import import_json
 from memoreei.search.embeddings import get_provider
 from memoreei.storage.database import Database
 
@@ -30,7 +30,7 @@ async def seed() -> None:
     print(f"Embedding provider: {type(embedder).__name__}")
 
     async with Database(db_path=db_path) as db:
-        sample_files = sorted(SAMPLES_DIR.glob("whatsapp_*.txt"))
+        sample_files = sorted(SAMPLES_DIR.glob("*.jsonl"))
         if not sample_files:
             print(f"No sample files found in {SAMPLES_DIR}")
             return
@@ -38,7 +38,8 @@ async def seed() -> None:
         total_inserted = 0
         for path in sample_files:
             print(f"\nParsing {path.name}...")
-            items = parse_whatsapp_export(path)
+            fields = {"content": "text", "sender": "sender", "timestamp": "ts"}
+            items, _ = import_json(str(path), fields, path.stem)
             print(f"  Parsed {len(items)} messages")
 
             if not items:
