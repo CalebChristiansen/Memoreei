@@ -96,6 +96,10 @@ Each connector has its own checkpoint table tracking the last successfully synce
 | `email_checkpoint` | `"email:folder"` | last IMAP UID |
 | `imessage_checkpoint` | `chat.rowid` | last `message.rowid` |
 | `whatsapp_checkpoint` | reader (`chatstorage:<path>`) | last `ZWAMESSAGE.Z_PK`, read or skipped |
+| `signal_checkpoint` | `"signal-desktop"` | last `messages.rowid`, read or skipped (and `"disappearing-skipped"`, a running count for the status page) |
+
+Signal also keeps `signal_seen`: each message read so far and how long it was then, so a
+later reaction, edit or deletion brings its memoreei up to date. Lengths only, never content.
 
 On the next sync, the connector fetches only messages newer than its checkpoint.
 

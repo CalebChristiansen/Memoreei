@@ -206,3 +206,22 @@ then a `.env` in the current directory (for development), then
 | `MASTODON_INSTANCE` | Instance URL, e.g. `https://mastodon.social` |
 | `MASTODON_HASHTAG` | Hashtag to follow (without `#`) |
 | `MASTODON_ACCESS_TOKEN` | Optional — for authenticated requests |
+
+### iMessage (macOS)
+
+| Variable | Description |
+|----------|-------------|
+| `IMESSAGE_DB_PATH` | Messages database, normally `~/Library/Messages/chat.db`. Needs Full Disk Access |
+
+### WhatsApp
+
+| Variable | Description |
+|----------|-------------|
+| `WHATSAPP_DB_PATH` | WhatsApp for Mac's `ChatStorage.sqlite` (`~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/`), or the copy in an iPhone backup |
+
+### Signal Desktop (macOS and Linux)
+
+| Variable | Description |
+|----------|-------------|
+| `SIGNAL_DB_KEY` | Signal Desktop's database key. Written by *Connect* (Sources, or `memoreei setup signal`), which reads it from the system keyring once |
+| `SIGNAL_DIR` | Signal Desktop's data folder, if it isn't in its usual place |

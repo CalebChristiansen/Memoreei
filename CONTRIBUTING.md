@@ -1,6 +1,6 @@
 # Contributing to Memoreei
 
-Welcome! Memoreei is a personal memory search server that ingests messages from iMessage, Discord, Telegram, Matrix, Slack, Gmail and more into a hybrid search database. Contributions are appreciated.
+Welcome! Memoreei is a personal memory search server that ingests messages from iMessage, WhatsApp, Signal, Discord, Telegram, Matrix, Slack, Gmail and more into a hybrid search database. Contributions are appreciated.
 
 ## Dev Environment Setup
 
@@ -54,7 +54,7 @@ No formatter is enforced yet, but aim for PEP 8 style. A simple `ruff check src/
 See [docs/connectors.md](docs/connectors.md) for a step-by-step guide. The short version:
 
 1. Create `src/memoreei/connectors/yourplatform_connector.py`: a sync that stores what's
-   new since a checkpoint (`connectors/imessage_connector.py` and `connectors/whatsapp/`
+   new since a checkpoint (`connectors/imessage_connector.py`, `connectors/whatsapp/` and `connectors/signal/`
    are the models for reading a local database)
 2. Add config fields to `src/memoreei/config.py`, and the connector to `configured_connectors()`
 3. Wire it in: a `MemoryTools` method, a branch in `SyncManager.sync_source`, a tool in

@@ -1,7 +1,7 @@
 # CLAUDE.md — Memoreei Project Context
 
 ## What This Is
-Memoreei is an MCP server for personal memory search. It ingests messages from iMessage, Discord, Telegram, Matrix, Slack, Gmail, and more — stores them in a hybrid search database (keyword + vector) — and exposes them via MCP tools.
+Memoreei is an MCP server for personal memory search. It ingests messages from iMessage, WhatsApp, Signal, Discord, Telegram, Matrix, Slack, Gmail, and more — stores them in a hybrid search database (keyword + vector) — and exposes them via MCP tools.
 
 ## MCP Tools Available
 You have these tools via the `memoreei` MCP server:
@@ -34,7 +34,7 @@ src/memoreei/
 ├── admin/                 # the /admin dashboard and its login rules
 ├── storage/database.py    # SQLite + FTS5 + vector search
 ├── search/hybrid.py       # Hybrid search with RRF fusion
-├── connectors/            # iMessage, Discord, Telegram, Matrix, Slack, Email, …
+├── connectors/            # iMessage, WhatsApp, Signal, Discord, Telegram, Slack, Email, …
 └── tools/memory_tools.py  # MCP tool implementations
 ```
 

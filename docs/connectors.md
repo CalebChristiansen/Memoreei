@@ -3,7 +3,7 @@
 This guide walks through adding support for a new message source. As an example we'll add a hypothetical `irc` connector.
 
 A connector that reads a database on this computer rather than an API follows
-`connectors/imessage_connector.py` or `connectors/whatsapp/` instead of step 1: open the
+`connectors/imessage_connector.py`, `connectors/whatsapp/` or `connectors/signal/` instead of step 1: open the
 file read-only, keep a checkpoint on its row IDs, and return errors as a dict rather
 than raising. Steps 2 onwards, and step 7, apply either way.
 
