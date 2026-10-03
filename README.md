@@ -9,8 +9,8 @@
 [![codecov](https://codecov.io/gh/CalebChristiansen/Memoreei/graph/badge.svg)](https://codecov.io/gh/CalebChristiansen/Memoreei)
 
 Memoreei is an open-source [MCP](https://modelcontextprotocol.io/) server that gives
-your AI assistant a searchable memory of your messages: iMessage, WhatsApp, Discord,
-Telegram, Slack, Gmail, Instagram and more. It keeps them in one SQLite file on your
+your AI assistant a searchable memory of your messages: iMessage, WhatsApp, Signal,
+Discord, Telegram, Slack, Gmail, Instagram and more. It keeps them in one SQLite file on your
 machine and searches them by keyword and by meaning at once.
 
 ```
@@ -58,9 +58,10 @@ elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
    window walks you through dragging Memoreei into the list, and notices when it's done.
 5. **The firewall** may ask whether *Memoreei Server* may accept incoming connections.
    **Allow**, or other machines can't reach it.
-6. **The dashboard** opens in your browser. Set up iMessage (and WhatsApp, if WhatsApp
-   for Mac is installed) under **Sources**, and
-   create a key under **Clients** for each machine or app that will search.
+6. **The dashboard** opens in your browser. Set up iMessage under **Sources**, and
+   WhatsApp or Signal too if WhatsApp for Mac or Signal Desktop is installed (Signal's
+   *Connect* asks macOS once for its key: choose **Allow**). Then create a key under
+   **Clients** for each machine or app that will search.
 
 Memoreei then lives in the menu bar and starts at login. **Open Dashboard** signs you in
 to the dashboard; **Quit** stops the server too.
@@ -91,8 +92,10 @@ Ubuntu 20.04, Debian 11, RHEL and Rocky 8, current Fedora, or newer; x86_64 or A
 3. **Open Memoreei** from your applications. It starts the server, sets it to start at
    login, and opens the dashboard. Create a key under **Clients** for each machine or
    app that will search.
-4. **Add sources** in a terminal, for now: `memoreei setup` for the live connectors,
-   `memoreei import …` for chat exports.
+4. **Add sources.** Signal, if Signal Desktop is set up, is under **Sources** in the
+   dashboard: *Connect* reads its key from your desktop's keyring. The other live
+   connectors are set up in a terminal for now, with `memoreei setup`, and chat exports
+   with `memoreei import …`.
 
 **No desktop?** The same package, from a terminal:
 
@@ -259,6 +262,7 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 |---|---|---|
 | iMessage (macOS) | live, from `chat.db` | 🧪 Beta |
 | WhatsApp (WhatsApp for Mac, or an iPhone backup) | live, from `ChatStorage.sqlite` | 🧪 Beta |
+| Signal (Signal Desktop, macOS and Linux) | live, from Signal Desktop's database | 🧪 Beta |
 | Gmail (IMAP) | live | ✅ |
 | Discord (bot) | live | ✅ |
 | Telegram (bot) | live | ✅ |
@@ -271,7 +275,6 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Android SMS Backup & Restore (XML) | import | ✅ |
 | Any JSON, JSON-lines, CSV or TSV | import | ✅ |
 | Contacts (vCard, or macOS Contacts) | names for phone numbers | ✅ |
-| Signal (Signal Desktop, macOS and Linux) | live | ✅ |
 
 **WhatsApp** is read from where WhatsApp for Mac keeps the chats it has synced from your
 phone: texts, photo and video captions, shared links and document names. Stickers, voice
@@ -328,7 +331,8 @@ memoreei service install | status | logs | uninstall | grant-access
 memoreei status                     # message counts, sources, last sync times
 memoreei config                     # settings, tokens masked
 memoreei sync [source]              # everything, or one of discord, telegram, matrix,
-                                    #   slack, email, mastodon, imessage, whatsapp
+                                    #   slack, email, mastodon, imessage, whatsapp,
+                                    #   signal
 memoreei search "printer issue" --limit 5 --source imessage:+12025550142
 memoreei import sms backup.xml      # also discord-package, messenger, instagram,
                                     #   json, csv, contacts
