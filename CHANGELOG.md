@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-02
+
 ### Fixed
 - The Sources page no longer shows the old "Signal Desktop: not yet" placeholder beside
   the Signal source that replaced it.
@@ -328,7 +330,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...v0.4.1
