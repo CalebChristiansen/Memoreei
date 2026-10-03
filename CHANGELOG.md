@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-02
+
 ### Added
 - **Signal**, read from Signal Desktop's own database on macOS and Linux. Choose
   *Connect* under Sources (offered once Signal Desktop is set up) or `memoreei setup
@@ -15,9 +17,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a Mac, macOS asks whether *Memoreei Server* may have it. Texts, captions, links,
   stories, group changes, calls and timer changes are kept; photos and files become
   labels like "[Photo] caption". Reactions are added to the message they're on, an edit
-  keeps the original and adds the new wording as "[edited] …", and a message deleted for
-  everyone is marked `deleted` rather than removed. Disappearing messages are never
-  stored; the status page counts them, beside the newest Signal message's age.
+  keeps the original and adds the new wording as "[edited] …", and a message deleted
+  (for everyone, or gone from Signal Desktop any other way) is marked `deleted` rather
+  than removed. Disappearing messages are never stored; the status page counts them,
+  beside the newest Signal message's age.
 
 ### Changed
 - The Signal connector is new: the old one read a plain key that Signal stopped writing
@@ -321,7 +324,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0
