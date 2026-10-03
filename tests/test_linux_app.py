@@ -39,12 +39,14 @@ def linux(monkeypatch):
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
-def test_linux_sources_offer_no_imessage_and_explain_signal(server, linux):
+def test_linux_sources_offer_no_imessage_and_signal_only_where_it_is(server, linux, monkeypatch):
     text = signed_in(server).get("/admin/sources").text
-    assert "iMessage" not in text
-    assert "Signal locks its key in your keyring" in text
+    assert "iMessage" not in text and "Signal" not in text
     assert "memoreei setup" in text
     assert signed_in(server).get("/admin/sources/imessage").status_code == 404
+    monkeypatch.setattr("memoreei.connectors.signal.app_present", lambda: True)
+    text = signed_in(server).get("/admin/sources").text
+    assert 'href="/admin/sources/signal"' in text
 
 
 def test_status_shows_the_service_switches(server, linux):

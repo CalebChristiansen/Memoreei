@@ -7,6 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The Sources page no longer shows the old "Signal Desktop: not yet" placeholder beside
+  the Signal source that replaced it.
+
 ## [0.4.3] - 2026-10-02
 
 ### Added
