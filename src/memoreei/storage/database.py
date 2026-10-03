@@ -744,6 +744,32 @@ class Database:
         )
         await self._db.commit()
 
+    async def forget_signal_seen(self, message_ids: list[str]) -> None:
+        assert self._db is not None
+        await self._db.executemany(
+            "DELETE FROM signal_seen WHERE message_id = ?", [(m,) for m in message_ids]
+        )
+        await self._db.commit()
+
+    async def mark_deleted(self, source_prefix: str, message_ids: list[str]) -> int:
+        """Set metadata.deleted on the memories whose source_id ends in these message ids.
+
+        For messages that left their app altogether, whose chat is no longer known.
+        Returns how many memories were marked.
+        """
+        assert self._db is not None
+        marked = 0
+        for message_id in message_ids:
+            cursor = await self._db.execute(
+                "UPDATE memories SET metadata = json_set(coalesce(metadata, '{}'), '$.deleted', json('true')) "
+                "WHERE source LIKE ? AND source_id = source || ':' || ? "
+                "AND coalesce(json_extract(metadata, '$.deleted'), 0) = 0",
+                (f"{source_prefix}:%", message_id),
+            )
+            marked += cursor.rowcount
+        await self._db.commit()
+        return marked
+
     async def get_by_source_ids(self, source: str, source_ids: list[str]) -> dict[str, MemoryItem]:
         """The memories with these source_ids in one source, by source_id."""
         assert self._db is not None

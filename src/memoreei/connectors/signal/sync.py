@@ -8,7 +8,9 @@ means a change, and that message's memoreei is rewritten:
     reactions  metadata only ({"emoji", "from"} each)
     an edit    the original stays, each later version follows on its own line as
                "[edited] …", so either wording finds it; re-embedded
-    a delete   the memoreei stays as it was, with metadata "deleted": true
+    a delete   the memoreei stays as it was, with metadata "deleted": true. Deleted for
+               everyone, the message stays in Signal marked so; deleted any other way
+               (for me, on another device, the whole chat), it simply isn't there
 
 Disappearing messages are never stored: whoever sent one chose that it shouldn't last.
 """
@@ -144,6 +146,10 @@ async def _bring_up_to_date(db: Database, embedder: Any, reader: SignalReader,
                             after: int, counts: dict[str, int]) -> None:
     seen = await db.get_signal_seen()
     sizes = reader.sizes(after)
+    gone = [mid for mid in seen if mid not in sizes]
+    if gone:
+        counts["updated"] += await db.mark_deleted(SOURCE_PREFIX, gone)
+        await db.forget_signal_seen(gone)
     changed = [mid for mid, size in sizes.items() if mid in seen and seen[mid] != size]
     if not changed:
         return

@@ -386,6 +386,24 @@ async def test_delete_for_everyone_is_flagged_not_forgotten(tools, fake):
     assert (await _meta(tools, mid))["deleted"] is True
 
 
+async def test_a_message_gone_from_signal_is_flagged(tools, fake):
+    mid = fake.message("c-me", "outgoing", body="note to self")
+    keep = fake.message("c-me", "outgoing", body="still here")
+    await _sync(tools)
+    fake.conn.execute("DELETE FROM messages WHERE id = ?", (mid,))
+    fake.conn.commit()
+    assert (await _sync(tools))["updated"] == 1
+    assert (await _meta(tools, mid))["deleted"] is True
+    assert "deleted" not in await _meta(tools, keep)
+    assert (await _sync(tools))["updated"] == 0  # flagged once, then forgotten
+
+
+async def test_a_caption_sent_as_the_body_joins_its_label(tools, fake):
+    mid = fake.message("c-zez", body="my bank", sender=ZEZIMA, attachments=[{"contentType": "image/jpeg"}])
+    await _sync(tools)
+    assert (await _contents(tools))[mid] == "Zezima: [Photo] my bank"
+
+
 async def test_deleted_before_it_was_read_leaves_nothing(tools, fake):
     fake.message("c-zez", sender=ZEZIMA, deletedForEveryone=True)
     assert (await _sync(tools))["synced"] == 0

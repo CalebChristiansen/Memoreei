@@ -372,7 +372,9 @@ class SignalReader:
             parts.append(f"{attachment_label(att)} {caption}".strip())
         if data.get("type") == "story" and parts:
             parts[0] = f"[Story] {parts[0]}"
-        if body:
+        if body and parts and parts[-1].endswith("]"):
+            parts[-1] = f"{parts[-1]} {body}"  # a phone sends a photo's caption as the body
+        elif body:
             parts.append(body)
         sticker = data.get("sticker")
         if sticker:
