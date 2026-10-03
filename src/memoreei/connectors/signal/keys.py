@@ -15,7 +15,9 @@ The sealed form, as Chromium's os_crypt writes it:
     macOS    v10, 1003 iterations, password from the Keychain (Signal Safe Storage)
     Linux    1 iteration; v11 takes its password from the keyring, v10 is b"peanuts"
 
-What comes out is 64 hex characters, used as a raw SQLCipher key.
+What comes out is 64 hex characters, used as a raw SQLCipher key. Started with
+--password-store=basic (no keyring at all), Signal 8 writes that key unsealed, as
+``key``, the way every Signal did before 2024.
 """
 from __future__ import annotations
 
@@ -27,8 +29,10 @@ from pathlib import Path
 KEYCHAIN_SERVICE = "Signal Safe Storage"
 KEYCHAIN_ACCOUNT = "Signal Key"
 LIBSECRET_ATTRIBUTES = {"application": "Signal", "xdg:schema": "chrome_libsecret_os_crypt_password_v2"}
-KWALLET_FOLDER = "Signal Keys"
-KWALLET_ENTRY = "Signal Safe Storage"
+# Electron keeps Chromium's names in KWallet (and in libsecret's label), so every
+# Electron app shares this entry; Signal's own is whichever was written first.
+KWALLET_FOLDER = "Chromium Keys"
+KWALLET_ENTRY = "Chromium Safe Storage"
 
 _SALT = b"saltysalt"
 _IV = b" " * 16
@@ -159,8 +163,9 @@ def _linux_passwords(prefix: bytes, backend: str) -> list[bytes]:
         return [_kwallet_password(backend)]
     if backend in ("", "gnome_libsecret", "gnome_any", "gnome_keyring"):
         return [_libsecret_password()]
-    # "basic_text" and anything newer: no keyring held it. Chromium's basic store seals
-    # v11 with an empty password; peanuts is tried too, in case that ever changes.
+    # Anything else: no keyring held it. Signal 8 then writes the key unsealed (handled
+    # above); should one ever be sealed anyway, Chromium's basic store uses an empty
+    # password for v11, and peanuts is tried too.
     return [b"", b"peanuts"]
 
 
