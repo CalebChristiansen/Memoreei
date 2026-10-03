@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-02
+
 ### Added
 - **WhatsApp**, read from WhatsApp for Mac's own database: texts, captions, shared links
   and document names, with senders named from WhatsApp's address book, including group
@@ -299,7 +301,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0
 [0.4.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.3.1...v0.4.0rc1
