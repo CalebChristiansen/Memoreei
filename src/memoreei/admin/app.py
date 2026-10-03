@@ -47,6 +47,7 @@ from memoreei.config import (
     memoreei_home,
     reload_config,
 )
+from memoreei.connectors.signal.sync import DISAPPEARING_SKIPPED
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -219,12 +220,17 @@ def _offered(key: str) -> bool:
         from memoreei.connectors.whatsapp import mac_app_present
 
         return (_on_mac() and mac_app_present()) or "WHATSAPP_DB_PATH" in _env_vars()
+    if key == "signal":
+        from memoreei.connectors.signal import app_present
+
+        return app_present() or "SIGNAL_DB_KEY" in _env_vars()
     return True
 
 
 def _dashboard_connectors() -> tuple[str, ...]:
-    """The connectors the dashboard offers here: iMessage only exists on a Mac, and
-    WhatsApp only where WhatsApp for Mac keeps its chats."""
+    """The connectors the dashboard offers here: iMessage only exists on a Mac,
+    WhatsApp only where WhatsApp for Mac keeps its chats, and Signal only where Signal
+    Desktop has been set up."""
     return tuple(k for k in DASHBOARD_CONNECTORS if _offered(k))
 
 
@@ -275,6 +281,10 @@ async def _status_context() -> dict[str, Any]:
     # A stale linked Mac (the phone offline for weeks, or WhatsApp dropping this macOS)
     # syncs nothing without an error; the newest message's age is what gives it away.
     whatsapp_newest = await db.newest_ts("whatsapp") if "whatsapp" in connectors else None
+    # Signal Desktop expires its own builds, and an old Mac can be left on the last one
+    # that runs there; its messages stopping is the only sign.
+    signal_newest = await db.newest_ts("signal") if "signal" in connectors else None
+    signal_disappearing = await db.get_signal_checkpoint(DISAPPEARING_SKIPPED) if signal_newest else None
     last_run = _sync_manager.last_run
     failed = bool(last_run) and any(
         isinstance(r, dict) for r in last_run["result"].get("connectors", {}).values()
@@ -292,6 +302,8 @@ async def _status_context() -> dict[str, Any]:
         "interval_min": max(1, cfg.sync_interval // 60),
         "fda": fda,
         "whatsapp_newest": whatsapp_newest,
+        "signal_newest": signal_newest,
+        "signal_disappearing": signal_disappearing,
         "running": _sync_manager.running,
         "last_run": last_run,
         "keys": keys,
@@ -532,7 +544,7 @@ def _enabled_connector(request: Request) -> dict[str, Any] | None:
     return {"key": key, **CONNECTORS[key]}
 
 
-async def source_form(request: Request) -> Response:
+async def source_form(request: Request, error: str | None = None) -> Response:
     connector = _enabled_connector(request)
     if connector is None:
         return _plain(404, "Not available in the dashboard.")
@@ -562,13 +574,45 @@ async def source_form(request: Request) -> Response:
         readable=_whatsapp_readable(env.get("WHATSAPP_DB_PATH"))
         if connector["key"] == "whatsapp"
         else None,
+        keyring=_keyring_name() if connector.get("connect") else None,
+        error=error,
     )
+
+
+def _keyring_name() -> str:
+    """What this computer calls the place Signal keeps its key, for the Connect button's page."""
+    return "the Keychain" if _on_mac() else "your desktop's keyring"
+
+
+async def _connect(request: Request, connector: dict[str, Any]) -> Response:
+    """Connect: read Signal's key from the keyring now, which is when macOS asks.
+
+    The prompt waits for whoever is at the screen, so the read runs in a thread and this
+    request waits with it. Only the key is saved; if anything stops it, the page says why.
+    """
+    from memoreei.connectors.signal import KeyUnavailable, connect
+
+    try:
+        key = await asyncio.to_thread(connect)
+    except KeyUnavailable as exc:
+        return await source_form(request, error=str(exc))
+    updates: list[tuple[str, str]] = [("SIGNAL_DB_KEY", key)]
+    if "AUTO_SYNC" not in _env_vars():
+        updates.append(("AUTO_SYNC", "true"))
+    ensure_home()
+    path = config_env_path()
+    write_env_updates(path, read_env_lines(path), updates)
+    reload_config()
+    await _start_sync()
+    return RedirectResponse("/admin/", status_code=303)
 
 
 async def source_save(request: Request) -> Response:
     connector = _enabled_connector(request)
     if connector is None:
         return _plain(404, "Not available in the dashboard.")
+    if connector.get("connect"):
+        return await _connect(request, connector)
     form = await request.form()
     updates: list[tuple[str, str]] = []
     for var in connector["vars"]:

@@ -82,16 +82,16 @@ CONNECTORS: dict[str, dict] = {
         ],
     },
     "signal": {
-        "name": "Signal Desktop",
-        "short": "Signal Desktop",
+        "name": "Signal (from Signal Desktop)",
+        "short": "Signal",
         "icon": "S",
-        "blurb": "Reads Signal Desktop's database on this computer.",
+        "blurb": "Reads the messages Signal Desktop keeps on this computer. Nothing is sent anywhere.",
+        # Never typed in: Connect reads it from the system's keyring (connectors/signal).
         "vars": [
-            ("SIGNAL_DB_PATH", "Signal DB path (optional)", False,
-             "Leave blank for auto-detect (~/.config/Signal/sql/db.sqlite)"),
-            ("SIGNAL_CONFIG_PATH", "Signal config path (optional)", False,
-             "Leave blank for auto-detect (~/.config/Signal/config.json)"),
+            ("SIGNAL_DB_KEY", "Signal database key", True,
+             "Read from your keyring when you choose Connect."),
         ],
+        "connect": True,
     },
     "imessage": {
         "name": "iMessage (macOS only)",
@@ -178,7 +178,7 @@ UPLOADS: dict[str, dict] = {
 }
 
 # What the dashboard offers. The rest stay CLI-only until each is tested there.
-DASHBOARD_CONNECTORS: tuple[str, ...] = ("imessage", "whatsapp")
+DASHBOARD_CONNECTORS: tuple[str, ...] = ("imessage", "whatsapp", "signal")
 DASHBOARD_UPLOADS: tuple[str, ...] = ()
 
 

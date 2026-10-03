@@ -331,24 +331,16 @@ async def sync_whatsapp() -> dict:
     return await tools.sync_whatsapp_tool()
 
 
-async def sync_signal(conversation_id: str | None = None) -> dict:
-    """Sync Signal Desktop messages from the local encrypted database.
-    Requires Signal Desktop to be installed and pysqlcipher3 package.
+async def sync_signal() -> dict:
+    """Sync Signal from Signal Desktop's database on this computer.
 
-    Reads the Signal SQLCipher database at the default OS location:
-        Linux:   ~/.config/Signal/sql/db.sqlite
-        macOS:   ~/Library/Application Support/Signal/sql/db.sqlite
-        Windows: %APPDATA%\\Signal\\sql\\db.sqlite
-
-    The encryption key is read from config.json in the same Signal directory.
-    Override paths with SIGNAL_DB_PATH and SIGNAL_CONFIG_PATH env vars.
-
-    Args:
-        conversation_id: Optional filter for a specific conversation (ID, name,
-                         phone number, or profile name).
+    Needs Signal connected first (the dashboard's Sources page, or `memoreei setup
+    signal`), which reads Signal's database key from the system keyring once. Texts,
+    captions, links, group changes and calls are kept, reactions and edits follow
+    the message they belong to, and disappearing messages are never stored.
     """
     tools = await _get_tools()
-    return await tools.sync_signal_tool(conversation_id=conversation_id)
+    return await tools.sync_signal_tool()
 
 
 async def import_sms_backup(file_path: str) -> dict:

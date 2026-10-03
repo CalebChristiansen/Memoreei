@@ -110,6 +110,16 @@ class SyncManager:
                     print(f"[sync_manager] WhatsApp sync error: {result['error']}", file=sys.stderr)
                     raise RuntimeError(result["error"])
                 count = result.get("synced", 0)
+            elif source_name == "signal":
+                result = await tools.sync_signal_tool()
+                if "error" in result:
+                    print(f"[sync_manager] Signal sync error: {result['error']}", file=sys.stderr)
+                    raise RuntimeError(result["error"])
+                count = result.get("synced", 0)
+                if result.get("updated") or result.get("skipped_disappearing"):
+                    # Counts only: which messages changed is nobody's business but theirs.
+                    print(f"[sync_manager] Signal: {result.get('updated', 0)} updated, "
+                          f"{result.get('skipped_disappearing', 0)} disappearing skipped", file=sys.stderr)
             else:
                 print(f"[sync_manager] Unknown source: {source_name}", file=sys.stderr)
                 return 0

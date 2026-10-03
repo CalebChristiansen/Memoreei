@@ -1,503 +1,438 @@
-"""Tests for the Signal Desktop connector.
+"""Signal, read from a database laid out like Signal Desktop 8's.
 
-All tests use a synthetic (unencrypted) SQLite DB in a temp directory.
-No real Signal Desktop installation is required. pysqlcipher3 is not
-required — DB access is patched to use a plain sqlite3 connection.
+The fixture builds a real SQLCipher database with the columns the reader uses, the
+message json Signal keeps beside them, and attachments in their own table, with people
+from the usual cast. Keys are sealed the way Electron's safeStorage seals them.
 """
 from __future__ import annotations
 
+import hashlib
 import json
-import os
-import sqlite3
 import sys
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memoreei.connectors.signal_connector import (
-    SOURCE_PREFIX,
-    SignalConnector,
-    _get_config_path,
-    _get_db_path,
-    _get_signal_dir,
-    _has_pysqlcipher3,
-    _has_sqlcipher_cli,
-    _read_key,
-    sync_signal,
-)
-from memoreei.storage.database import Database
+from memoreei.connectors import signal as signal_pkg
+from memoreei.connectors.signal import KeyUnavailable, connect, sync_signal
+from memoreei.connectors.signal import keys as keys_module
+from memoreei.connectors.signal.keys import read_db_key, unseal
+from memoreei.connectors.signal.reader import SignalReader, attachment_label
+from memoreei.connectors.signal.sync import CHECKPOINT, DISAPPEARING_SKIPPED
+from memoreei.tools.memory_tools import MemoryTools
 
-# ---------------------------------------------------------------------------
-# Synthetic Signal DB schema (mirrors the real Signal Desktop schema)
-# ---------------------------------------------------------------------------
+sqlcipher3 = pytest.importorskip("sqlcipher3")
 
-_SIGNAL_SCHEMA = """
-CREATE TABLE IF NOT EXISTS conversations (
-    id TEXT PRIMARY KEY,
-    json TEXT,
-    active_at INTEGER,
-    type TEXT,
-    members TEXT,
-    name TEXT,
-    profileName TEXT,
-    profileFamilyName TEXT,
-    profileFullName TEXT,
-    e164 TEXT,
-    uuid TEXT,
-    groupId TEXT,
-    profileLastFetchedAt INTEGER
-);
+KEY = "0123456789abcdef" * 4
+ME = "aaaaaaaa-0000-4000-8000-000000000001"
+ZEZIMA = "aaaaaaaa-0000-4000-8000-000000000002"
+HANS = "aaaaaaaa-0000-4000-8000-000000000003"
+GERTRUDE = "aaaaaaaa-0000-4000-8000-000000000004"
+T0 = 1_780_000_000_000  # ms, 2026-05-28
 
-CREATE TABLE IF NOT EXISTS messages (
-    id TEXT PRIMARY KEY,
-    json TEXT,
-    readStatus INTEGER,
-    expires_at INTEGER,
-    sent_at INTEGER,
-    schemaVersion INTEGER,
-    conversationId TEXT,
-    received_at INTEGER,
-    source TEXT,
-    sourceUuid TEXT,
-    sourceDevice INTEGER,
-    hasAttachments INTEGER,
-    hasFileAttachments INTEGER,
-    hasVisualMediaAttachments INTEGER,
-    expireTimer INTEGER,
-    expirationStartTimestamp INTEGER,
-    type TEXT,
-    body TEXT,
-    messageTimer INTEGER,
-    messageTimerStart INTEGER,
-    messageTimerExpiresAt INTEGER,
-    serverTimestamp INTEGER,
-    serverGuid TEXT,
-    unread INTEGER,
-    targetOfThisMessage TEXT
-);
+_SCHEMA = """
+CREATE TABLE conversations (id TEXT PRIMARY KEY, json TEXT, active_at INTEGER, type TEXT,
+    members TEXT, name TEXT, profileName TEXT, profileFamilyName TEXT, profileFullName TEXT,
+    e164 TEXT, serviceId TEXT, groupId TEXT);
+CREATE TABLE messages (rowid INTEGER PRIMARY KEY ASC, id TEXT UNIQUE, json TEXT,
+    sent_at INTEGER, conversationId TEXT, type TEXT, body TEXT, expireTimer INTEGER,
+    isViewOnce INTEGER, isErased INTEGER, sourceServiceId TEXT, source TEXT,
+    timestamp INTEGER, hasAttachments INTEGER);
+CREATE TABLE message_attachments (messageId TEXT, editHistoryIndex INTEGER,
+    attachmentType TEXT, orderInMessage INTEGER, contentType TEXT, caption TEXT,
+    fileName TEXT, flags INTEGER, duration REAL, storyTextAttachmentJson TEXT);
+CREATE TABLE callsHistory (callId TEXT PRIMARY KEY, peerId TEXT, ringerId TEXT, mode TEXT,
+    type TEXT, direction TEXT, status TEXT, timestamp INTEGER);
+CREATE TABLE items (id TEXT PRIMARY KEY, json TEXT);
 """
 
 
-def _make_signal_db(path: str) -> None:
-    """Create a minimal Signal-like SQLite DB with test data."""
-    conn = sqlite3.connect(path)
-    conn.executescript(_SIGNAL_SCHEMA)
-
-    # Conversations
-    conn.execute(
-        "INSERT INTO conversations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("conv-zezima", None, int(time.time()), "private", None, None,
-         "Zezima", None, "Zezima Lumbridge", "+15550001111", "uuid-zezima", None, None),
-    )
-    conn.execute(
-        "INSERT INTO conversations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("conv-group", None, int(time.time()), "group", None, "Book Club",
-         None, None, None, None, None, "group-id-1", None),
-    )
-
-    # Messages — sent_at in milliseconds
-    base_ms = 1700000000000  # ~Nov 2023
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-1", None, 0, None, base_ms, 0, "conv-zezima", base_ms, "+15550001111",
-         "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "Hello!", None, None, None,
-         base_ms, None, 0, None),
-    )
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-2", None, 0, None, base_ms + 1000, 0, "conv-zezima", base_ms + 1000,
-         None, None, 1, 0, 0, 0, 0, None, "outgoing", "Hey Zezima!", None, None,
-         None, base_ms + 1000, None, 0, None),
-    )
-    # Empty body (should be skipped)
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-3", None, 0, None, base_ms + 2000, 0, "conv-zezima", base_ms + 2000,
-         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "",
-         None, None, None, base_ms + 2000, None, 0, None),
-    )
-    # NULL body (should be skipped)
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-4", None, 0, None, base_ms + 3000, 0, "conv-zezima", base_ms + 3000,
-         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", None,
-         None, None, None, base_ms + 3000, None, 0, None),
-    )
-    # System message (type not in incoming/outgoing — should be skipped)
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-5", None, 0, None, base_ms + 4000, 0, "conv-zezima", base_ms + 4000,
-         None, None, 0, 0, 0, 0, 0, None, "keychange", "Safety number changed.",
-         None, None, None, base_ms + 4000, None, 0, None),
-    )
-    # Group message
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-6", None, 0, None, base_ms + 5000, 0, "conv-group", base_ms + 5000,
-         "+15550002222", "uuid-hans", 1, 0, 0, 0, 0, None, "incoming", "What are we reading?",
-         None, None, None, base_ms + 5000, None, 0, None),
-    )
-
-    conn.commit()
-    conn.close()
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def signal_db_path(tmp_path) -> str:
-    path = str(tmp_path / "db.sqlite")
-    _make_signal_db(path)
-    return path
-
-
-@pytest.fixture
-def signal_config_path(tmp_path) -> str:
-    """Write a fake config.json with a dummy hex key."""
-    config = {"key": "a" * 64}  # 64-char hex key
-    path = tmp_path / "config.json"
-    path.write_text(json.dumps(config))
-    return str(path)
-
-
-@pytest.fixture
-async def mem_db(tmp_path) -> Database:
-    db = Database(db_path=str(tmp_path / "memoreei.db"))
-    await db.connect()
-    yield db
-    await db.close()
-
-
-class MockEmbedder:
-    dim = 4
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.0] * self.dim for _ in texts]
-
-    async def embed_query(self, text: str) -> list[float]:
-        return [0.0] * self.dim
-
-
-@pytest.fixture
-def embedder() -> MockEmbedder:
-    return MockEmbedder()
-
-
-# ---------------------------------------------------------------------------
-# Helper: patch _open_signal_db to return a plain sqlite3 connection
-# ---------------------------------------------------------------------------
-
-
-def _make_plain_conn(db_path: str):
-    """Open the synthetic DB as a plain sqlite3 connection."""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-# ---------------------------------------------------------------------------
-# Unit tests — OS detection & path logic
-# ---------------------------------------------------------------------------
-
-
-def test_get_signal_dir_linux():
-    with patch.object(sys, "platform", "linux"):
-        d = _get_signal_dir()
-    assert str(d).endswith(".config/Signal")
-
-
-def test_get_signal_dir_macos():
-    with patch.object(sys, "platform", "darwin"):
-        d = _get_signal_dir()
-    assert "Application Support/Signal" in str(d)
-
-
-def test_get_signal_dir_windows():
-    with patch.dict(os.environ, {"APPDATA": "C:\\Users\\Test\\AppData\\Roaming"}):
-        with patch.object(sys, "platform", "win32"):
-            d = _get_signal_dir()
-    assert "Signal" in str(d)
-
-
-def test_get_db_path_default_linux():
-    with patch.object(sys, "platform", "linux"):
-        os.environ.pop("SIGNAL_DB_PATH", None)
-        path = _get_db_path()
-    assert path.endswith(".config/Signal/sql/db.sqlite")
-
-
-def test_get_db_path_from_env(tmp_path):
-    custom = str(tmp_path / "signal.db")
-    with patch.dict(os.environ, {"SIGNAL_DB_PATH": custom}):
-        assert _get_db_path() == custom
-
-
-def test_get_config_path_default_linux():
-    with patch.object(sys, "platform", "linux"):
-        os.environ.pop("SIGNAL_CONFIG_PATH", None)
-        path = _get_config_path()
-    assert path.endswith(".config/Signal/config.json")
-
-
-def test_get_config_path_from_env(tmp_path):
-    custom = str(tmp_path / "config.json")
-    with patch.dict(os.environ, {"SIGNAL_CONFIG_PATH": custom}):
-        assert _get_config_path() == custom
-
-
-# ---------------------------------------------------------------------------
-# Unit tests — key extraction
-# ---------------------------------------------------------------------------
-
-
-def test_read_key_success(tmp_path):
-    key = "deadbeef" * 8  # 64-char hex
-    config = {"key": key, "other_field": "ignored"}
-    config_path = str(tmp_path / "config.json")
-    Path(config_path).write_text(json.dumps(config))
-    assert _read_key(config_path) == key
-
-
-def test_read_key_missing_key_field(tmp_path):
-    config = {"other_field": "no key here"}
-    config_path = str(tmp_path / "config.json")
-    Path(config_path).write_text(json.dumps(config))
-    with pytest.raises(RuntimeError, match="No 'key' field"):
-        _read_key(config_path)
-
-
-def test_read_key_file_not_found():
-    with pytest.raises(FileNotFoundError):
-        _read_key("/nonexistent/path/config.json")
-
-
-# ---------------------------------------------------------------------------
-# Unit tests — missing backend returns clear error
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_sync_signal_no_backend_returns_error(mem_db, embedder):
-    """When neither pysqlcipher3 nor sqlcipher CLI is available, return clear error."""
-    with (
-        patch("memoreei.connectors.signal_connector._has_pysqlcipher3", return_value=False),
-        patch("memoreei.connectors.signal_connector._has_sqlcipher_cli", return_value=False),
-    ):
-        result = await sync_signal(db=mem_db, embedder=embedder)
-    assert "error" in result
-    assert result["synced"] == 0
-    assert "pysqlcipher3" in result["error"]
-
-
-# ---------------------------------------------------------------------------
-# Integration tests — parsing with mock Signal DB
-# ---------------------------------------------------------------------------
-
-
-def _patch_open_signal_db(signal_db_path: str):
-    """Return a context manager that patches _open_signal_db.
-
-    Uses side_effect so each call gets a fresh connection (needed for
-    idempotency tests where sync() is called twice).
-    """
-    return patch(
-        "memoreei.connectors.signal_connector._open_signal_db",
-        side_effect=lambda db_path, key: (_make_plain_conn(signal_db_path), None),
-    )
-
-
-@pytest.mark.asyncio
-async def test_sync_ingests_messages(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        count = await connector.sync()
-
-    # msg-1 (incoming), msg-2 (outgoing), msg-6 (group incoming) = 3
-    # msg-3 (empty), msg-4 (null), msg-5 (keychange) are skipped
-    assert count == 3
-
-
-@pytest.mark.asyncio
-async def test_sync_source_labels(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        await connector.sync()
-
-    sources = await mem_db.list_sources()
-    assert f"{SOURCE_PREFIX}:conv-zezima" in sources
-    assert f"{SOURCE_PREFIX}:conv-group" in sources
-    assert sources[f"{SOURCE_PREFIX}:conv-zezima"] == 2
-    assert sources[f"{SOURCE_PREFIX}:conv-group"] == 1
-
-
-@pytest.mark.asyncio
-async def test_sync_sender_attribution(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        await connector.sync()
-
-    results = await mem_db.search_fts("Hello", limit=5)
-    assert len(results) == 1
-    assert "+15550001111: Hello!" in results[0].content
-
-    results = await mem_db.search_fts("Hey Zezima", limit=5)
-    assert len(results) == 1
-    assert "me: Hey Zezima!" in results[0].content
-
-
-@pytest.mark.asyncio
-async def test_sync_timestamp_ms_to_seconds(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        await connector.sync()
-
-    results = await mem_db.search_fts("Hello", limit=1)
-    # sent_at = 1700000000000ms → ts = 1700000000s
-    assert results[0].ts == 1700000000
-
-
-@pytest.mark.asyncio
-async def test_sync_conversation_filter(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        count = await connector.sync(conversation_id="conv-zezima")
-
-    assert count == 2
-    sources = await mem_db.list_sources()
-    assert f"{SOURCE_PREFIX}:conv-zezima" in sources
-    assert f"{SOURCE_PREFIX}:conv-group" not in sources
-
-
-@pytest.mark.asyncio
-async def test_sync_conversation_filter_by_name(mem_db, embedder, signal_db_path, signal_config_path):
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        count = await connector.sync(conversation_id="Book Club")
-
-    assert count == 1
-    sources = await mem_db.list_sources()
-    assert f"{SOURCE_PREFIX}:conv-group" in sources
-
-
-# ---------------------------------------------------------------------------
-# Checkpoint tests
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_checkpoint_set_and_get(mem_db):
-    await mem_db.set_signal_checkpoint("conv-1", 42)
-    result = await mem_db.get_signal_checkpoint("conv-1")
-    assert result == 42
-
-
-@pytest.mark.asyncio
-async def test_checkpoint_update(mem_db):
-    await mem_db.set_signal_checkpoint("conv-1", 10)
-    await mem_db.set_signal_checkpoint("conv-1", 99)
-    assert await mem_db.get_signal_checkpoint("conv-1") == 99
-
-
-@pytest.mark.asyncio
-async def test_checkpoint_none_for_unknown(mem_db):
-    result = await mem_db.get_signal_checkpoint("nonexistent-conv")
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_sync_idempotent(mem_db, embedder, signal_db_path, signal_config_path):
-    """Second sync should return 0 new messages (checkpoint prevents re-ingestion)."""
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=signal_db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(signal_db_path):
-        first = await connector.sync()
-        second = await connector.sync()
-
-    assert first == 3
-    assert second == 0
-
-
-@pytest.mark.asyncio
-async def test_sync_incremental_new_message(mem_db, embedder, tmp_path, signal_config_path):
-    """Messages added after first sync are picked up on the second sync."""
-    db_path = str(tmp_path / "signal_inc.db")
-    _make_signal_db(db_path)
-
-    connector = SignalConnector(
-        db=mem_db, embedder=embedder,
-        db_path=db_path, config_path=signal_config_path,
-    )
-    with _patch_open_signal_db(db_path):
-        first = await connector.sync()
-
-    assert first == 3
-
-    # Add a new message to conv-zezima
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("msg-new", None, 0, None, 1700000010000, 0, "conv-zezima", 1700000010000,
-         "+15550001111", "uuid-zezima", 1, 0, 0, 0, 0, None, "incoming", "New message!",
-         None, None, None, 1700000010000, None, 0, None),
-    )
-    conn.commit()
-    conn.close()
-
-    with _patch_open_signal_db(db_path):
-        second = await connector.sync()
-
-    assert second == 1
-
-
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_sync_signal_config_not_found_returns_error(mem_db, embedder, signal_db_path):
-    """Missing config.json returns error dict, not exception."""
-    with (
-        patch("memoreei.connectors.signal_connector._has_pysqlcipher3", return_value=True),
-        patch("memoreei.connectors.signal_connector._has_sqlcipher_cli", return_value=False),
-    ):
-        result = await sync_signal(
-            db=mem_db,
-            embedder=embedder,
-            conversation_id=None,
+class FakeSignal:
+    """A Signal Desktop data folder: config.json and an encrypted sql/db.sqlite."""
+
+    def __init__(self, folder: Path, key: str = KEY) -> None:
+        self.folder = folder
+        (folder / "sql").mkdir(parents=True)
+        (folder / "config.json").write_text(json.dumps({"key": key}))
+        self.conn = sqlcipher3.connect(str(folder / "sql" / "db.sqlite"))
+        self.conn.execute(f"PRAGMA key = \"x'{key}'\"")
+        self.conn.executescript(_SCHEMA)
+        self.conn.execute("INSERT INTO items VALUES ('uuid_id', ?)",
+                          (json.dumps({"id": "uuid_id", "value": f"{ME}.2"}),))
+        self._n = 0
+        self.chat("c-me", serviceId=ME, profileName="Caloo")
+        self.chat("c-zez", serviceId=ZEZIMA, profileName="Zezima")
+        self.chat("c-hans", serviceId=HANS, name="Hans")
+        self.chat("c-gert", serviceId=GERTRUDE, profileName="Gertrude")
+        self.chat("c-ge", type="group", name="Grand Exchange traders")
+        self.conn.commit()
+
+    def chat(self, conv_id: str, type: str = "private", **fields: str) -> None:
+        self.conn.execute(
+            "INSERT INTO conversations (id, json, type, name, serviceId) VALUES (?, ?, ?, ?, ?)",
+            (conv_id, json.dumps({"id": conv_id, "type": type, **fields}), type,
+             fields.get("name"), fields.get("serviceId")),
         )
-    # config.json at default path doesn't exist on this machine
-    assert "error" in result
-    assert result["synced"] == 0
+
+    def message(self, conv: str, type: str = "incoming", body: str | None = None,
+                sender: str | None = None, attachments: list[dict] | None = None,
+                expire: int | None = None, **extra: object) -> str:
+        self._n += 1
+        mid = f"m{self._n}"
+        self.conn.execute(
+            "INSERT INTO messages (id, json, sent_at, conversationId, type, body, expireTimer, "
+            "sourceServiceId, hasAttachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (mid, json.dumps(extra), T0 + self._n * 60_000, conv, type, body, expire,
+             sender, int(bool(attachments))),
+        )
+        for n, att in enumerate(attachments or []):
+            self.conn.execute(
+                "INSERT INTO message_attachments (messageId, editHistoryIndex, attachmentType, "
+                "orderInMessage, contentType, caption, fileName, flags, duration, "
+                "storyTextAttachmentJson) VALUES (?, -1, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (mid, att.get("attachmentType", "attachment"), n, att.get("contentType"),
+                 att.get("caption"), att.get("fileName"), att.get("flags"),
+                 att.get("duration"), att.get("story")),
+            )
+        self.conn.commit()
+        return mid
+
+    def update(self, mid: str, body: str | None = None, **json_fields: object) -> None:
+        row = self.conn.execute("SELECT json FROM messages WHERE id = ?", (mid,)).fetchone()
+        data = json.loads(row[0])
+        data.update(json_fields)
+        self.conn.execute("UPDATE messages SET json = ? WHERE id = ?", (json.dumps(data), mid))
+        if body is not None:
+            self.conn.execute("UPDATE messages SET body = ? WHERE id = ?", (body or None, mid))
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
 
 
-def test_read_key_explains_signals_encrypted_key(tmp_path):
-    config_path = str(tmp_path / "config.json")
-    Path(config_path).write_text(json.dumps({"encryptedKey": "763130deadbeef"}))
-    with pytest.raises(RuntimeError, match="keyring"):
-        _read_key(config_path)
+@pytest.fixture
+def fake(tmp_path, monkeypatch):
+    f = FakeSignal(tmp_path / "Signal")
+    monkeypatch.setenv("SIGNAL_DIR", str(f.folder))
+    yield f
+    f.close()
+
+
+@pytest.fixture
+def tools(temp_db, mock_embedder) -> MemoryTools:
+    return MemoryTools(db=temp_db, embedder=mock_embedder)
+
+
+async def _sync(tools: MemoryTools) -> dict:
+    return await sync_signal(db=tools.db, embedder=tools.embedder, key=KEY)
+
+
+async def _contents(tools: MemoryTools) -> dict[str, str]:
+    async with tools.db._db.execute("SELECT source_id, content FROM memories") as cur:
+        return {row[0].rsplit(":", 1)[1]: row[1] for row in await cur.fetchall()}
+
+
+async def _meta(tools: MemoryTools, mid: str) -> dict:
+    async with tools.db._db.execute(
+        "SELECT metadata FROM memories WHERE source_id LIKE ?", (f"%:{mid}",)
+    ) as cur:
+        return json.loads((await cur.fetchone())[0])
+
+
+# ── Keys ───────────────────────────────────────────────────────────────────────
+
+
+def _seal(key: str, password: bytes, iterations: int, prefix: bytes = b"v10") -> str:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    aes = hashlib.pbkdf2_hmac("sha1", password, b"saltysalt", iterations, 16)
+    pad = 16 - len(key) % 16
+    enc = Cipher(algorithms.AES(aes), modes.CBC(b" " * 16)).encryptor()
+    return (prefix + enc.update(key.encode() + bytes([pad]) * pad) + enc.finalize()).hex()
+
+
+def test_unseals_a_mac_key():
+    sealed = bytes.fromhex(_seal(KEY, b"from-the-keychain", 1003))
+    assert unseal(sealed, [b"from-the-keychain"], iterations=1003) == KEY
+
+
+def test_the_wrong_password_says_so():
+    sealed = bytes.fromhex(_seal(KEY, b"right", 1003))
+    with pytest.raises(KeyUnavailable, match="doesn't open"):
+        unseal(sealed, [b"wrong"], iterations=1003)
+
+
+def _config(folder: Path, **fields: object) -> Path:
+    folder.mkdir(exist_ok=True)
+    (folder / "config.json").write_text(json.dumps(fields))
+    return folder
+
+
+def test_linux_libsecret(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(keys_module, "_libsecret_password", lambda: b"gnome-secret")
+    folder = _config(tmp_path / "s", encryptedKey=_seal(KEY, b"gnome-secret", 1, b"v11"),
+                     safeStorageBackend="gnome_libsecret")
+    assert read_db_key(folder) == KEY
+
+
+def test_linux_kwallet(tmp_path, monkeypatch):
+    asked: list[str] = []
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(keys_module, "_kwallet_password", lambda b: asked.append(b) or b"kde-secret")
+    folder = _config(tmp_path / "s", encryptedKey=_seal(KEY, b"kde-secret", 1, b"v11"),
+                     safeStorageBackend="kwallet6")
+    assert read_db_key(folder) == KEY and asked == ["kwallet6"]
+
+
+def test_linux_without_a_keyring(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    v10 = _config(tmp_path / "a", encryptedKey=_seal(KEY, b"peanuts", 1, b"v10"))
+    basic = _config(tmp_path / "b", encryptedKey=_seal(KEY, b"", 1, b"v11"),
+                    safeStorageBackend="basic_text")
+    assert read_db_key(v10) == KEY and read_db_key(basic) == KEY
+
+
+def test_mac_asks_the_keychain(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(keys_module, "_keychain_password", lambda: b"from-the-keychain")
+    folder = _config(tmp_path / "s", encryptedKey=_seal(KEY, b"from-the-keychain", 1003))
+    assert read_db_key(folder) == KEY
+
+
+def test_a_declined_keychain_prompt_explains(tmp_path, monkeypatch):
+    def declined() -> bytes:
+        raise KeyUnavailable(keys_module._KEYCHAIN_ERRORS[-128])
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(keys_module, "_keychain_password", declined)
+    folder = _config(tmp_path / "s", encryptedKey=_seal(KEY, b"x", 1003))
+    with pytest.raises(KeyUnavailable, match="choose Allow"):
+        read_db_key(folder)
+
+
+def test_signal_not_set_up(tmp_path):
+    with pytest.raises(KeyUnavailable, match="link it to your phone"):
+        read_db_key(tmp_path / "nothing-here")
+
+
+def test_connect_proves_the_key_opens_the_database(fake):
+    assert connect() == KEY
+
+
+def test_connect_with_a_key_that_doesnt_open_it(fake):
+    (fake.folder / "config.json").write_text(json.dumps({"key": "f" * 64}))
+    with pytest.raises(KeyUnavailable, match="didn't open"):
+        connect()
+
+
+def test_offered_only_where_signal_desktop_is(tmp_path, monkeypatch):
+    monkeypatch.setenv("SIGNAL_DIR", str(tmp_path / "Signal"))
+    assert not signal_pkg.app_present()
+    _config(tmp_path / "Signal", key=KEY)
+    assert signal_pkg.app_present() == (sys.platform != "win32")
+
+
+# ── What becomes a memoreei ──────────────────────────────────────────────────
+
+
+async def test_messages_say_who_said_what(tools, fake):
+    a = fake.message("c-zez", body="Selling lobsters, 200 each", sender=ZEZIMA)
+    b = fake.message("c-zez", "outgoing", body="I'll take 50")
+    c = fake.message("c-ge", body="Party hats in stock", sender=HANS)
+    assert (await _sync(tools))["synced"] == 3
+    got = await _contents(tools)
+    assert got[a] == "Zezima: Selling lobsters, 200 each"
+    assert got[b] == "me: I'll take 50"
+    assert got[c] == "Hans: Party hats in stock"
+    assert (await _meta(tools, c))["chat_name"] == "Grand Exchange traders"
+
+
+async def test_attachments_are_words_not_files(tools, fake):
+    photo = fake.message("c-zez", sender=ZEZIMA, attachments=[
+        {"contentType": "image/jpeg", "caption": "my bank"}])
+    voice = fake.message("c-zez", sender=ZEZIMA, attachments=[
+        {"contentType": "audio/aac", "flags": 1, "duration": 42}])
+    gif = fake.message("c-zez", sender=ZEZIMA, attachments=[{"contentType": "video/mp4", "flags": 8}])
+    doc = fake.message("c-zez", body="the rules", sender=ZEZIMA, attachments=[
+        {"contentType": "application/pdf", "fileName": "duel-arena.pdf"}])
+    link = fake.message("c-zez", body="look", sender=ZEZIMA,
+                        preview=[{"url": "https://example.com", "title": "Varrock news"}])
+    previews_only = fake.message("c-zez", sender=ZEZIMA, attachments=[
+        {"contentType": "image/png", "attachmentType": "preview"}])
+    await _sync(tools)
+    got = await _contents(tools)
+    assert got[photo] == "Zezima: [Photo] my bank"
+    assert got[voice] == "Zezima: [Voice note 0:42]"
+    assert got[gif] == "Zezima: [GIF]"
+    assert got[doc] == "Zezima: [Document] duel-arena.pdf\nthe rules"
+    assert got[link] == "Zezima: look\n[Link] Varrock news"
+    assert previews_only not in got
+
+
+def test_attachment_labels():
+    assert attachment_label({"contentType": "video/quicktime"}) == "[Video]"
+    assert attachment_label({"contentType": "audio/mpeg", "fileName": "sea shanty.mp3"}) == "[Audio] sea shanty.mp3"
+    assert attachment_label({"contentType": "application/zip"}) == "[Document]"
+
+
+async def test_stories(tools, fake):
+    text = fake.message("c-zez", "story", sender=ZEZIMA, attachments=[
+        {"story": json.dumps({"text": "Maxed at last"})}])
+    media = fake.message("c-zez", "story", sender=ZEZIMA, attachments=[
+        {"contentType": "image/jpeg", "caption": "cape"}])
+    await _sync(tools)
+    got = await _contents(tools)
+    assert got[text] == "Zezima: [Story] Maxed at last"
+    assert got[media] == "Zezima: [Story] [Photo] cape"
+
+
+async def test_group_changes_read_as_sentences(tools, fake):
+    renamed = fake.message("c-ge", "group-v2-change", groupV2Change={
+        "from": HANS, "details": [{"type": "title", "newTitle": "GE flippers"}]})
+    added = fake.message("c-ge", "group-v2-change", groupV2Change={
+        "from": HANS, "details": [{"type": "member-add", "aci": GERTRUDE}]})
+    joined = fake.message("c-ge", "group-v2-change", groupV2Change={
+        "details": [{"type": "member-add", "aci": ZEZIMA}]})
+    left = fake.message("c-ge", "group-v2-change", groupV2Change={
+        "from": GERTRUDE, "details": [{"type": "member-remove", "aci": GERTRUDE}]})
+    await _sync(tools)
+    got = await _contents(tools)
+    assert got[renamed] == "Hans changed the group name to GE flippers"
+    assert got[added] == "Hans added Gertrude"
+    assert got[joined] == "Zezima joined the group"
+    assert got[left] == "Gertrude left the group"
+
+
+async def test_calls_and_timers(tools, fake):
+    fake.conn.execute("INSERT INTO callsHistory VALUES ('call1', 'c-zez', NULL, 'Direct', 'Video', "
+                      "'Incoming', 'Missed', 0)")
+    fake.conn.commit()
+    call = fake.message("c-zez", "call-history", callId="call1")
+    timer = fake.message("c-zez", "timer-notification", expirationTimerUpdate={
+        "expireTimer": 604800, "sourceServiceId": ZEZIMA})
+    await _sync(tools)
+    got = await _contents(tools)
+    assert got[call] == "Missed video call from Zezima"
+    assert got[timer] == "Zezima set disappearing messages to 1 week"
+
+
+async def test_reactions_live_on_the_message(tools, fake):
+    mid = fake.message("c-zez", body="Gz on 99", sender=ZEZIMA,
+                       reactions=[{"emoji": "🎉", "fromId": "c-me", "targetTimestamp": 1, "timestamp": 2},
+                                  {"emoji": "❤️", "fromId": "c-hans", "targetTimestamp": 1, "timestamp": 3}])
+    assert (await _sync(tools))["synced"] == 1
+    assert (await _meta(tools, mid))["reactions"] == [
+        {"emoji": "🎉", "from": "me"}, {"emoji": "❤️", "from": "Hans"}]
+
+
+async def test_disappearing_messages_are_never_kept(tools, fake):
+    gone = fake.message("c-zez", body="my bank pin is", sender=ZEZIMA, expire=3600)
+    kept = fake.message("c-zez", body="ordinary", sender=ZEZIMA)
+    result = await _sync(tools)
+    assert result["synced"] == 1 and result["skipped_disappearing"] == 1
+    got = await _contents(tools)
+    assert gone not in got and kept in got
+    assert await tools.db.get_signal_checkpoint(DISAPPEARING_SKIPPED) == 1
+
+
+async def test_system_noise_is_skipped(tools, fake):
+    fake.message("c-zez", "keychange")
+    fake.message("c-zez", "verified-change")
+    assert (await _sync(tools))["synced"] == 0
+    assert await tools.db.get_signal_checkpoint(CHECKPOINT) == 2
+
+
+# ── Keeping up with changes ───────────────────────────────────────────────────
+
+
+async def test_second_sync_reads_only_whats_new(tools, fake):
+    fake.message("c-zez", body="one", sender=ZEZIMA)
+    await _sync(tools)
+    fake.message("c-zez", body="two", sender=ZEZIMA)
+    result = await _sync(tools)
+    assert result["synced"] == 1 and result["updated"] == 0
+    assert (await _sync(tools)) == {"synced": 0, "updated": 0, "skipped_disappearing": 0}
+
+
+async def test_a_later_reaction_updates_the_memoreei(tools, fake):
+    mid = fake.message("c-zez", body="Gz on 99", sender=ZEZIMA)
+    await _sync(tools)
+    fake.update(mid, reactions=[{"emoji": "👍", "fromId": "c-gert", "targetTimestamp": 1, "timestamp": 2}])
+    result = await _sync(tools)
+    assert result == {"synced": 0, "updated": 1, "skipped_disappearing": 0}
+    assert (await _meta(tools, mid))["reactions"] == [{"emoji": "👍", "from": "Gertrude"}]
+    assert (await _contents(tools))[mid] == "Zezima: Gz on 99"
+
+
+async def test_an_edit_keeps_both_wordings_searchable(tools, fake):
+    mid = fake.message("c-zez", body="meet at Varrock", sender=ZEZIMA)
+    await _sync(tools)
+    fake.update(mid, body="meet at Falador", editHistory=[
+        {"body": "meet at Falador", "timestamp": T0 + 2}, {"body": "meet at Varrock", "timestamp": T0 + 1}])
+    assert (await _sync(tools))["updated"] == 1
+    assert (await _contents(tools))[mid] == "Zezima: meet at Varrock\n[edited] meet at Falador"
+    assert (await _meta(tools, mid))["edits"] == 1
+    hits = await tools.db.search_fts("Falador")
+    assert [h.source_id.rsplit(":", 1)[1] for h in hits] == [mid]
+
+
+async def test_delete_for_everyone_is_flagged_not_forgotten(tools, fake):
+    mid = fake.message("c-zez", body="wrong chat, sorry", sender=ZEZIMA)
+    await _sync(tools)
+    fake.update(mid, body="", deletedForEveryone=True)
+    assert (await _sync(tools))["updated"] == 1
+    assert (await _contents(tools))[mid] == "Zezima: wrong chat, sorry"
+    assert (await _meta(tools, mid))["deleted"] is True
+
+
+async def test_deleted_before_it_was_read_leaves_nothing(tools, fake):
+    fake.message("c-zez", sender=ZEZIMA, deletedForEveryone=True)
+    assert (await _sync(tools))["synced"] == 0
+
+
+# ── When it can't ─────────────────────────────────────────────────────────────
+
+
+async def test_not_connected(tools, fake):
+    result = await sync_signal(db=tools.db, embedder=tools.embedder, key="")
+    assert "Connect it on the Sources page" in result["error"]
+
+
+async def test_a_changed_key_says_to_reconnect(tools, fake):
+    result = await sync_signal(db=tools.db, embedder=tools.embedder, key="f" * 64)
+    assert "Reconnect Signal" in result["error"]
+
+
+async def test_a_changed_schema_says_so(tools, fake):
+    fake.conn.execute("ALTER TABLE messages RENAME COLUMN conversationId TO chatId")
+    fake.conn.commit()
+    result = await _sync(tools)
+    assert "has changed" in result["error"] and "conversationId" in result["error"]
+
+
+async def test_sync_manager_reports_a_failure_as_a_problem(tools, fake, monkeypatch):
+    from memoreei.sync_manager import SyncManager
+
+    monkeypatch.setenv("SIGNAL_DB_KEY", "f" * 64)
+    with pytest.raises(RuntimeError, match="Reconnect Signal"):
+        await SyncManager().sync_source("signal", tools)
+
+
+def test_configured_once_a_key_is_saved(monkeypatch):
+    from memoreei.config import get_config
+
+    assert "signal" not in get_config().configured_connectors()
+    monkeypatch.setenv("SIGNAL_DB_KEY", KEY)
+    monkeypatch.setattr("memoreei.config._config", None)
+    assert "signal" in get_config().configured_connectors()
+
+
+async def test_reader_names_without_items_table(tmp_path):
+    f = FakeSignal(tmp_path / "S")
+    f.conn.execute("DROP TABLE items")
+    f.conn.commit()
+    f.message("c-zez", "outgoing", body="hi")
+    with SignalReader(f.folder / "sql" / "db.sqlite", KEY) as reader:
+        assert [m.sender_name for m in reader.messages(0, reader.end())] == ["me"]
+    f.close()

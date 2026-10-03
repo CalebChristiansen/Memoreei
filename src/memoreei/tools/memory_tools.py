@@ -13,7 +13,7 @@ from memoreei.connectors.generic_connector import import_json, import_csv
 from memoreei.connectors.discord_package_connector import import_discord_package as _import_discord_package
 from memoreei.connectors.imessage_connector import sync_imessage
 from memoreei.connectors.whatsapp import sync_whatsapp
-from memoreei.connectors.signal_connector import sync_signal
+from memoreei.connectors.signal import sync_signal
 from memoreei.connectors.email_connector import sync_email
 from memoreei.connectors.mastodon_connector import sync_mastodon
 from memoreei.connectors.matrix_connector import sync_matrix
@@ -155,8 +155,9 @@ class MemoryTools:
             return {"error": f"File not found: {file_path}", "synced": 0}
         return await import_vcf(self.db, path)
 
-    async def sync_signal_tool(self, conversation_id: str | None = None) -> dict[str, Any]:
-        return await sync_signal(db=self.db, embedder=self.embedder, conversation_id=conversation_id)
+    async def sync_signal_tool(self) -> dict[str, Any]:
+        """Sync Signal Desktop with the key saved when Signal was connected."""
+        return await sync_signal(db=self.db, embedder=self.embedder)
 
     async def import_sms_backup(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)

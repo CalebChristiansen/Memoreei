@@ -271,7 +271,7 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Android SMS Backup & Restore (XML) | import | ✅ |
 | Any JSON, JSON-lines, CSV or TSV | import | ✅ |
 | Contacts (vCard, or macOS Contacts) | names for phone numbers | ✅ |
-| Signal Desktop | live | ⛔ Blocked |
+| Signal (Signal Desktop, macOS and Linux) | live | ✅ |
 
 **WhatsApp** is read from where WhatsApp for Mac keeps the chats it has synced from your
 phone: texts, photo and video captions, shared links and document names. Stickers, voice
@@ -280,9 +280,16 @@ same layout as the one in an iPhone backup, so `WHATSAPP_DB_PATH` can point at t
 instead, on any OS. WhatsApp on Windows and Linux is WhatsApp Web, whose local copy is
 encrypted with a key held by WhatsApp's servers, so there is nothing there to read.
 
+**Signal** is read from Signal Desktop's database on the same computer. Its key is sealed
+by the system keyring (the Keychain on a Mac, GNOME Keyring or KWallet on Linux), so
+connecting reads it once, when you choose *Connect* under Sources, and saves it; a Mac
+asks first. Texts, captions, links, group changes and calls are kept. Reactions and edits
+follow the message they belong to, with both wordings of an edit searchable, and a
+message deleted for everyone is marked rather than forgotten. Photos and files become
+labels, never copies. Disappearing messages are never stored.
+
 **Live** sources sync incrementally, fetching only what's new. **Imports** are
-remembered: `memoreei sync` re-reads a file when it changes. Signal Desktop now keeps its
-database key in the system keyring, which Memoreei can't read yet.
+remembered: `memoreei sync` re-reads a file when it changes.
 
 Set up live sources with `memoreei setup` (or `memoreei setup gmail` for one), and import
 with `memoreei import …`. `memoreei import --help` lists the formats.
@@ -383,7 +390,7 @@ Connector settings:
 | Mastodon | `MASTODON_INSTANCE` (default `https://mastodon.social`), `MASTODON_HASHTAG`, `MASTODON_ACCESS_TOKEN` |
 | iMessage | `IMESSAGE_DB_PATH` (default `~/Library/Messages/chat.db`) |
 | WhatsApp | `WHATSAPP_DB_PATH` (default WhatsApp for Mac's, `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite`) |
-| Signal | `SIGNAL_DB_PATH`, `SIGNAL_CONFIG_PATH` |
+| Signal | `SIGNAL_DB_KEY`, written by *Connect*; `SIGNAL_DIR` if Signal Desktop's data isn't in its usual place |
 
 API keys aren't settings. They live in the database, hashed.
 

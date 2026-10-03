@@ -253,7 +253,7 @@ def status() -> None:
 def sync(
     source: Optional[str] = typer.Argument(
         None,
-        help="Source to sync (discord, telegram, matrix, slack, email, mastodon, imessage, whatsapp). "
+        help="Source to sync (discord, telegram, matrix, slack, email, mastodon, imessage, whatsapp, signal). "
         "Omit to sync every configured source and re-read changed import files.",
     ),
 ) -> None:
@@ -707,6 +707,9 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     typer.echo(f"\n  {info['name']}\n")
     updates: list[tuple[str, str]] = []
 
+    if info.get("connect"):
+        return _connect_signal()
+
     for var_info in info["vars"]:
         var_name, label, is_secret, hint = var_info[:4]
         var_default: str = var_info[4] if len(var_info) > 4 else ""
@@ -723,6 +726,23 @@ def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
         typer.echo("")
 
     return updates
+
+
+def _connect_signal() -> list[tuple[str, str]]:
+    """Read Signal Desktop's key from the keyring now. On a Mac, macOS asks first."""
+    from memoreei.connectors.signal import KeyUnavailable, app_present, connect
+
+    if not app_present():
+        typer.echo("  Signal Desktop isn't set up on this computer. Install it and link it to your phone first.\n")
+        return []
+    typer.echo("  Reading Signal Desktop's key from your keyring. If your computer asks, allow it.")
+    try:
+        key = connect()
+    except KeyUnavailable as exc:
+        typer.echo(f"  ✗ {exc}\n")
+        return []
+    typer.echo("  ✓ Signal's database opens.\n")
+    return [("SIGNAL_DB_KEY", key)]
 
 
 def _login_link() -> str:

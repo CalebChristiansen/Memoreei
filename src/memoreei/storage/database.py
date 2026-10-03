@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS signal_checkpoint (
     updated_at INTEGER NOT NULL
 );
 
+-- Every Signal message read so far, and how long its json and body were then: when
+-- that changes, someone reacted, edited or deleted it, and its memoreei is brought up
+-- to date. Lengths only, never content.
+CREATE TABLE IF NOT EXISTS signal_seen (
+    message_id TEXT PRIMARY KEY,
+    size INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS api_keys (
     name TEXT PRIMARY KEY,
     key_hash TEXT NOT NULL,
@@ -721,6 +729,61 @@ class Database:
             (conversation_id, last_rowid, int(time.time())),
         )
         await self._db.commit()
+
+    async def get_signal_seen(self) -> dict[str, int]:
+        assert self._db is not None
+        async with self._db.execute("SELECT message_id, size FROM signal_seen") as cursor:
+            return {row[0]: row[1] for row in await cursor.fetchall()}
+
+    async def set_signal_seen(self, sizes: dict[str, int]) -> None:
+        assert self._db is not None
+        await self._db.executemany(
+            "INSERT INTO signal_seen (message_id, size) VALUES (?, ?) "
+            "ON CONFLICT(message_id) DO UPDATE SET size = excluded.size",
+            list(sizes.items()),
+        )
+        await self._db.commit()
+
+    async def get_by_source_ids(self, source: str, source_ids: list[str]) -> dict[str, MemoryItem]:
+        """The memories with these source_ids in one source, by source_id."""
+        assert self._db is not None
+        found: dict[str, MemoryItem] = {}
+        for start in range(0, len(source_ids), 500):
+            chunk = source_ids[start:start + 500]
+            async with self._db.execute(
+                f"SELECT * FROM memories WHERE source = ? AND source_id IN ({','.join('?' * len(chunk))})",
+                (source, *chunk),
+            ) as cursor:
+                for row in await cursor.fetchall():
+                    item = MemoryItem.from_row(dict(row))
+                    found[item.source_id or ""] = item
+        return found
+
+    async def update_memory(self, memory: MemoryItem, reembedded: bool) -> None:
+        """Rewrite a stored memory's words and metadata in place, found by source and source_id.
+
+        The FTS index follows by trigger. With *reembedded*, the embedding changes too,
+        which the in-memory vector index can't see from here (no row was added and no
+        other connection committed), so it is rebuilt in the background.
+        """
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE memories SET content = ?, participants = ?, metadata = ?, "
+            "embedding = coalesce(?, embedding) WHERE source = ? AND source_id = ?",
+            (
+                memory.content,
+                json.dumps(memory.participants),
+                json.dumps(memory.metadata),
+                _embedding_to_blob(memory.embedding) if reembedded and memory.embedding else None,
+                memory.source,
+                memory.source_id,
+            ),
+        )
+        await self._db.commit()
+        if reembedded:
+            self._vector_epoch += 1
+            if self._vectors is not None:
+                self._vectors.data_version = -1  # stale: the next search rebuilds it
 
     async def upsert_contacts(self, contacts: list[tuple[str, str, str]]) -> int:
         """Upsert a batch of (identifier, display_name, source) tuples. Returns count written."""

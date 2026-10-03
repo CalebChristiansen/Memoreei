@@ -32,6 +32,7 @@ def server(tmp_path, mock_embedder, monkeypatch):
     monkeypatch.setattr("memoreei.admin.app._on_mac", lambda: True)
     # Without WhatsApp for Mac, whatever the machine running the tests has installed.
     monkeypatch.setattr("memoreei.connectors.whatsapp.mac_app_present", lambda: False)
+    monkeypatch.setattr("memoreei.connectors.signal.app_present", lambda: False)
 
     async def no_service():
         return None
@@ -353,6 +354,52 @@ def test_status_shows_the_newest_whatsapp_message(server, monkeypatch):
 
     client.portal.call(seed)
     assert "Newest message 3 hours ago" in client.get("/admin/").text
+
+
+def test_signal_is_offered_only_where_signal_desktop_is(server, monkeypatch):
+    client = signed_in(server)
+    assert client.get("/admin/sources/signal").status_code == 404
+    monkeypatch.setattr("memoreei.connectors.signal.app_present", lambda: True)
+    form = client.get("/admin/sources/signal").text
+    assert "Memoreei Server" in form and ">Connect<" in form
+    assert 'name="SIGNAL_DB_KEY"' not in form  # never typed in
+
+
+def test_connecting_signal_reads_the_key_then_saves_it(server, monkeypatch):
+    from memoreei.admin import app as admin_app
+    from memoreei.config import config_env_path
+
+    asked: list[bool] = []
+    synced: list[bool] = []
+
+    async def fake_sync() -> None:
+        synced.append(True)
+
+    monkeypatch.setattr(admin_app, "_start_sync", fake_sync)
+    monkeypatch.setattr("memoreei.connectors.signal.app_present", lambda: True)
+    monkeypatch.setattr("memoreei.connectors.signal.connect", lambda: asked.append(True) or "ab" * 32)
+    client = signed_in(server)
+    assert not asked  # opening the page asks nothing
+    r = client.post("/admin/sources/signal", headers=ORIGIN, follow_redirects=False)
+    assert r.status_code == 303 and asked == [True] and synced == [True]
+    assert f"SIGNAL_DB_KEY={'ab' * 32}" in config_env_path().read_text()
+    page = client.get("/admin/sources/signal").text
+    assert "Connected" in page and "ab" * 32 not in page
+    client.post("/admin/sources/signal/remove", headers=ORIGIN)
+    assert "SIGNAL_DB_KEY=\n" in config_env_path().read_text()
+
+
+def test_a_refused_signal_connect_says_why(server, monkeypatch):
+    from memoreei.connectors.signal import KeyUnavailable
+
+    def refused() -> str:
+        raise KeyUnavailable("The Keychain prompt was declined. Click Connect again and choose Allow.")
+
+    monkeypatch.setattr("memoreei.connectors.signal.app_present", lambda: True)
+    monkeypatch.setattr("memoreei.connectors.signal.connect", refused)
+    client = signed_in(server)
+    r = client.post("/admin/sources/signal", headers=ORIGIN, follow_redirects=False)
+    assert r.status_code == 200 and "choose Allow" in r.text
 
 
 def test_setting_up_imessage_writes_config_and_turns_on_auto_sync(server, monkeypatch):

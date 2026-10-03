@@ -35,6 +35,8 @@ dependencies = [
     "questionary>=2.0.0",
     "jinja2>=3.1",  # the /admin dashboard
     "python-multipart>=0.0.9",  # its forms
+    "sqlcipher3>=0.6.2",  # Signal Desktop's database; wheels bundle SQLCipher itself
+    "secretstorage>=3.3; sys_platform == 'linux'",  # Signal's key, from GNOME Keyring; jeepney for KWallet
 ]
 
 [project.urls]
@@ -44,9 +46,9 @@ Documentation = "https://github.com/CalebChristiansen/Memoreei#readme"
 Issues = "https://github.com/CalebChristiansen/Memoreei/issues"
 
 [project.optional-dependencies]
-signal = ["pysqlcipher3>=1.0.0"]
+signal = []  # kept so `pip install memoreei[signal]` still works: Signal needs nothing extra now
 discord-live = ["discord.py>=2.3.0"]
-all = ["pysqlcipher3>=1.0.0", "discord.py>=2.3.0"]
+all = ["discord.py>=2.3.0"]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",

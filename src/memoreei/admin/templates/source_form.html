@@ -34,6 +34,24 @@
 </section>
 {% endif %}
 
+{% if c.connect %}
+<form method="post" class="card stack">
+  {% if error %}<p class="problem" role="alert"><b>Couldn't connect:</b> {{ error }}</p>{% endif %}
+  {% if configured %}
+  <p><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Connected</span>
+    Memoreei reads Signal Desktop's messages with the key it saved when you connected.</p>
+  <p class="hint">Connect again only if Status says to: after Signal Desktop is reinstalled or linked again.</p>
+  {% else %}
+  <p>Signal Desktop locks its messages with a key it keeps in {{ keyring }}. Connecting reads that key once, and Memoreei saves it so it doesn't need to ask again.</p>
+  {% if keyring == "the Keychain" %}<p class="hint">macOS will ask whether <b>Memoreei Server</b> may use “Signal Safe Storage”. Choose <b>Allow</b>; you may need your Mac's login password.</p>{% endif %}
+  <p class="hint">Disappearing messages are never kept. Photos and files aren't either: they're noted as “[Photo]”, “[Document] name” and so on, with any caption.</p>
+  {% endif %}
+  <div class="row">
+    <button>{{ "Connect again" if configured else "Connect" }}</button>
+    <a href="/admin/sources">Cancel</a>
+  </div>
+</form>
+{% else %}
 <form method="post" class="card stack">
   {% for f in fields %}
   <div class="field">
@@ -47,6 +65,7 @@
     <a href="/admin/sources">Cancel</a>
   </div>
 </form>
+{% endif %}
 
 {% if configured %}
 <form method="post" action="/admin/sources/{{ c.key }}/remove" class="aside">

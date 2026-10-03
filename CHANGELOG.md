@@ -7,6 +7,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Signal**, read from Signal Desktop's own database on macOS and Linux. Choose
+  *Connect* under Sources (offered once Signal Desktop is set up) or `memoreei setup
+  signal`: that reads Signal's database key from the Keychain, GNOME Keyring or KWallet,
+  once, and saves it, so nothing asks again unless Signal is reinstalled or relinked. On
+  a Mac, macOS asks whether *Memoreei Server* may have it. Texts, captions, links,
+  stories, group changes, calls and timer changes are kept; photos and files become
+  labels like "[Photo] caption". Reactions are added to the message they're on, an edit
+  keeps the original and adds the new wording as "[edited] …", and a message deleted for
+  everyone is marked `deleted` rather than removed. Disappearing messages are never
+  stored; the status page counts them, beside the newest Signal message's age.
+
+### Changed
+- The Signal connector is new: the old one read a plain key that Signal stopped writing
+  in 2024, and columns Signal has since renamed. `SIGNAL_DB_PATH` and
+  `SIGNAL_CONFIG_PATH` are gone; `SIGNAL_DIR` replaces both. `sync_signal` takes no
+  arguments.
+- `sqlcipher3` is a dependency (and `secretstorage` on Linux), replacing the optional
+  `pysqlcipher3`; `memoreei[signal]` still installs.
+
 ## [0.4.2] - 2026-10-02
 
 ### Added

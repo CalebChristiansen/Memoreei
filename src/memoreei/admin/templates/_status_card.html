@@ -12,6 +12,9 @@
 {% if "whatsapp" in connectors and whatsapp_newest %}
 <dt>WhatsApp</dt><dd>Newest message {{ whatsapp_newest|ago }}</dd>
 {% endif %}
+{% if "signal" in connectors and signal_newest %}
+<dt>Signal</dt><dd>Newest message {{ signal_newest|ago }}{% if signal_disappearing %} · {{ "{:,}".format(signal_disappearing) }} disappearing message{{ "" if signal_disappearing == 1 else "s" }} not kept{% endif %}</dd>
+{% endif %}
 {%- endmacro -%}
 {%- macro auto_row(label) -%}
 <dt>{{ label }}</dt><dd>{% if auto_sync %}Every {{ interval_min }} minute{{ "" if interval_min == 1 else "s" }}{% else %}Off{% endif %}</dd>
