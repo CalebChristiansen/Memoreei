@@ -167,6 +167,22 @@ async def test_vector_search_sees_inserts_and_deletes_after_the_first_search(db)
     assert not db._rebuilding()
 
 
+@pytest.mark.asyncio
+async def test_vector_search_adds_inserts_to_an_index_of_several_rows(db):
+    # one row broadcasts into any number of rows, so it hides a bad copy; three don't
+    old = [make_item(content=f"old {i}", source_id=f"old{i}", embedding=_unit(i)) for i in range(3)]
+    for item in old:
+        await db.insert_memory(item)
+    assert [r.id for r in await db.search_vector(_unit(0), limit=1)] == [old[0].id]
+
+    new = [make_item(content=f"new {i}", source_id=f"new{i}", embedding=_unit(i)) for i in range(3, 5)]
+    for item in new:
+        await db.insert_memory(item)
+    for i, item in enumerate(old + new):
+        assert [r.id for r in await db.search_vector(_unit(i), limit=1)] == [item.id]
+    assert not db._rebuilding()  # added to, not rebuilt
+
+
 async def _rowid(db: Database, memory_id: str) -> int:
     assert db._db is not None
     async with db._db.execute("SELECT rowid FROM memories WHERE id = ?", (memory_id,)) as cursor:

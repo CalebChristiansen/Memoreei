@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Search stops failing with "could not broadcast input array" once the server has
+  added new messages to an index of more than one. Every search failed from then on,
+  until the server was restarted.
+
 ## [0.4.4] - 2026-10-02
 
 ### Fixed

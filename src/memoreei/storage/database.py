@@ -205,8 +205,8 @@ class _VectorIndex:
 
         old = len(self.matrix)
         matrix = np.empty((old + len(decoded), dim), np.float32)
-        for start in range(0, old, _STEP):
-            matrix[start:start + _STEP] = self.matrix[start:start + _STEP]
+        if old:
+            matrix[:old] = self.matrix
         for n, (_, _, vector) in enumerate(decoded, old):
             matrix[n] = vector
         norms = np.concatenate([self.norms, _norms(matrix[old:])])
