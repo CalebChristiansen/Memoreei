@@ -48,10 +48,10 @@ elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
 
 1. **Download** the DMG from the [latest release](https://github.com/CalebChristiansen/Memoreei/releases/latest):
    `Memoreei-arm64.dmg` for Apple silicon (About This Mac says *Chip Apple M…*),
-   `Memoreei-x86_64.dmg` for Intel. macOS 12 or newer.
+   `Memoreei-x86_64.dmg` for Intel. macOS 11 or newer.
 2. **Drag Memoreei into Applications.**
 3. **Open it the first time from Finder.** The app isn't signed by Apple yet, so a
-   double-click, Launchpad or Spotlight won't open it. On macOS 12–14, **right-click →
+   double-click, Launchpad or Spotlight won't open it. On macOS 11–14, **right-click →
    Open**, then **Open**. On macOS 15 and later, double-click once, then System Settings
    → Privacy & Security → **Open Anyway**. Once per download.
 4. **Full Disk Access**, which iMessage needs. macOS gives apps no way to ask, so a

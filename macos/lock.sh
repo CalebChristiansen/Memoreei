@@ -6,13 +6,13 @@
 #                           architectures (what CI runs; it never changes a pin)
 #
 # One lock serves both architectures. It's resolved for x86_64 (the stricter of the two:
-# some packages have dropped Intel wheels for macOS 12) and then checked against arm64.
+# some packages have dropped Intel wheels for macOS 11) and then checked against arm64.
 # --only-binary matters: without it the resolver picks versions that exist on PyPI but
-# have no wheel for macOS 12, and the build fails instead.
+# have no wheel for macOS 11, and the build fails instead.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 UV=${UV:-uv}
-export MACOSX_DEPLOYMENT_TARGET=12.0
+export MACOSX_DEPLOYMENT_TARGET=11.0
 common=(--only-binary :all: --python-version 3.12 --no-header --no-annotate -q)
 
 if [ "${1:-}" != --check ]; then

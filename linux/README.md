@@ -43,7 +43,7 @@ project's.
 - **manylinux_2_28** (glibc 2.28): the floor for every wheel in the lock, and so for the
   packages. Ubuntu 20.04, Debian 11, RHEL 8.
 - **Its own lock**, on current onnxruntime. The Mac's `constraints.txt` holds it at 1.19.2
-  for macOS 12; nothing holds Linux back that way.
+  for macOS 11; nothing holds Linux back that way.
 - **xz**, not zstd, inside the .deb and .rpm: Debian 11's dpkg can't read zstd.
 
 ## Upgrades and data

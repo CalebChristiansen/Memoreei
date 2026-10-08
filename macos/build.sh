@@ -46,7 +46,7 @@ esac
 # The bundle identifier becomes permanent the day the app is signed with a Developer ID:
 # changing it after that costs every user a fresh Full Disk Access grant.
 BUNDLE_ID=cafe.caleb.Memoreei
-MIN_MACOS=12.0
+MIN_MACOS=11.0
 PYTHON_VERSION=3.12.14
 PBS_RELEASE=20260924
 PY_MINOR=${PYTHON_VERSION%.*}
@@ -148,7 +148,7 @@ if [ "$MAKE_DMG" = 1 ]; then
   step "DMG"
   # The familiar window, laid out by dmgbuild (see macos/dmg-settings.py).
   DMG="$OUT/Memoreei-$ARCH.dmg"
-  # As a module: uv's command shims call realpath, which macOS 12 doesn't have.
+  # As a module: uv's command shims call realpath, which macOS 11 and 12 don't have.
   "$UV" run -q --no-project --python 3.12 --with dmgbuild==1.6.7 python -m dmgbuild \
     -s "$ROOT/macos/dmg-settings.py" \
     -D app="$APP" -D background="$ROOT/macos/dmg-background.tiff" \

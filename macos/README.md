@@ -38,11 +38,11 @@ Nothing writes into the bundle at runtime, or the signature breaks: bytecode goe
 
 ## Pins that matter
 
-- **onnxruntime 1.19.2** (`constraints.txt`): the last release with wheels for macOS
-  12 on Intel. Newer ones need macOS 13 (1.20–1.23) or 14 and arm64 only (1.24+).
+- **onnxruntime 1.19.2** (`constraints.txt`): the last release with Intel wheels for
+  macOS 11 and 12. Newer ones need macOS 13 (1.20–1.23) or 14 and arm64 only (1.24+).
   fastembed accepts it on Python ≤ 3.12, hence Python 3.12.
 - **The lock is resolved for x86_64 with `--only-binary`** and checked against arm64, or
-  it picks versions with no macOS 12 wheel.
+  it picks versions with no macOS 11 wheel.
 - **sympy is dropped from the bundle**: onnxruntime needs it only for offline model
   tools.
 

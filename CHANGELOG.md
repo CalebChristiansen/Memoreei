@@ -7,6 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- The Mac app runs on macOS 11 Big Sur, not only 12 and later. Nothing it bundles
+  needed 12: the same pinned dependencies resolve for 11 unchanged.
+
 ## [0.4.5] - 2026-10-07
 
 ### Fixed
