@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-07
+
 ### Fixed
 - Search stops failing with "could not broadcast input array" once the server has
   added new messages to an index of more than one. Every search failed from then on,
@@ -335,7 +337,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.1...v0.4.2
