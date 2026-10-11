@@ -31,6 +31,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `memoreei search` takes `--person`, `--scope`, `--after` and `--before`.
 
 ### Fixed
+- `get_context` returns the messages around the one asked about. It looked within a
+  few minutes either side and took the earliest, so in a chat whose messages are
+  seconds apart every anchor came back as the chat's first messages.
 - Punctuation in a search no longer fails it: a path, a URL, a hyphenated word or a file
   name gave "fts5: syntax error" instead of results.
 

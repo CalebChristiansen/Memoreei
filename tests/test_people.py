@@ -294,3 +294,26 @@ async def test_any_words_reaches_the_keyword_search(tools, monkeypatch):
     await tools.search_memoreei("bank zeppelin", participant="Zezima")
     await tools.search_memoreei("bank zeppelin", participant="Zezima", any_words=True)
     assert seen == [False, True]
+
+
+async def test_get_context_centres_on_the_anchor_in_a_dense_chat(tmp_path):
+    """Backlog 30: messages seconds apart all fell in the old minutes-wide window, and
+    'ORDER BY ts LIMIT n' returned the chat's first rows, whatever the anchor."""
+    from pathlib import Path
+
+    from memoreei.connectors.generic_connector import import_json
+
+    sample = Path(__file__).resolve().parent.parent / "data/samples/donut_heist.jsonl"
+    items, _ = import_json(sample, {"content": "text", "sender": "sender", "timestamp": "ts"},
+                           source_label="donut")
+    db = Database(db_path=str(tmp_path / "ctx.db"))
+    await db.connect()
+    for it in items:
+        await db.insert_memory(it)
+    tools = MemoryTools(db=db, embedder=WordEmbedder())
+    anchor = items[48]
+    context = await tools.get_context(anchor.id, before=3, after=3)
+    got = [m["content"] for m in context["messages"]]
+    assert got == [it.content for it in items[45:52]]
+    assert [m.get("hit", False) for m in context["messages"]] == [False] * 3 + [True] + [False] * 3
+    await db.close()
