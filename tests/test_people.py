@@ -246,8 +246,11 @@ async def test_the_network_server_documents_itself():
     assert all(tools[n].annotations.readOnlyHint for n in ("search_memoreei", "get_context", "list_sources"))
 
 
-async def test_search_without_a_note_passes_its_own_output_schema(tools, monkeypatch):
-    """Optional keys must be optional in the schema FastMCP validates results against."""
+async def test_results_pass_the_output_schema_through_a_real_client(tools, monkeypatch):
+    """Through a client session, as Hermes sees it: the SDK checks each result against
+    the tool's output schema there, and optional keys come back as null."""
+    from mcp.shared.memory import create_connected_server_and_client_session
+
     import memoreei.server as server
 
     async def fake_tools():
@@ -255,7 +258,15 @@ async def test_search_without_a_note_passes_its_own_output_schema(tools, monkeyp
 
     monkeypatch.setattr(server, "_get_tools", fake_tools)
     mcp = server.build_network_server()
-    content, structured = await mcp.call_tool("search_memoreei", {"query": "rune", "participant": "Zezima"})
-    assert structured.get("note") is None and structured["results"]
-    assert all("hit" not in row for row in structured["results"])  # nested rows stay sparse
-    assert '"note"' not in content[0].text
+    async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+        plain = await client.call_tool("search_memoreei", {"query": "rune", "participant": "Zezima"})
+        assert not plain.isError, plain.content
+        assert plain.structuredContent["results"]
+        assert all("hit" not in row for row in plain.structuredContent["results"])
+        assert '"note"' not in plain.content[0].text
+        noted = await client.call_tool("search_memoreei", {"query": "heist", "participant": "Hans"})
+        assert not noted.isError and "2 people" in noted.structuredContent["note"]
+        context = await client.call_tool("get_context", {"memory_id": plain.structuredContent["results"][0]["id"]})
+        assert not context.isError, context.content
+        listed = await client.call_tool("list_sources", {})
+        assert not listed.isError, listed.content

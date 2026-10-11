@@ -2,6 +2,9 @@
 
 No ``from __future__ import annotations`` here: TypedDict reads NotRequired from the
 annotations as written, and a string annotation hides it, making every key required.
+
+Optional keys at the top level also allow null: the SDK fills an absent one with None
+in the structured result, then checks that result against this schema.
 """
 from pydantic import Field
 from typing_extensions import Annotated, NotRequired, TypedDict
@@ -28,9 +31,9 @@ class PersonMatch(TypedDict):
 
 class SearchResult(TypedDict):
     results: Annotated[list[Message], Field(description="Best match first")]
-    people: NotRequired[Annotated[list[PersonMatch], Field(
+    people: NotRequired[Annotated[list[PersonMatch] | None, Field(
         description="Who participant matched; more than one means the name was ambiguous")]]
-    note: NotRequired[Annotated[str, Field(
+    note: NotRequired[Annotated[str | None, Field(
         description="Why results are empty or broader than asked; read it before answering")]]
 
 
