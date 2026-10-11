@@ -133,6 +133,10 @@ say so; don't guess.
 """
 
 
+# Say when no result contains all of the query's words (MemoryTools.search_memoreei).
+WEAK_MATCH_NOTE = False
+
+
 async def search_memoreei(
     query: Annotated[str, Field(
         description="What to look for, in a few words: 'credit card recommendation', "
@@ -173,6 +177,7 @@ async def search_memoreei(
         participant_scope=participant_scope,
         after=after,
         before=before,
+        weak_match_note=WEAK_MATCH_NOTE,
     )
 
 

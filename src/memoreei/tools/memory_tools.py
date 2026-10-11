@@ -99,8 +99,14 @@ class MemoryTools:
         participant_scope: str = "conversation",
         after: str | None = None,
         before: str | None = None,
+        weak_match_note: bool = False,
     ) -> dict[str, Any]:
-        """Search, narrowed first by any filters; see server.search_memoreei for the contract."""
+        """Search, narrowed first by any filters; see server.search_memoreei for the contract.
+
+        With *weak_match_note*, say so when no message contains all the query's words:
+        semantic search always returns its nearest neighbours, and a small model can't
+        otherwise tell "the answer" from "the least unrelated".
+        """
         if participant_scope not in SCOPES:
             raise ValueError(
                 f"participant_scope must be one of {', '.join(SCOPES)}, not {participant_scope!r}."
@@ -180,8 +186,14 @@ class MemoryTools:
             if notes:
                 out["note"] = " ".join(notes)
 
-        scored = await self.search.search_items(query, limit, filt)
+        stats: dict[str, int] = {}
+        scored = await self.search.search_items(query, limit, filt, stats)
         out["results"] = [present(item, contacts) for _, item in scored]
+        if weak_match_note and out["results"] and not stats.get("keyword_hits"):
+            weak = ("No message contains all of these words; these are only the nearest by "
+                    "meaning. If none of them answers the question, try other words, and if "
+                    "those fail too, it probably isn't in the messages.")
+            out["note"] = f"{out['note']} {weak}" if out.get("note") else weak
         if not out["results"]:
             within = f" within {', '.join(described)}" if described else ""
             empty = (f"Nothing matched{within}. Try other words"

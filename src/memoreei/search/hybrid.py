@@ -51,9 +51,12 @@ class HybridSearch:
         items = await self.search_items(query, limit, filter)
         return [{**item.to_dict(), "score": round(score, 6)} for score, item in items]
 
-    async def search_items(self, query: str, limit: int,
-                           filter: Filter) -> list[tuple[float, MemoryItem]]:
-        """The best *limit* memories within *filter*, with their fused scores."""
+    async def search_items(self, query: str, limit: int, filter: Filter,
+                           stats: dict | None = None) -> list[tuple[float, MemoryItem]]:
+        """The best *limit* memories within *filter*, with their fused scores.
+
+        *stats*, if given, gets ``keyword_hits``: how many messages contain every word.
+        """
         # Fetch more candidates than needed for better RRF fusion
         candidate_limit = max(limit * 3, 30)
         where = None if filter.empty else filter.sql()
@@ -65,6 +68,8 @@ class HybridSearch:
             self.embedder.embed_query(query),
         )
         vec_results = await self.db.search_vector(query_embedding, limit=candidate_limit, keep=keep)
+        if stats is not None:
+            stats["keyword_hits"] = len(fts_results)
 
         fts_ranks = {item.id: rank for rank, item in enumerate(fts_results, 1)}
         vec_ranks = {item.id: rank for rank, item in enumerate(vec_results, 1)}

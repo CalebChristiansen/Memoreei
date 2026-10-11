@@ -270,3 +270,12 @@ async def test_results_pass_the_output_schema_through_a_real_client(tools, monke
         assert not context.isError, context.content
         listed = await client.call_tool("list_sources", {})
         assert not listed.isError, listed.content
+
+
+async def test_weak_matches_say_so_when_asked(tools):
+    found = await tools.search_memoreei("zeppelin", participant="Zezima", weak_match_note=True)
+    assert found["results"] and "nearest by meaning" in found["note"]
+    found = await tools.search_memoreei("scimitar", participant="Zezima", weak_match_note=True)
+    assert "nearest by meaning" not in (found.get("note") or "")
+    found = await tools.search_memoreei("zeppelin", participant="Zezima")
+    assert "note" not in found
