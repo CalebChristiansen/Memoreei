@@ -31,6 +31,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The server describes every parameter with an example, sends instructions, declares
   output schemas and marks its read tools read-only. Mistakes come back as errors that
   say what to pass instead.
+- **Unknown parameter names are no longer ignored.** A model that passed `person` for
+  `participant` got an unfiltered search that looked like an answer. Plain stand-ins
+  (`person`, `id`, `since`, `window`, …) are now mapped to the real parameter, and
+  anything else is refused with the list of parameters the tool takes.
 - `memoreei search` takes `--person`, `--scope`, `--after` and `--before`.
 
 ### Fixed

@@ -330,3 +330,26 @@ async def test_list_sources_finds_someone_by_name(tools):
     listed = await tools.list_sources(name="hans")
     assert {p["name"] for p in listed["people"]} == {"Hans Gruber", "Hans Zimmer"}
     assert "not_shown" not in listed
+
+
+async def test_stand_in_parameter_names_are_mapped_or_refused(tools, monkeypatch):
+    """`person` used to be dropped without a word, leaving an unfiltered search."""
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    import memoreei.server as server
+
+    async def fake_tools():
+        return tools
+
+    monkeypatch.setattr(server, "_get_tools", fake_tools)
+    mcp = server.build_network_server()
+    async with create_connected_server_and_client_session(mcp._mcp_server) as client:
+        mapped = await client.call_tool("search_memoreei", {"query": "heist", "person": "Hans"})
+        assert not mapped.isError and mapped.structuredContent["people"]  # filtered, as asked
+        hit = mapped.structuredContent["results"][0]["id"]
+        window = await client.call_tool("get_context", {"id": hit, "window": 1})
+        assert not window.isError and len(window.structuredContent["messages"]) <= 3
+        refused = await client.call_tool("search_memoreei", {"query": "heist", "participnt": "Hans"})
+        assert refused.isError
+        text = refused.content[0].text
+        assert "'participnt'" in text and "did you mean 'participant'" in text and "It takes:" in text

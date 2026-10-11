@@ -592,13 +592,73 @@ ANNOTATIONS = {
 }
 
 
+# Names small models reach for instead of the real ones, seen in the eval: mapped rather
+# than refused, since the meaning is plain and a retry costs a whole model turn.
+ALIASES: dict[str, dict[str, str]] = {
+    "search_memoreei": {
+        "person": "participant", "sender": "participant", "contact": "participant",
+        "who": "participant", "from": "participant", "with": "participant",
+        "scope": "participant_scope", "q": "query", "text": "query", "search": "query",
+        "since": "after", "from_date": "after", "start_date": "after", "start": "after",
+        "until": "before", "to_date": "before", "end_date": "before", "end": "before",
+        "platform": "source", "app": "source", "max_results": "limit", "n": "limit", "k": "limit",
+    },
+    "get_context": {"id": "memory_id", "message_id": "memory_id", "memoryid": "memory_id",
+                    "result_id": "memory_id", "source_id": "memory_id"},
+    "list_sources": {"query": "name", "participant": "name", "person": "name"},
+}
+# get_context: one number for both sides
+_WINDOW = {"window", "radius", "context", "around", "n", "limit", "count"}
+
+
+class _Server(FastMCP):  # type: ignore[type-arg]
+    """FastMCP that maps known stand-in parameter names and refuses unknown ones.
+
+    The SDK drops arguments it doesn't know without a word, so a small model's
+    `person: "Jane"` became an unfiltered search that looked like an answer.
+    """
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        tool = self._tool_manager.get_tool(name)
+        if tool is not None and arguments:
+            arguments = _fix_arguments(name, set(tool.parameters.get("properties", {})), arguments)
+        return await super().call_tool(name, arguments)
+
+
+def _fix_arguments(tool: str, known: set[str], arguments: dict[str, Any]) -> dict[str, Any]:
+    import difflib
+
+    aliases = ALIASES.get(tool, {})
+    fixed: dict[str, Any] = {}
+    unknown = []
+    for key, value in arguments.items():
+        if key in known:
+            fixed[key] = value
+        elif aliases.get(key.lower()) in known and aliases[key.lower()] not in arguments:
+            fixed.setdefault(aliases[key.lower()], value)
+        elif tool == "get_context" and key.lower() in _WINDOW and isinstance(value, int):
+            fixed.setdefault("before", value)
+            fixed.setdefault("after", value)
+        else:
+            unknown.append(key)
+    if unknown:
+        hints = []
+        for key in unknown:
+            close = difflib.get_close_matches(key, sorted(known), n=1, cutoff=0.5)
+            hints.append(f"{key!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+        raise ValueError(
+            f"{tool} has no parameter {', '.join(hints)}. It takes: {', '.join(sorted(known))}."
+        )
+    return fixed
+
+
 def _add_tools(server: FastMCP, tools: list) -> None:  # type: ignore[type-arg]
     for fn in tools:
         server.add_tool(fn, annotations=ANNOTATIONS.get(fn.__name__))
 
 
 def build_local_server() -> FastMCP:
-    server = FastMCP("memoreei", instructions=INSTRUCTIONS, lifespan=_lifespan)
+    server = _Server("memoreei", instructions=INSTRUCTIONS, lifespan=_lifespan)
     _add_tools(server, LOCAL_TOOLS)
     return server
 
@@ -607,7 +667,7 @@ def build_network_server() -> FastMCP:
     # Every request needs a key, so the SDK's DNS-rebinding check (which it switches
     # on for loopback binds, allowing only localhost Host headers) adds nothing and
     # would reject clients addressing the server by LAN IP or hostname.
-    server = FastMCP(
+    server = _Server(
         "memoreei",
         instructions=INSTRUCTIONS,
         stateless_http=True,
