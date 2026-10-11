@@ -15,6 +15,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   else. A name that fits several people searches all of them and says so.
 - **Filters narrow the search before it ranks.** They used to be applied to the top 30
   matches from everyone, so a filtered search on a busy topic could come back empty.
+- **Keyword search no longer needs every word.** Messages with all of them still come
+  first; after those, ones with only the rarer words fill in. "What did he say he
+  ordered" now finds the message that names what he ordered.
 - New `participant_scope`: `conversation` (default; what they wrote, plus both sides of
   your one-to-one chats), `sent`, or `any_chat`. `source` takes a platform (`signal`) as
   well as a source id. Dates are in the server's time zone, and `before` includes its
