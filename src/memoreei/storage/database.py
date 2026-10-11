@@ -438,14 +438,13 @@ class Database:
         """Keyword matches, best first; *where* (SQL over memories, and its parameters)
         narrows them before the limit is applied."""
         assert self._db is not None
-        # Sanitize query for FTS5 — strip characters that break the parser
+        # Words only, each quoted: FTS5 reads punctuation (a path's "/", a URL's ":", a
+        # hyphen) and bare AND/OR/NOT as syntax, and a syntax error fails the search.
         import re as _re
-        # Remove apostrophes, quotes, and other FTS5 syntax chars
-        safe_query = _re.sub(r"[\"'()*^{}~:\-+]", " ", query)
-        # Collapse whitespace
-        safe_query = " ".join(safe_query.split())
-        if not safe_query.strip():
+        words = _re.findall(r"\w+", query)
+        if not words:
             return []
+        safe_query = " ".join(f'"{w}"' for w in words)
         clause, params = where or ("1", [])
         async with self._db.execute(
             f"""

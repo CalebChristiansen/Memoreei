@@ -93,3 +93,22 @@ async def test_normal_query(db):
     results = await db.search_fts("hello world")
     assert isinstance(results, list)
     assert len(results) > 0
+
+
+@pytest.mark.parametrize("query", [
+    "files on /srv/projects",
+    "https://example.com/co2_sensor",
+    "rev-1 board",
+    "co2_sensor.kicad_pcb",
+    "cats AND OR NOT dogs",
+    "C:\\Users\\files",
+    "price: $5 + tax",
+    "NEAR(project message)",
+])
+async def test_punctuation_never_breaks_the_search(db, query):
+    await db.search_fts(query)  # no fts5 syntax error
+
+
+async def test_words_inside_punctuation_still_match(db):
+    results = await db.search_fts("project/message")
+    assert any("project" in r.content for r in results)
