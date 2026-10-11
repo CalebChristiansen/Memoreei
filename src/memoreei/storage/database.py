@@ -196,6 +196,8 @@ class _VectorIndex:
         self.count, self.max_rowid = count, max_rowid
         self.data_version = 0  # SQLite's, when this was read; set by the Database
         self._sender_counts: tuple[list[str], list[int]] | None = None
+        self._codes: dict[str, tuple[dict[str, int], np.ndarray]] = {}
+        self.directory: Any = None  # search.people.Directory, cached by MemoryTools
 
     @classmethod
     def empty(cls) -> "_VectorIndex":
@@ -247,11 +249,32 @@ class _VectorIndex:
         index.data_version = self.data_version
         return index
 
+    def _coded(self, column: str) -> tuple[dict[str, int], np.ndarray]:
+        """*column* as integer codes and the value each stands for, computed once."""
+        if column not in self._codes:
+            values, codes = np.unique(getattr(self, column).astype(str), return_inverse=True)
+            self._codes[column] = ({v: n for n, v in enumerate(values.tolist())},
+                                   codes.astype(np.int32))
+        return self._codes[column]
+
+    def vocab(self, column: str) -> dict[str, int]:
+        """Every distinct value of *column*."""
+        return self._coded(column)[0]
+
+    def isin(self, column: str, values: set[str]) -> np.ndarray:
+        """A mask of the rows whose *column* is one of *values*."""
+        vocab, codes = self._coded(column)
+        wanted = [vocab[v] for v in values if v in vocab]
+        if not wanted:
+            return np.zeros(len(codes), bool)
+        return np.isin(codes, np.array(wanted, np.int32))
+
     def sender_counts(self) -> tuple[list[str], list[int]]:
         """Each sender as stored, and how many rows it sent; computed once per index."""
         if self._sender_counts is None:
-            counts = Counter(self.senders.tolist())
-            self._sender_counts = (list(counts), list(counts.values()))
+            vocab, codes = self._coded("senders")
+            counts = np.bincount(codes, minlength=len(vocab)).tolist() if len(codes) else []
+            self._sender_counts = (list(vocab), counts)
         return self._sender_counts
 
     def rank(self, query: np.ndarray, limit: int, keep: np.ndarray | None = None) -> list[str]:
@@ -561,16 +584,28 @@ class Database:
         return {row["source"]: row["cnt"] for row in rows}
 
     async def source_summary(self) -> list[dict[str, Any]]:
-        """Each source with its message count, whether it is a group chat and its name, largest first."""
+        """Each source with its message count, whether it is a group chat and its name, largest first.
+
+        Group and name come from each source's newest row, so this costs one indexed
+        GROUP BY and a row per source, not a JSON parse of every message.
+        """
         assert self._db is not None
         async with self._db.execute(
-            f"SELECT source, COUNT(*) AS cnt, MAX({GROUP_SQL}) AS grp, "
-            "MAX(json_extract(CASE WHEN json_valid(metadata) THEN metadata END, '$.chat_name')) AS chat "
-            "FROM memories GROUP BY source ORDER BY cnt DESC"
+            "SELECT m.source, c.cnt, m.metadata FROM "
+            "(SELECT source, COUNT(*) AS cnt, MAX(rowid) AS last FROM memories GROUP BY source) c "
+            "JOIN memories m ON m.rowid = c.last ORDER BY c.cnt DESC"
         ) as cursor:
             rows = await cursor.fetchall()
-        return [{"source": r["source"], "count": r["cnt"], "group": bool(r["grp"]),
-                 "chat_name": r["chat"] or None} for r in rows]
+        summary = []
+        for r in rows:
+            try:
+                meta = json.loads(r["metadata"]) if r["metadata"] else {}
+            except ValueError:
+                meta = {}
+            group = bool(meta.get("is_group")) or r["source"].startswith("imessage:chat")
+            summary.append({"source": r["source"], "count": r["cnt"], "group": group,
+                            "chat_name": meta.get("chat_name") or None})
+        return summary
 
     async def platforms(self) -> list[str]:
         """The kinds of source stored ('imessage' for 'imessage:…'), alphabetically."""

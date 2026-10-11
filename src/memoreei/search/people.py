@@ -37,8 +37,8 @@ MAX_PEOPLE = 10
 
 # A stored row's sender, whether it came from me, its sender's number, and whether its
 # chat is a group, as SQL over the memories table. Old rows can hold '' for JSON.
-_META = "(CASE WHEN json_valid(metadata) THEN metadata END)"
-_PARTS = "(CASE WHEN json_valid(participants) THEN participants END)"
+_META = "nullif(metadata, '')"
+_PARTS = "nullif(participants, '')"
 SENDER_SQL = (
     f"CASE WHEN json_extract({_META}, '$.is_from_me') = 1 "
     f"OR json_extract({_META}, '$.type') = 'sent' THEN 'me' "
@@ -236,32 +236,25 @@ class Filter:
         """The index rows this filter keeps, or None for all of them."""
         if self.empty:
             return None
-        n = len(index.ids)
-        keep = np.ones(n, bool)
+        keep = np.ones(len(index.ids), bool)
         if self.has_person:
-            person = np.zeros(n, bool)
-            if self.labels:
-                person |= _isin(index.senders, self.labels)
-            if self.phones:
-                person |= _isin(index.phones, self.phones)
-            if self.chats:
-                person |= _isin(index.sources, self.chats)
+            person = np.zeros(len(index.ids), bool)
+            for column, values in (("senders", self.labels), ("phones", self.phones),
+                                   ("sources", self.chats)):
+                if values:
+                    person |= index.isin(column, values)
             keep &= person
         if self.platforms is not None or self.sources is not None:
-            wanted = set(self.sources or ())
             prefixes = tuple(p + ":" for p in self.platforms or ())
-            keep &= np.fromiter(
-                (s in wanted or s in (self.platforms or ()) or (bool(prefixes) and s.startswith(prefixes))
-                 for s in index.sources), bool, n)
+            platforms = self.platforms or set()
+            wanted = {s for s in index.vocab("sources")
+                      if s in platforms or (prefixes and s.startswith(prefixes))}
+            keep &= index.isin("sources", wanted | set(self.sources or ()))
         if self.after_ts is not None:
             keep &= index.ts >= self.after_ts
         if self.before_ts is not None:
             keep &= index.ts < self.before_ts
         return keep
-
-
-def _isin(column: np.ndarray, values: set[str]) -> np.ndarray:
-    return np.fromiter((v in values for v in column), bool, len(column))
 
 
 def parse_date(text: str, end: bool = False) -> int:

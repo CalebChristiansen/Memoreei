@@ -138,7 +138,9 @@ class MemoryTools:
 
         if participant and participant.strip():
             index = await self.db.search_index()
-            directory = Directory(contacts, index)
+            directory = index.directory
+            if directory is None or directory.contacts != contacts:
+                directory = index.directory = Directory(contacts, index)
             people = directory.resolve(participant)
             if not people:
                 out["people"] = []
