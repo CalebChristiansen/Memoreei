@@ -328,3 +328,22 @@ async def test_discord_checkpoint(db):
     await db.set_discord_checkpoint("chan123", "msg789")
     result = await db.get_discord_checkpoint("chan123")
     assert result == "msg789"
+
+
+@pytest.mark.asyncio
+async def test_codes_carry_forward_when_rows_are_appended(db):
+    """An appended index keeps its filter codes consistent with a full rebuild."""
+    from memoreei.storage.database import _read_vectors
+
+    a = make_item(source="whatsapp:a", content="a", source_id="a", embedding=_unit(0))
+    await db.insert_memory(a)
+    first = _read_vectors(db.db_path, None)
+    b = make_item(source="signal:b", content="b", source_id="b", embedding=_unit(1))
+    c = make_item(source="whatsapp:a", content="c", source_id="c", embedding=_unit(2))
+    await db.insert_memory(b)
+    await db.insert_memory(c)
+    grown = _read_vectors(db.db_path, first)
+    assert grown is not None and len(grown.ids) == 3
+    assert grown.isin("sources", {"whatsapp:a"}).tolist() == [True, False, True]
+    assert grown.isin("sources", {"signal:b"}).tolist() == [False, True, False]
+    assert grown.isin("sources", {"nowhere"}).tolist() == [False, False, False]

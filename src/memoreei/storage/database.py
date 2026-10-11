@@ -237,8 +237,17 @@ class _VectorIndex:
                np.array([bool(g) for g in added[4]], dtype=bool))
         sources, senders, phones, ts, groups = (
             np.concatenate([mine, theirs]) for mine, theirs in zip(self._columns(), new))
-        return _VectorIndex(self.ids + [i for i, _, _ in decoded], sources, matrix, count,
-                            max_rowid, norms, senders, phones, ts, groups)
+        index = _VectorIndex(self.ids + [i for i, _, _ in decoded], sources, matrix, count,
+                             max_rowid, norms, senders, phones, ts, groups)
+        # Carry the codes forward, adding only the new rows', rather than recode them all
+        for column, added_values in (("sources", new[0]), ("senders", new[1]), ("phones", new[2])):
+            if column in self._codes:
+                vocab, codes = self._codes[column]
+                vocab = dict(vocab)
+                extra = np.fromiter((vocab.setdefault(v, len(vocab)) for v in added_values.tolist()),
+                                    np.int32, len(added_values))
+                index._codes[column] = (vocab, np.concatenate([codes, extra]))
+        return index
 
     def without_source(self, source: str, count: int, max_rowid: int) -> "_VectorIndex":
         """A new index without *source*'s rows."""
@@ -256,6 +265,12 @@ class _VectorIndex:
             self._codes[column] = ({v: n for n, v in enumerate(values.tolist())},
                                    codes.astype(np.int32))
         return self._codes[column]
+
+    def prepare(self) -> "_VectorIndex":
+        """Code every filter column now, in the worker thread, not in the first search."""
+        for column in ("sources", "senders", "phones"):
+            self._coded(column)
+        return self
 
     def vocab(self, column: str) -> dict[str, int]:
         """Every distinct value of *column*."""
@@ -325,7 +340,7 @@ def _read_vectors(db_path: str, base: _VectorIndex | None) -> _VectorIndex | Non
         conn.close()
     if base is not None and base.count + len(rows) != count:
         return None
-    index = (base or _VectorIndex.empty()).extend(rows, count, max_rowid)
+    index = (base or _VectorIndex.empty()).extend(rows, count, max_rowid).prepare()
     if base is not None:
         index.data_version = base.data_version
     return index
