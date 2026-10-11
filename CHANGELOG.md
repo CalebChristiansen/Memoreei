@@ -7,6 +7,34 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Search finds people by name or number.** `participant` takes a name, part of one or
+  a phone number in any format, and finds that person on every app, joined through your
+  contacts and the number each WhatsApp and Signal message came from. Before, it had to
+  match the stored sender exactly: a name missed every iMessage, a number everything
+  else. A name that fits several people searches all of them and says so.
+- **Filters narrow the search before it ranks.** They used to be applied to the top 30
+  matches from everyone, so a filtered search on a busy topic could come back empty.
+- New `participant_scope`: `conversation` (default; what they wrote, plus both sides of
+  your one-to-one chats), `sent`, or `any_chat`. `source` takes a platform (`signal`) as
+  well as a source id. Dates are in the server's time zone, and `before` includes its
+  whole day.
+- **The network tools return objects.** `search_memoreei` returns `{results, people,
+  note}`; `note` says why results are empty or broader than asked. Each result gives
+  `date`, `platform`, `chat`, `group` and `sender` in plain words, names in place of
+  numbers where your contacts know them; `participants`, `contact_name`, `score` and the
+  raw metadata are gone. `get_context` returns `{messages}`, counts messages rather than
+  minutes, and marks the one asked about. `list_sources` groups chats by person.
+- The server describes every parameter with an example, sends instructions, declares
+  output schemas and marks its read tools read-only. Mistakes come back as errors that
+  say what to pass instead.
+- `memoreei search` takes `--person`, `--scope`, `--after` and `--before`.
+
+### Added
+- Signal messages keep their sender's phone number, and messages stored earlier get it
+  on the next sync, once.
+- `MEMOREEI_ME`: who "me" is, when your account's full name isn't enough.
+
 ## [0.4.6] - 2026-10-10
 
 The Mac app on macOS 11 Big Sur, tried on a Big Sur MacBook and on macOS 12. Nothing

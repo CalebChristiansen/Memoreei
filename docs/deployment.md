@@ -152,6 +152,7 @@ then a `.env` in the current directory (for development), then
 | `OPENAI_API_KEY` | — | Required if `EMBEDDING_PROVIDER=openai` |
 | `AUTO_SYNC` | `false` | Enable background sync on server start |
 | `AUTO_SYNC_INTERVAL` | `300` | Background sync interval in seconds |
+| `MEMOREEI_ME` | the account's full name | Names, numbers or addresses that mean the owner, comma-separated; `participant` resolves them to `me` |
 
 ### Network server
 

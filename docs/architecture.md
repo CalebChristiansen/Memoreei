@@ -48,7 +48,9 @@ score(id) = Σ  1 / (60 + rank_i)
 
 Both rankers return `max(limit * 3, 30)` candidates. Each result gets a score that sums its reciprocal ranks across the two rankers. Items appearing in both sets get naturally boosted. The constant `k=60` is the standard from the original RRF paper.
 
-Post-fusion filters (`source`, `participant`, `after`, `before`) are applied to the merged ranked list before returning the top N results.
+Filters (`participant`, `source`, `after`, `before`) narrow both rankers before they rank: a `WHERE` clause inside the FTS query, and a row mask over the in-memory vector matrix, which keeps each row's sender, sender's number, time and group flag beside its embedding for the purpose. `search/people.py` builds both from one resolved filter, so they agree.
+
+A `participant` is resolved first (`search/people.py`, `Directory`): a number or address is normalized and matched against iMessage handles and the `sender_phone` WhatsApp and Signal store; a name, or part of one, matches stored sender names and contact names, and contacts add that person's numbers. Only shared identifiers link one app's sender to another's. `participant_scope` then adds the person's one-to-one chats (`conversation`) or every chat they wrote in (`any_chat`).
 
 ## Database Schema
 
@@ -150,7 +152,8 @@ memory_tools.py: search()
 hybrid.py: RRF fusion → top 10 results
         │
         ▼
-Returns list of dicts: [{id, source, content, participants, ts, score}]
+Returns {results: [{id, date, platform, chat, group, sender, content, source}],
+         people?: [{name, identifiers}], note?: "…"}
 ```
 
 Tools are registered on the `FastMCP` instance at module load time and dispatched via stdio JSON-RPC.

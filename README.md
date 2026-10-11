@@ -303,9 +303,9 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 
 | Tool | Does | Network |
 |---|---|:---:|
-| `search_memoreei` | hybrid search, filtered by `source`, `participant`, `after`, `before` | ✅ |
-| `get_context` | the messages around a search result | ✅ |
-| `list_sources` | every source and its message count | ✅ |
+| `search_memoreei` | hybrid search, narrowed by `participant`, `participant_scope`, `source`, `after`, `before` | ✅ |
+| `get_context` | the messages before and after a search result, in its chat | ✅ |
+| `list_sources` | every chat, grouped by the person it is with, and the group chats | ✅ |
 | `sync` | refresh everything configured on the server; no arguments | ✅ |
 | `add_memoreei` | store a note | — |
 | `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_whatsapp`, `_signal` | sync one connector | — |
@@ -314,7 +314,22 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 | `import_contacts_vcf`, `sync_contacts` | names for phone numbers, from a vCard or macOS Contacts | — |
 
 A local (stdio) client gets all of them. Each tool's parameters are in its MCP
-description, which your client shows it.
+description, which your client shows it, and the server sends a short set of
+instructions on how to use them.
+
+**Finding people.** `participant` takes a name, part of one (`"Jane"`, `"jan do"`) or a
+phone number in any format, and finds that person on every app: iMessage stores a
+number, WhatsApp and Signal a name, and the two are joined through your contacts and
+the number each WhatsApp or Signal message came from. People who only share a name
+are never merged; a name that fits several people searches all of them and says so in
+the result's `note`. `participant_scope` decides how much: `conversation` (the default)
+is what they wrote anywhere plus both sides of your one-to-one chats, `sent` only what
+they wrote, `any_chat` every chat they're in. `me` is you, as is your own name.
+
+Every filter narrows the search before anything is ranked, so a filtered search
+returns the best matches among those messages. A search returns `results`, plus
+`people` when you named one and a `note` whenever there's something to explain, such
+as a name that fits several people or why nothing came back.
 
 ---
 
@@ -333,7 +348,7 @@ memoreei config                     # settings, tokens masked
 memoreei sync [source]              # everything, or one of discord, telegram, matrix,
                                     #   slack, email, mastodon, imessage, whatsapp,
                                     #   signal
-memoreei search "printer issue" --limit 5 --source imessage:+12025550142
+memoreei search "printer issue" --limit 5 --person "Jane" --after 2026-01-01
 memoreei import sms backup.xml      # also discord-package, messenger, instagram,
                                     #   json, csv, contacts
 memoreei import list | forget <id>  # the files `sync` re-reads
@@ -381,6 +396,7 @@ current directory, which wins over `config.env`.
 | `MEMOREEI_PORT` | `3679` | network server port |
 | `MEMOREEI_PUBLIC_URL` | — | the URL `key create` prints, e.g. behind a proxy |
 | `MEMOREEI_TLS_CERT`, `MEMOREEI_TLS_KEY` | — | serve HTTPS directly |
+| `MEMOREEI_ME` | your account's full name | names, numbers or addresses that mean you, comma-separated |
 
 Connector settings:
 
