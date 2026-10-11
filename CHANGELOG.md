@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-10
+
+The Mac app on macOS 11 Big Sur, tried on a Big Sur MacBook and on macOS 12. Nothing
+changed since 0.4.6rc1.
+
 ## [0.4.6rc1] - 2026-10-07
 
 ### Changed
@@ -343,7 +348,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6rc1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6
 [0.4.6rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6rc1
 [0.4.5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.3...v0.4.4
