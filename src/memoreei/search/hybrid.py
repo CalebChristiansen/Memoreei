@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 from typing import Any
 
 from memoreei.search.embeddings import EmbeddingProvider
+from memoreei.search.people import Filter, parse_date
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
@@ -16,14 +16,8 @@ def _rrf_score(ranks: list[int]) -> float:
 
 
 def _parse_date(date_str: str) -> int:
-    """Parse ISO date string to unix timestamp."""
-    try:
-        dt = datetime.fromisoformat(date_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except ValueError:
-        raise ValueError(f"Invalid date format: {date_str!r}. Use ISO 8601 (e.g. '2026-03-15' or '2026-03-15T09:00:00')")
+    """Parse ISO date string to unix timestamp (local time when no zone is given)."""
+    return parse_date(date_str)
 
 
 class HybridSearch:
@@ -39,62 +33,46 @@ class HybridSearch:
         participant: str | None = None,
         after: str | None = None,
         before: str | None = None,
+        filter: Filter | None = None,
     ) -> list[dict[str, Any]]:
-        """Hybrid search using FTS5 + vector similarity with RRF fusion."""
-        after_ts = _parse_date(after) if after else None
-        before_ts = _parse_date(before) if before else None
+        """Hybrid search using FTS5 + vector similarity with RRF fusion.
 
+        *filter* narrows both searches before they rank anything. The plain *source*,
+        *after* and *before* build one when it isn't given; *participant* is kept for
+        callers that pass a name exactly as stored (MemoryTools resolves people properly).
+        """
+        if filter is None:
+            filter = Filter(
+                sources={source} if source else None,
+                after_ts=_parse_date(after) if after else None,
+                before_ts=parse_date(before, end=True) if before else None,
+                labels={participant} if participant else None,
+            )
+        items = await self.search_items(query, limit, filter)
+        return [{**item.to_dict(), "score": round(score, 6)} for score, item in items]
+
+    async def search_items(self, query: str, limit: int,
+                           filter: Filter) -> list[tuple[float, MemoryItem]]:
+        """The best *limit* memories within *filter*, with their fused scores."""
         # Fetch more candidates than needed for better RRF fusion
         candidate_limit = max(limit * 3, 30)
+        where = None if filter.empty else filter.sql()
+        keep = None if filter.empty else filter.mask
 
         # FTS runs on the database's thread while the query is embedded on another
         fts_results, query_embedding = await asyncio.gather(
-            self.db.search_fts(query, limit=candidate_limit),
+            self.db.search_fts(query, limit=candidate_limit, where=where),
             self.embedder.embed_query(query),
         )
-        vec_results = await self.db.search_vector(
-            query_embedding, limit=candidate_limit, source_filter=source
-        )
+        vec_results = await self.db.search_vector(query_embedding, limit=candidate_limit, keep=keep)
 
-        # Build rank maps
-        fts_ranks: dict[str, int] = {item.id: rank for rank, item in enumerate(fts_results, 1)}
-        vec_ranks: dict[str, int] = {item.id: rank for rank, item in enumerate(vec_results, 1)}
+        fts_ranks = {item.id: rank for rank, item in enumerate(fts_results, 1)}
+        vec_ranks = {item.id: rank for rank, item in enumerate(vec_results, 1)}
+        all_items = {item.id: item for item in fts_results + vec_results}
 
-        # Collect all unique candidate IDs
-        all_ids = set(fts_ranks.keys()) | set(vec_ranks.keys())
-
-        # Index all items by ID
-        all_items: dict[str, MemoryItem] = {}
-        for item in fts_results + vec_results:
-            all_items[item.id] = item
-
-        # Score with RRF
-        scored: list[tuple[float, MemoryItem]] = []
-        for item_id in all_ids:
-            item = all_items[item_id]
-
-            # Apply filters
-            if source and item.source != source:
-                continue
-            if participant and participant.lower() not in [p.lower() for p in item.participants]:
-                continue
-            if after_ts and item.ts < after_ts:
-                continue
-            if before_ts and item.ts > before_ts:
-                continue
-
-            ranks = []
-            if item_id in fts_ranks:
-                ranks.append(fts_ranks[item_id])
-            if item_id in vec_ranks:
-                ranks.append(vec_ranks[item_id])
-
-            score = _rrf_score(ranks)
-            scored.append((score, item))
-
+        scored = []
+        for item_id, item in all_items.items():
+            ranks = [r for r in (fts_ranks.get(item_id), vec_ranks.get(item_id)) if r]
+            scored.append((_rrf_score(ranks), item))
         scored.sort(key=lambda x: x[0], reverse=True)
-
-        return [
-            {**item.to_dict(), "score": round(score, 6)}
-            for score, item in scored[:limit]
-        ]
+        return scored[:limit]

@@ -30,6 +30,8 @@ SOURCE_PREFIX = "signal"
 CHECKPOINT = "signal-desktop"  # the one reader so far, as signal_checkpoint names it
 DISAPPEARING_SKIPPED = "disappearing-skipped"  # a running count, kept beside it for Status
 BATCH_SIZE = 100
+# Set once every stored message carries its sender's number (0.4.7 began storing it).
+SENDER_PHONES = "sender-phones"
 
 
 def source_for(chat_id: str) -> str:
@@ -59,6 +61,8 @@ def metadata(msg: SignalMessage) -> dict[str, Any]:
         "message_id": msg.message_id,
         "kind": msg.kind,
     }
+    if msg.sender_phone:
+        meta["sender_phone"] = msg.sender_phone
     if msg.edits:
         meta["edits"] = len(msg.edits)
     if msg.deleted:
@@ -93,12 +97,17 @@ async def sync_reader(db: Database, embedder: Any, reader: SignalReader) -> dict
     upto = reader.end()
     counts = {"synced": 0, "updated": 0, "skipped_disappearing": 0}
 
+    phones_done = bool(await db.get_signal_checkpoint(SENDER_PHONES))
     if after:
         await _bring_up_to_date(db, embedder, reader, after, counts)
+        if not phones_done:
+            counts["updated"] += await _add_sender_phones(db, reader, after)
     if upto > after:
         await _store_new(db, embedder, reader, after, upto, counts)
     # Past what was skipped too, so it isn't re-read every round.
     await db.set_signal_checkpoint(CHECKPOINT, upto)
+    if not phones_done:
+        await db.set_signal_checkpoint(SENDER_PHONES, 1)
     if counts["skipped_disappearing"]:
         total = await db.get_signal_checkpoint(DISAPPEARING_SKIPPED) or 0
         await db.set_signal_checkpoint(DISAPPEARING_SKIPPED, total + counts["skipped_disappearing"])
@@ -140,6 +149,26 @@ async def _store_new(db: Database, embedder: Any, reader: SignalReader,
         if batch:
             progress.update(len(batch))
             await flush()
+
+
+async def _add_sender_phones(db: Database, reader: SignalReader, upto: int) -> int:
+    """Give messages stored before 0.4.7 their sender's number, once. Words untouched."""
+    by_source: dict[str, dict[str, str]] = {}
+    for msg in reader.messages(0, upto):
+        if msg.sender_phone:
+            source = source_for(msg.chat.id)
+            by_source.setdefault(source, {})[f"{source}:{msg.message_id}"] = msg.sender_phone
+    updated = 0
+    for source, phones in by_source.items():
+        stored = await db.get_by_source_ids(source, list(phones))
+        for source_id, item in stored.items():
+            if item.metadata.get("sender_phone") != phones[source_id]:
+                item.metadata["sender_phone"] = phones[source_id]
+                await db.update_memory(item, reembedded=False)
+                updated += 1
+    if updated:
+        db.invalidate_vectors()  # the index keeps each row's number
+    return updated
 
 
 async def _bring_up_to_date(db: Database, embedder: Any, reader: SignalReader,

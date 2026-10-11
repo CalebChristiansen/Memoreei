@@ -214,9 +214,11 @@ async def test_anonymous_ids_find_names_and_numbers(tools, chatstorage):
 
 async def test_list_sources_shows_chats_by_name(tools, chatstorage):
     await _sync(tools, chatstorage)
-    listed = (await tools.list_sources())["sources"]
-    assert f"Zezima (whatsapp:{ZEZIMA})" in listed
-    assert f"Grand Exchange traders (whatsapp:{GROUP})" in listed
+    listed = await tools.list_sources()
+    zezima = next(p for p in listed["people"] if p["name"] == "Zezima")
+    assert f"whatsapp:{ZEZIMA}" in zezima["sources"]
+    assert any(g["name"] == "Grand Exchange traders" and g["source"] == f"whatsapp:{GROUP}"
+               for g in listed["groups"])
 
 
 async def test_reads_without_its_neighbours(tools, chatstorage, tmp_path):

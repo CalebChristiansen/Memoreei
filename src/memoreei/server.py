@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import Field
+from typing_extensions import Annotated, Literal, NotRequired, TypedDict
 from mcp.server.transport_security import TransportSecuritySettings
 
 from memoreei.config import get_config
@@ -105,45 +108,140 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[typ
         yield
 
 
-async def search_memoreei(
-    query: str,
-    limit: int = 10,
-    source: str | None = None,
-    participant: str | None = None,
-    after: str | None = None,
-    before: str | None = None,
-) -> list[dict]:
-    """Search your personal memories using hybrid keyword + semantic search.
+# -- What a client is told -----------------------------------------------------------
+#
+# Written for the smallest model likely to call these: every parameter says what it
+# takes, with an example, and anything surprising comes back in a ``note`` rather than
+# as an empty list to be guessed at.
 
-    Args:
-        query: Natural language search query
-        limit: Maximum number of results to return (default: 10)
-        source: Filter by data source (e.g. 'imessage:+12025550142', 'discord:1487...')
-        participant: Filter by participant name
-        after: Only return memories after this date (ISO format, e.g. '2026-01-01')
-        before: Only return memories before this date (ISO format, e.g. '2026-12-31')
+INSTRUCTIONS = """\
+Memoreei searches one person's own messages: iMessage, WhatsApp, Signal and any other \
+apps they have connected. They are the owner, and appear in results as sender "me".
+
+To answer a question about their messages:
+1. Call search_memoreei. Put a few distinctive words in query. If the question is about \
+someone, put that person in participant: a first name, a full name or a phone number all \
+work. Keep names out of query.
+2. Read each result's sender, chat and date. If a result looks right but you need what \
+was said around it (a reply, what "it" means), call get_context with its id.
+3. If results is empty, read note: it says why. Try other words, a shorter name or fewer \
+filters before deciding the messages don't say.
+4. Answer from what the messages say, with who said it and when. If nothing was found, \
+say so; don't guess.
+"""
+
+
+class Message(TypedDict):
+    id: Annotated[str, Field(description="Pass to get_context to read around this message")]
+    date: Annotated[str, Field(description="When it was sent, YYYY-MM-DD HH:MM, owner's time zone")]
+    platform: Annotated[str, Field(description="imessage, whatsapp, signal, …")]
+    chat: Annotated[str, Field(description="The group's name, or the other person in a one-to-one chat")]
+    group: Annotated[bool, Field(description="True for a group chat")]
+    sender: Annotated[str, Field(description="Who wrote it; 'me' is the owner")]
+    content: Annotated[str, Field(description="The message, as stored: usually 'sender: text'")]
+    source: Annotated[str, Field(description="The chat's id, for the source filter")]
+    deleted: NotRequired[Annotated[bool, Field(description="Deleted for everyone after it was read")]]
+    hit: NotRequired[Annotated[bool, Field(description="The message get_context was asked about")]]
+
+
+class PersonMatch(TypedDict):
+    name: str
+    identifiers: Annotated[list[str], Field(description="Phone numbers and addresses known for them")]
+    me: NotRequired[Annotated[bool, Field(description="This is the owner")]]
+
+
+class SearchResult(TypedDict):
+    results: Annotated[list[Message], Field(description="Best match first")]
+    people: NotRequired[Annotated[list[PersonMatch], Field(
+        description="Who participant matched; more than one means the name was ambiguous")]]
+    note: NotRequired[Annotated[str, Field(
+        description="Why results are empty or broader than asked; read it before answering")]]
+
+
+class Context(TypedDict):
+    messages: Annotated[list[Message], Field(description="Oldest first")]
+
+
+class PersonSources(TypedDict):
+    name: str
+    messages: int
+    sources: Annotated[dict[str, int], Field(description="Each chat's source id and its message count")]
+
+
+class GroupSource(TypedDict):
+    name: str
+    source: str
+    messages: int
+
+
+class OtherSource(TypedDict):
+    source: str
+    messages: int
+
+
+class Sources(TypedDict):
+    total: int
+    platforms: Annotated[list[str], Field(description="Values the source filter takes")]
+    people: Annotated[list[PersonSources], Field(description="Most messages first")]
+    groups: list[GroupSource]
+    other: Annotated[list[OtherSource], Field(description="Sources with no name to give them")]
+
+
+async def search_memoreei(
+    query: Annotated[str, Field(
+        description="What to look for, in a few words: 'credit card recommendation', "
+                    "'dinner Saturday'. Leave people's names out; use participant for who.")],
+    participant: Annotated[str | None, Field(
+        description="Whose messages to search: a name ('Jane Doe'), part of one ('Jane', "
+                    "'jan do'), a phone number in any format ('+1 202 555 0142', "
+                    "'2025550142') or an email address. One name finds the person on "
+                    "every app; 'me' is the owner.")] = None,
+    participant_scope: Annotated[Literal["conversation", "sent", "any_chat"], Field(
+        description="How much of participant's messages to search. 'conversation' "
+                    "(default): what they wrote anywhere, plus both sides of the owner's "
+                    "one-to-one chats with them. 'sent': only what they wrote. "
+                    "'any_chat': everything in every chat they are in, groups included.")] = "conversation",
+    after: Annotated[str | None, Field(
+        description="Only messages on or after this date: 'YYYY-MM-DD' or "
+                    "'YYYY-MM-DDTHH:MM', in the owner's time zone.")] = None,
+    before: Annotated[str | None, Field(
+        description="Only messages on or before this date: 'YYYY-MM-DD' (the whole day "
+                    "counts) or 'YYYY-MM-DDTHH:MM'.")] = None,
+    source: Annotated[str | None, Field(
+        description="Only one app ('imessage', 'whatsapp', 'signal', …) or one chat, by "
+                    "a result's source. For a person, use participant instead.")] = None,
+    limit: Annotated[int, Field(ge=1, le=100, description="How many results. Default 10.")] = 10,
+) -> SearchResult:
+    """Search the owner's messages by meaning and by keyword, best match first.
+
+    Every filter narrows the search before it ranks anything, so a filtered search
+    finds the best matches within those messages. If results is empty or note is
+    set, note says why and what to try.
     """
     tools = await _get_tools()
-    return await tools.search_memoreei(
+    return await tools.search_memoreei(  # type: ignore[return-value]
         query=query,
         limit=limit,
         source=source,
         participant=participant,
+        participant_scope=participant_scope,
         after=after,
         before=before,
     )
 
 
-async def get_context(memory_id: str, before: int = 5, after: int = 5) -> list[dict]:
-    """Get surrounding messages/context for a specific memory.
+async def get_context(
+    memory_id: Annotated[str, Field(description="The id of a search result, exactly as given")],
+    before: Annotated[int, Field(ge=0, le=50, description="Messages before it. Default 5.")] = 5,
+    after: Annotated[int, Field(ge=0, le=50, description="Messages after it. Default 5.")] = 5,
+) -> Context:
+    """The messages around one message, in its chat, oldest first; it has hit: true.
 
-    Args:
-        memory_id: The ID of the memory to get context for
-        before: Number of messages before this one to include (default: 5)
-        after: Number of messages after this one to include (default: 5)
+    Use it when a search result is relevant but needs what was said around it: the
+    question it answers, the reply, what "it" refers to.
     """
     tools = await _get_tools()
-    return await tools.get_context(memory_id=memory_id, before=before, after=after)
+    return await tools.get_context(memory_id=memory_id, before=before, after=after)  # type: ignore[return-value]
 
 
 async def add_memoreei(
@@ -162,8 +260,12 @@ async def add_memoreei(
     return await tools.add_memoreei(content=content, source=source, metadata=metadata)
 
 
-async def list_sources() -> dict:
-    """List all data sources and their message counts."""
+async def list_sources() -> Sources:
+    """Who and what is in the archive: each person with their message count and chats,
+    each group chat, and the platforms.
+
+    Not needed before searching: search_memoreei finds people by name or number itself.
+    """
     tools = await _get_tools()
     return await tools.list_sources()
 
@@ -521,10 +623,23 @@ LOCAL_TOOLS = [
 NETWORK_TOOLS = [search_memoreei, get_context, list_sources, sync]
 
 
+ANNOTATIONS = {
+    "search_memoreei": ToolAnnotations(title="Search messages", readOnlyHint=True, openWorldHint=False),
+    "get_context": ToolAnnotations(title="Read around a message", readOnlyHint=True, openWorldHint=False),
+    "list_sources": ToolAnnotations(title="List people and chats", readOnlyHint=True, openWorldHint=False),
+    "sync": ToolAnnotations(title="Fetch new messages", readOnlyHint=False, destructiveHint=False,
+                            idempotentHint=True, openWorldHint=False),
+}
+
+
+def _add_tools(server: FastMCP, tools: list) -> None:  # type: ignore[type-arg]
+    for fn in tools:
+        server.add_tool(fn, annotations=ANNOTATIONS.get(fn.__name__))
+
+
 def build_local_server() -> FastMCP:
-    server = FastMCP("memoreei", lifespan=_lifespan)
-    for fn in LOCAL_TOOLS:
-        server.add_tool(fn)
+    server = FastMCP("memoreei", instructions=INSTRUCTIONS, lifespan=_lifespan)
+    _add_tools(server, LOCAL_TOOLS)
     return server
 
 
@@ -534,12 +649,12 @@ def build_network_server() -> FastMCP:
     # would reject clients addressing the server by LAN IP or hostname.
     server = FastMCP(
         "memoreei",
+        instructions=INSTRUCTIONS,
         stateless_http=True,
         json_response=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
-    for fn in NETWORK_TOOLS:
-        server.add_tool(fn)
+    _add_tools(server, NETWORK_TOOLS)
     return server
 
 

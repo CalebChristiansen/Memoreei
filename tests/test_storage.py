@@ -7,6 +7,7 @@ import time
 import numpy as np
 import pytest
 
+from memoreei.search.people import Filter
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
@@ -147,7 +148,7 @@ async def test_vector_search_filters_by_source(db):
     b = make_item(source="discord", content="b", source_id="b", embedding=_unit(0))
     await db.insert_memory(a)
     await db.insert_memory(b)
-    results = await db.search_vector(_unit(0), limit=5, source_filter="discord")
+    results = await db.search_vector(_unit(0), limit=5, keep=Filter(sources={"discord"}).mask)
     assert [r.id for r in results] == [b.id]
 
 

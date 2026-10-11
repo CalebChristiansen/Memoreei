@@ -454,3 +454,38 @@ async def test_reader_names_without_items_table(tmp_path):
     with SignalReader(f.folder / "sql" / "db.sqlite", KEY) as reader:
         assert [m.sender_name for m in reader.messages(0, reader.end())] == ["me"]
     f.close()
+
+
+# ── Sender numbers ─────────────────────────────────────────────────────────────
+
+GNOME = "aaaaaaaa-0000-4000-8000-000000000005"
+
+
+async def test_the_senders_number_is_kept(tools, fake):
+    fake.chat("c-gnome", serviceId=GNOME, profileName="Gnome Child", e164="+12025550150")
+    theirs = fake.message("c-gnome", body="Hello", sender=GNOME)
+    mine = fake.message("c-gnome", "outgoing", body="Hi")
+    nameless = fake.message("c-zez", body="no number here", sender=ZEZIMA)
+    await _sync(tools)
+    assert (await _meta(tools, theirs))["sender_phone"] == "+12025550150"
+    assert "sender_phone" not in await _meta(tools, mine)
+    assert "sender_phone" not in await _meta(tools, nameless)
+
+
+async def test_messages_stored_before_numbers_were_kept_get_them_once(tools, fake):
+    from memoreei.connectors.signal.sync import SENDER_PHONES
+
+    fake.chat("c-gnome", serviceId=GNOME, profileName="Gnome Child", e164="+12025550150")
+    mid = fake.message("c-gnome", body="Hello", sender=GNOME)
+    await _sync(tools)
+    # As 0.4.6 stored it: no number, and no record of having added them
+    await tools.db._db.execute(
+        "UPDATE memories SET metadata = json_remove(metadata, '$.sender_phone')")
+    await tools.db.set_signal_checkpoint(SENDER_PHONES, 0)
+    await tools.db._db.commit()
+    assert "sender_phone" not in await _meta(tools, mid)
+
+    assert (await _sync(tools))["updated"] == 1
+    assert (await _meta(tools, mid))["sender_phone"] == "+12025550150"
+    assert (await _contents(tools))[mid] == "Gnome Child: Hello"
+    assert (await _sync(tools))["updated"] == 0  # once

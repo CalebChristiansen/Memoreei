@@ -334,22 +334,35 @@ def sync(
 def search(
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(10, "--limit", "-n", help="Number of results"),
-    source: Optional[str] = typer.Option(None, "--source", "-s", help="Filter by source"),
+    source: Optional[str] = typer.Option(None, "--source", "-s", help="A platform (imessage, whatsapp, …) or a source id"),
+    person: Optional[str] = typer.Option(None, "--person", "-p", help="A name, part of one, or a phone number"),
+    scope: str = typer.Option("conversation", "--scope", help="sent, conversation or any_chat"),
+    after: Optional[str] = typer.Option(None, "--after", help="On or after this date (YYYY-MM-DD)"),
+    before: Optional[str] = typer.Option(None, "--before", help="On or before this date (YYYY-MM-DD)"),
 ) -> None:
     """Search your memoreeis from the CLI."""
 
     async def _run() -> None:
         async with _open_tools() as tools:
-            results = await tools.search_memoreei(query=query, limit=limit, source=source)
-        if not results:
+            try:
+                found = await tools.search_memoreei(
+                    query=query, limit=limit, source=source, participant=person,
+                    participant_scope=scope, after=after, before=before,
+                )
+            except ValueError as e:
+                typer.echo(str(e), err=True)
+                raise typer.Exit(2)
+        if found.get("people") and len(found["people"]) > 1:
+            typer.echo("People: " + ", ".join(p["name"] for p in found["people"]))
+        if found.get("note"):
+            typer.echo(found["note"])
+        if not found["results"]:
             typer.echo("No results found.")
             return
 
-        for i, r in enumerate(results, 1):
-            typer.echo(f"\n[{i}] {r.get('source', '?')}  {r.get('timestamp', '')}")
-            typer.echo(f"    {r.get('content', '')[:200]}")
-            if r.get("participant"):
-                typer.echo(f"    — {r['participant']}")
+        for i, r in enumerate(found["results"], 1):
+            typer.echo(f"\n[{i}] {r['date']}  {r['chat']} ({r['platform']})")
+            typer.echo(f"    {r['content'][:200]}")
 
     asyncio.run(_run())
 

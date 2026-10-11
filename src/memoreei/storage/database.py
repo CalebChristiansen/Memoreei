@@ -12,6 +12,7 @@ from typing import Any
 import aiosqlite
 import numpy as np
 
+from memoreei.search.people import GROUP_SQL, PHONE_SQL, SENDER_SQL
 from memoreei.storage.models import MemoryItem
 
 SCHEMA = """
@@ -174,24 +175,39 @@ def _norms(matrix: np.ndarray) -> np.ndarray:
 
 
 class _VectorIndex:
-    """The embeddings of the memories table, as a matrix, with ids and sources alongside."""
+    """The embeddings of the memories table, as a matrix, with ids and sources alongside.
+
+    Beside each row it also keeps what a search can be narrowed by (sender, the sender's
+    number, time, whether the chat is a group), so filters mask the matrix before it is
+    scored rather than throwing away winners afterwards (see search.people.Filter).
+    """
 
     def __init__(self, ids: list[str], sources: np.ndarray, matrix: np.ndarray,
-                 count: int, max_rowid: int, norms: np.ndarray | None = None) -> None:
+                 count: int, max_rowid: int, norms: np.ndarray | None = None,
+                 senders: np.ndarray | None = None, phones: np.ndarray | None = None,
+                 ts: np.ndarray | None = None, groups: np.ndarray | None = None) -> None:
+        n = len(ids)
         self.ids, self.sources, self.matrix = ids, sources, matrix
         self.norms = _norms(matrix) if norms is None else norms
+        self.senders = np.full(n, "", dtype=object) if senders is None else senders
+        self.phones = np.full(n, "", dtype=object) if phones is None else phones
+        self.ts = np.zeros(n, np.int64) if ts is None else ts
+        self.groups = np.zeros(n, bool) if groups is None else groups
         self.count, self.max_rowid = count, max_rowid
         self.data_version = 0  # SQLite's, when this was read; set by the Database
+        self._sender_counts: tuple[list[str], list[int]] | None = None
 
     @classmethod
     def empty(cls) -> "_VectorIndex":
         return cls([], np.array([], dtype=object), np.zeros((0, 0), np.float32), 0, 0)
 
+    def _columns(self) -> tuple[np.ndarray, ...]:
+        return self.sources, self.senders, self.phones, self.ts, self.groups
+
     def extend(self, rows: list, count: int, max_rowid: int) -> "_VectorIndex":
-        """A new index with *rows* (rowid, id, source, embedding) added."""
-        decoded = [(memory_id, source, _stored_to_vector(stored))
-                   for _rowid, memory_id, source, stored in rows]
-        decoded = [(i, s, v) for i, s, v in decoded if v is not None]
+        """A new index with *rows* (rowid, id, source, embedding, sender, phone, ts, group) added."""
+        decoded = [(row[1], row[2:3] + row[4:], _stored_to_vector(row[3])) for row in rows]
+        decoded = [(i, c, v) for i, c, v in decoded if v is not None]
         if len(self.matrix):
             dim = self.matrix.shape[1]
         elif decoded:  # the embedding model most rows came from
@@ -199,9 +215,10 @@ class _VectorIndex:
         else:
             dim = 0
         # another embedding model's vectors are not comparable
-        decoded = [(i, s, v) for i, s, v in decoded if v.shape[0] == dim]
+        decoded = [(i, c, v) for i, c, v in decoded if v.shape[0] == dim]
         if not decoded:
-            return _VectorIndex(self.ids, self.sources, self.matrix, count, max_rowid, self.norms)
+            return _VectorIndex(self.ids, self.sources, self.matrix, count, max_rowid, self.norms,
+                                self.senders, self.phones, self.ts, self.groups)
 
         old = len(self.matrix)
         matrix = np.empty((old + len(decoded), dim), np.float32)
@@ -210,23 +227,41 @@ class _VectorIndex:
         for n, (_, _, vector) in enumerate(decoded, old):
             matrix[n] = vector
         norms = np.concatenate([self.norms, _norms(matrix[old:])])
-        return _VectorIndex(self.ids + [i for i, _, _ in decoded],
-                            np.concatenate([self.sources, np.array([s for _, s, _ in decoded], dtype=object)]),
-                            matrix, count, max_rowid, norms)
+        added = list(zip(*(c for _, c, _ in decoded)))  # one tuple per column
+        new = (np.array(added[0], dtype=object),
+               np.array([s or "" for s in added[1]], dtype=object),
+               np.array([p or "" for p in added[2]], dtype=object),
+               np.array([t or 0 for t in added[3]], dtype=np.int64),
+               np.array([bool(g) for g in added[4]], dtype=bool))
+        sources, senders, phones, ts, groups = (
+            np.concatenate([mine, theirs]) for mine, theirs in zip(self._columns(), new))
+        return _VectorIndex(self.ids + [i for i, _, _ in decoded], sources, matrix, count,
+                            max_rowid, norms, senders, phones, ts, groups)
 
     def without_source(self, source: str, count: int, max_rowid: int) -> "_VectorIndex":
         """A new index without *source*'s rows."""
         keep = self.sources != source
         index = _VectorIndex([i for i, k in zip(self.ids, keep) if k], self.sources[keep],
-                             self.matrix[keep], count, max_rowid, self.norms[keep])
+                             self.matrix[keep], count, max_rowid, self.norms[keep],
+                             *(column[keep] for column in self._columns()[1:]))
         index.data_version = self.data_version
         return index
 
-    def rank(self, query: np.ndarray, limit: int, source_filter: str | None) -> list[str]:
-        """The ids of the *limit* rows nearest *query* by cosine similarity, nearest first."""
+    def sender_counts(self) -> tuple[list[str], list[int]]:
+        """Each sender as stored, and how many rows it sent; computed once per index."""
+        if self._sender_counts is None:
+            counts = Counter(self.senders.tolist())
+            self._sender_counts = (list(counts), list(counts.values()))
+        return self._sender_counts
+
+    def rank(self, query: np.ndarray, limit: int, keep: np.ndarray | None = None) -> list[str]:
+        """The ids of the *limit* rows nearest *query* by cosine similarity, nearest first.
+
+        With *keep* (a mask over the rows), only those rows are scored.
+        """
         if not self.ids or self.matrix.shape[1] != query.shape[0]:
             return []
-        candidates = np.flatnonzero(self.sources == source_filter) if source_filter else None
+        candidates = np.flatnonzero(keep) if keep is not None else None
         matrix = self.matrix if candidates is None else self.matrix[candidates]
         norms = (self.norms if candidates is None else self.norms[candidates]) * np.linalg.norm(query)
         if not len(matrix):
@@ -255,7 +290,8 @@ def _read_vectors(db_path: str, base: _VectorIndex | None) -> _VectorIndex | Non
         count, max_rowid = conn.execute(
             "SELECT count(*), coalesce(max(rowid), 0) FROM memories").fetchone()
         cursor = conn.execute(
-            "SELECT rowid, id, source, embedding FROM memories WHERE rowid > ? ORDER BY rowid",
+            f"SELECT rowid, id, source, embedding, {SENDER_SQL}, {PHONE_SQL}, ts, {GROUP_SQL} "
+            "FROM memories WHERE rowid > ? ORDER BY rowid",
             (base.max_rowid if base else 0,),
         )
         rows: list = []
@@ -359,42 +395,48 @@ class Database:
             inserted += 1
         return inserted
 
-    async def search_fts(self, query: str, limit: int = 10) -> list[MemoryItem]:
+    async def search_fts(self, query: str, limit: int = 10,
+                         where: tuple[str, list] | None = None) -> list[MemoryItem]:
+        """Keyword matches, best first; *where* (SQL over memories, and its parameters)
+        narrows them before the limit is applied."""
         assert self._db is not None
         # Sanitize query for FTS5 — strip characters that break the parser
         import re as _re
         # Remove apostrophes, quotes, and other FTS5 syntax chars
-        safe_query = _re.sub(r"[\"'()*^{}~]", " ", query)
+        safe_query = _re.sub(r"[\"'()*^{}~:\-+]", " ", query)
         # Collapse whitespace
         safe_query = " ".join(safe_query.split())
         if not safe_query.strip():
             return []
+        clause, params = where or ("1", [])
         async with self._db.execute(
-            """
+            f"""
             SELECT m.*, memories_fts.rank as fts_rank
             FROM memories_fts
             JOIN memories m ON memories_fts.rowid = m.rowid
-            WHERE memories_fts MATCH ?
+            WHERE memories_fts MATCH ? AND ({clause})
             ORDER BY memories_fts.rank
             LIMIT ?
             """,
-            (safe_query, limit),
+            (safe_query, *params, limit),
         ) as cursor:
             rows = await cursor.fetchall()
         return [MemoryItem.from_row(dict(row)) for row in rows]
 
     async def search_vector(
-        self, embedding: list[float], limit: int = 10, source_filter: str | None = None
+        self, embedding: list[float], limit: int = 10, keep: Any = None
     ) -> list[MemoryItem]:
         """The memories nearest *embedding* by cosine similarity.
 
         Scored in one matrix product over every embedding, held in memory between
         searches (see _vector_index); whole rows are fetched for the winners alone.
+        *keep*, a callable given the index, returns a mask of the rows that may win.
         """
         assert self._db is not None
         index = await self._vector_index()
         query = np.asarray(embedding, dtype=np.float32)
-        winners = await asyncio.to_thread(index.rank, query, limit, source_filter)
+        mask = keep(index) if keep is not None else None
+        winners = await asyncio.to_thread(index.rank, query, limit, mask)
         if not winners:
             return []
 
@@ -485,29 +527,30 @@ class Database:
     async def get_context(
         self, memory_id: str, before: int = 5, after: int = 5
     ) -> list[MemoryItem]:
+        """The memory, with up to *before* messages before it and *after* after it, in
+        its own chat, oldest first."""
         assert self._db is not None
-        # Get the target memory first
         target = await self.get_by_id(memory_id)
         if not target:
             return []
-
         async with self._db.execute(
-            """
-            SELECT * FROM memories
-            WHERE source = ?
-              AND ts BETWEEN ? AND ?
-            ORDER BY ts ASC
-            LIMIT ?
-            """,
-            (
-                target.source,
-                target.ts - (before * 300),  # 5 min windows
-                target.ts + (after * 300),
-                before + after + 1,
-            ),
+            "SELECT rowid FROM memories WHERE id = ?", (memory_id,)
         ) as cursor:
-            rows = await cursor.fetchall()
-        return [MemoryItem.from_row(dict(row)) for row in rows]
+            (rowid,) = await cursor.fetchone()
+        # Ordered by time, then rowid for messages sent in the same second.
+        async with self._db.execute(
+            "SELECT * FROM memories WHERE source = ? AND (ts < ? OR (ts = ? AND rowid < ?)) "
+            "ORDER BY ts DESC, rowid DESC LIMIT ?",
+            (target.source, target.ts, target.ts, rowid, max(before, 0)),
+        ) as cursor:
+            earlier = [MemoryItem.from_row(dict(r)) for r in await cursor.fetchall()]
+        async with self._db.execute(
+            "SELECT * FROM memories WHERE source = ? AND (ts > ? OR (ts = ? AND rowid > ?)) "
+            "ORDER BY ts ASC, rowid ASC LIMIT ?",
+            (target.source, target.ts, target.ts, rowid, max(after, 0)),
+        ) as cursor:
+            later = [MemoryItem.from_row(dict(r)) for r in await cursor.fetchall()]
+        return earlier[::-1] + [target] + later
 
     async def list_sources(self) -> dict[str, int]:
         assert self._db is not None
@@ -516,6 +559,32 @@ class Database:
         ) as cursor:
             rows = await cursor.fetchall()
         return {row["source"]: row["cnt"] for row in rows}
+
+    async def source_summary(self) -> list[dict[str, Any]]:
+        """Each source with its message count, whether it is a group chat and its name, largest first."""
+        assert self._db is not None
+        async with self._db.execute(
+            f"SELECT source, COUNT(*) AS cnt, MAX({GROUP_SQL}) AS grp, "
+            "MAX(json_extract(CASE WHEN json_valid(metadata) THEN metadata END, '$.chat_name')) AS chat "
+            "FROM memories GROUP BY source ORDER BY cnt DESC"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [{"source": r["source"], "count": r["cnt"], "group": bool(r["grp"]),
+                 "chat_name": r["chat"] or None} for r in rows]
+
+    async def platforms(self) -> list[str]:
+        """The kinds of source stored ('imessage' for 'imessage:…'), alphabetically."""
+        return sorted({s.partition(":")[0] for s in await self.list_sources()})
+
+    async def search_index(self) -> "_VectorIndex":
+        """The in-memory index, as searches see it (for resolving who a filter means)."""
+        return await self._vector_index()
+
+    def invalidate_vectors(self) -> None:
+        """Rebuild the vector index on the next search: rows changed in ways it can't see."""
+        self._vector_epoch += 1
+        if self._vectors is not None:
+            self._vectors.data_version = -1
 
     async def newest_ts(self, kind: str) -> int | None:
         """The newest message time among sources of one kind ("whatsapp" for "whatsapp:…")."""

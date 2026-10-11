@@ -61,6 +61,7 @@ class SignalMessage:
     reactions: list[dict[str, str]] = field(default_factory=list)
     disappearing: bool = False   # had a disappearing-message timer: never stored
     size: int = 0                # length of its json and body, which change when it does
+    sender_phone: str | None = None  # the sender's number, when Signal knows it
 
 
 def _duration(seconds: int | float | None) -> str:
@@ -106,6 +107,7 @@ class SignalReader:
         self._conn: Any = None
         self._chats: dict[str, Chat] = {}
         self._names: dict[str, str] = {}   # service id (ACI/PNI) → a person's name
+        self._phones: dict[str, str] = {}  # service id (ACI/PNI) → their number
         self._me: str | None = None        # our own ACI
         self._calls: dict[str, dict[str, Any]] = {}
 
@@ -162,6 +164,9 @@ class SignalReader:
                         self._names[str(sid).lower()] = name
                 if data.get("e164"):
                     self._names[str(data["e164"])] = name
+                    for sid in (data.get("serviceId"), data.get("pni"), data.get("uuid")):
+                        if sid:
+                            self._phones[str(sid).lower()] = str(data["e164"])
         row = self._conn.execute("SELECT json FROM items WHERE id = 'uuid_id'").fetchone() if self._has_table("items") else None
         if row:
             value = str(_loads(row[0]).get("value") or "")
@@ -335,7 +340,14 @@ class SignalReader:
             ],
             disappearing=bool(data.get("expireTimer")) and kind in CHAT_TYPES,
             size=size,
+            sender_phone=None if from_me else self.phone_of(data.get("sourceServiceId"), data.get("source")),
         )
+
+    def phone_of(self, service_id: Any, e164: Any = None) -> str | None:
+        """The sender's number: on the message itself in older rows, else from their chat."""
+        if e164:
+            return str(e164)
+        return self._phones.get(str(service_id).lower()) if service_id else None
 
     def name_of(self, service_id: Any, e164: Any = None) -> str:
         if service_id and _is(service_id, self._me):
