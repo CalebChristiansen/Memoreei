@@ -30,6 +30,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   say what to pass instead.
 - `memoreei search` takes `--person`, `--scope`, `--after` and `--before`.
 
+### Fixed
+- Punctuation in a search no longer fails it: a path, a URL, a hyphenated word or a file
+  name gave "fts5: syntax error" instead of results.
+
 ### Added
 - Signal messages keep their sender's phone number, and messages stored earlier get it
   on the next sync, once.
