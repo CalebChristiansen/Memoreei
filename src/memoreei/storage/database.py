@@ -152,6 +152,17 @@ END;
 """
 
 
+# Words too common to narrow a keyword search on their own (Database.search_fts).
+_COMMON_WORDS = frozenset("""
+a about after again all also am an and any are as at be because been before being but by
+can could did do does doing don done for from get got had has have having he her here him
+his how i if in into is it its just like me more most my no not now of on one or our out
+over said say says she should so some than that the their them then there these they this
+to too u up us very was we were what when where which who why will with would yes you your
+going gonna want wanted tell told ask asked think know
+""".split())
+
+
 def _stored_to_vector(stored: object) -> np.ndarray | None:
     """An embedding as stored (float32 bytes, or JSON from older versions) as a vector."""
     if isinstance(stored, (bytes, bytearray)) and stored:
@@ -465,9 +476,12 @@ class Database:
             rows = list(await cursor.fetchall())
         if stats is not None:
             stats["all_words"] = len(rows)
-        if any_words and len(quoted) > 1 and len(rows) < limit:
+        # Common words left out: "to" OR "on" matches most of an archive, and ranking that
+        # many rows took seconds on 155k messages, for words that rank nothing anyway.
+        rare = [f'"{w}"' for w in words if w.lower() not in _COMMON_WORDS]
+        if any_words and len(quoted) > 1 and rare and len(rows) < limit:
             have = {row["id"] for row in rows}
-            async with self._db.execute(sql, (" OR ".join(quoted), *params, limit + len(rows))) as cursor:
+            async with self._db.execute(sql, (" OR ".join(rare), *params, limit + len(rows))) as cursor:
                 rows += [row for row in await cursor.fetchall() if row["id"] not in have][:limit - len(rows)]
         return [MemoryItem.from_row(dict(row)) for row in rows]
 

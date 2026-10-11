@@ -121,3 +121,11 @@ async def test_any_words_fills_after_all_words(db):
     some = await db.search_fts("project zeppelin", any_words=True, stats=stats)
     assert stats["all_words"] == 0 and any("project" in r.content for r in some)
     assert await db.search_fts("project zeppelin") == []
+
+
+async def test_any_words_ignores_common_words(db):
+    """'what is the project': only 'project' should pull partial matches in."""
+    some = await db.search_fts("what is the zeppelin", any_words=True)
+    assert some == []  # no rare word matches, and the common ones alone don't count
+    some = await db.search_fts("what is the project zeppelin", any_words=True)
+    assert some and all("project" in r.content for r in some)
