@@ -53,14 +53,11 @@ class GroupSource(TypedDict):
     messages: int
 
 
-class OtherSource(TypedDict):
-    source: str
-    messages: int
-
-
 class Sources(TypedDict):
-    total: int
+    total: Annotated[int, Field(description="Messages in the archive")]
     platforms: Annotated[list[str], Field(description="Values the source filter takes")]
     people: Annotated[list[PersonSources], Field(description="Most messages first")]
-    groups: list[GroupSource]
-    other: Annotated[list[OtherSource], Field(description="Sources with no name to give them")]
+    groups: Annotated[list[GroupSource], Field(description="Most messages first")]
+    not_shown: NotRequired[Annotated[dict[str, int] | None, Field(
+        description="How many people, groups and unnamed chats were left out")]]
+    note: NotRequired[Annotated[str | None, Field(description="How to see the rest")]]

@@ -317,3 +317,16 @@ async def test_get_context_centres_on_the_anchor_in_a_dense_chat(tmp_path):
     assert got == [it.content for it in items[45:52]]
     assert [m.get("hit", False) for m in context["messages"]] == [False] * 3 + [True] + [False] * 3
     await db.close()
+
+
+async def test_list_sources_is_bounded_and_says_what_it_left_out(tools):
+    listed = await tools.list_sources(limit=1)
+    assert len(listed["people"]) == 1 and len(listed["groups"]) == 1
+    assert listed["not_shown"]["people"] >= 2 and "name" in listed["note"]
+    assert listed["not_shown"]["unnamed chats"] >= 1  # the number with no contact
+
+
+async def test_list_sources_finds_someone_by_name(tools):
+    listed = await tools.list_sources(name="hans")
+    assert {p["name"] for p in listed["people"]} == {"Hans Gruber", "Hans Zimmer"}
+    assert "not_shown" not in listed

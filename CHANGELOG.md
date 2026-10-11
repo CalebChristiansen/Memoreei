@@ -24,7 +24,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `date`, `platform`, `chat`, `group` and `sender` in plain words, names in place of
   numbers where your contacts know them; `participants`, `contact_name`, `score` and the
   raw metadata are gone. `get_context` returns `{messages}`, counts messages rather than
-  minutes, and marks the one asked about. `list_sources` groups chats by person.
+  minutes, and marks the one asked about. `list_sources` groups chats by person and
+  lists the 30 most-messaged people and groups, with counts of the rest, instead of
+  every source; `name` finds anyone else. The full list ran to ~27k tokens on a large
+  archive, more than a small model can read.
 - The server describes every parameter with an example, sends instructions, declares
   output schemas and marks its read tools read-only. Mistakes come back as errors that
   say what to pass instead.

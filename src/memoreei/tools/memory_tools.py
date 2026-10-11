@@ -26,7 +26,8 @@ from memoreei.connectors.sms_connector import parse_sms_backup
 from memoreei.search.embeddings import EmbeddingProvider
 from memoreei.search.hybrid import HybridSearch
 from memoreei.search.people import (
-    MAX_PEOPLE, SCOPES, Directory, Filter, Person, fold, looks_like_identifier, parse_date,
+    MAX_PEOPLE, SCOPES, Directory, Filter, Person, fold, looks_like_identifier, matches_name,
+    parse_date,
 )
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
@@ -264,31 +265,49 @@ class MemoryTools:
         memory_id = await self.db.insert_memory(item)
         return {"id": memory_id, "source": source, "content": content}
 
-    async def list_sources(self) -> dict[str, Any]:
-        """Every chat, grouped by the person it is with; group chats on their own."""
+    async def list_sources(self, name: str | None = None, limit: int = 30) -> dict[str, Any]:
+        """Chats grouped by the person they're with, and group chats, most messages first.
+
+        Bounded: an archive has hundreds of people and chats, more than a small model can
+        read (the whole list was ~27k tokens on 155k messages), so only the *limit* most
+        messaged of each come back, with counts of the rest; *name* finds anyone else.
+        """
+        limit = max(1, min(int(limit), 200))
         summary = await self.db.source_summary()
         contacts = await self.db.get_contacts()
         people: dict[str, dict[str, Any]] = {}
         groups: list[dict[str, Any]] = []
-        other: list[dict[str, Any]] = []
+        unnamed = 0
         for row in summary:
             source, count = row["source"], row["count"]
-            name = _resolve_source_name(source, contacts) or row.get("chat_name")
+            label = _resolve_source_name(source, contacts) or row.get("chat_name")
             if row["group"]:
-                groups.append({"name": name or "unnamed group", "source": source, "messages": count})
-            elif name:
-                person = people.setdefault(fold(name), {"name": name, "messages": 0, "sources": {}})
+                groups.append({"name": label or "unnamed group", "source": source, "messages": count})
+            elif label:
+                person = people.setdefault(fold(label), {"name": label, "messages": 0, "sources": {}})
                 person["messages"] += count
                 person["sources"][source] = count
             else:
-                other.append({"source": source, "messages": count})
-        return {
+                unnamed += 1
+        ranked = sorted(people.values(), key=lambda p: -p["messages"])
+        if name and name.strip():
+            words = [w for w in fold(name).split() if w]
+            ranked = [p for p in ranked if matches_name(words, p["name"])]
+            groups = [g for g in groups if matches_name(words, g["name"])]
+        out: dict[str, Any] = {
             "total": sum(r["count"] for r in summary),
             "platforms": sorted({r["source"].partition(":")[0] for r in summary}),
-            "people": sorted(people.values(), key=lambda p: -p["messages"]),
-            "groups": groups,
-            "other": other,
+            "people": ranked[:limit],
+            "groups": groups[:limit],
         }
+        left = {"people": len(ranked) - len(out["people"]), "groups": len(groups) - len(out["groups"])}
+        if not name:
+            left["unnamed chats"] = unnamed
+        if any(left.values()):
+            out["not_shown"] = left
+            out["note"] = ("Only the most-messaged are listed. To find someone, pass name, or "
+                           "just search with participant: search_memoreei finds people itself.")
+        return out
 
     async def sync_contacts_tool(self) -> dict[str, Any]:
         """Sync contacts from macOS AddressBook into the contacts table."""

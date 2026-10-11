@@ -214,14 +214,20 @@ async def add_memoreei(
     return await tools.add_memoreei(content=content, source=source, metadata=metadata)
 
 
-async def list_sources() -> Sources:
-    """Who and what is in the archive: each person with their message count and chats,
-    each group chat, and the platforms.
+async def list_sources(
+    name: Annotated[str | None, Field(
+        description="Only people and groups whose name matches, like participant does "
+                    "('Jane', 'jan do').")] = None,
+    limit: Annotated[int, Field(ge=1, le=200, description="How many people, and how many "
+                                                         "groups. Default 30.")] = 30,
+) -> Sources:
+    """Who is in the archive: the most-messaged people with their chats, the busiest
+    group chats, and the platforms.
 
     Not needed before searching: search_memoreei finds people by name or number itself.
     """
     tools = await _get_tools()
-    return await tools.list_sources()
+    return await tools.list_sources(name=name, limit=limit)  # type: ignore[return-value]
 
 
 async def refresh_memoreei() -> dict:

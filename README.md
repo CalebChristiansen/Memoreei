@@ -305,7 +305,7 @@ with `memoreei import …`. `memoreei import --help` lists the formats.
 |---|---|:---:|
 | `search_memoreei` | hybrid search, narrowed by `participant`, `participant_scope`, `source`, `after`, `before` | ✅ |
 | `get_context` | the messages before and after a search result, in its chat | ✅ |
-| `list_sources` | every chat, grouped by the person it is with, and the group chats | ✅ |
+| `list_sources` | the most-messaged people (with their chats) and group chats; `name` finds anyone | ✅ |
 | `sync` | refresh everything configured on the server; no arguments | ✅ |
 | `add_memoreei` | store a note | — |
 | `sync_discord`, `_telegram`, `_matrix`, `_slack`, `_email`, `_mastodon`, `_imessage`, `_whatsapp`, `_signal` | sync one connector | — |
