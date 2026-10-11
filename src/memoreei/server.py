@@ -135,6 +135,8 @@ say so; don't guess.
 
 # Say when no result contains all of the query's words (MemoryTools.search_memoreei).
 WEAK_MATCH_NOTE = False
+# Let keyword matches with only some of the query's words fill in (Database.search_fts).
+ANY_WORDS = False
 
 
 async def search_memoreei(
@@ -178,6 +180,7 @@ async def search_memoreei(
         after=after,
         before=before,
         weak_match_note=WEAK_MATCH_NOTE,
+        any_words=ANY_WORDS,
     )
 
 

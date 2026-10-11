@@ -434,9 +434,16 @@ class Database:
         return inserted
 
     async def search_fts(self, query: str, limit: int = 10,
-                         where: tuple[str, list] | None = None) -> list[MemoryItem]:
+                         where: tuple[str, list] | None = None, any_words: bool = False,
+                         stats: dict | None = None) -> list[MemoryItem]:
         """Keyword matches, best first; *where* (SQL over memories, and its parameters)
-        narrows them before the limit is applied."""
+        narrows them before the limit is applied.
+
+        Messages with every word come first. With *any_words*, messages with only some
+        of them fill the rest of the limit, ranked by BM25, which weighs rare words most;
+        so a word the model guessed ("ordered food") doesn't hide the message that has
+        the other ("ordered a sensor"). *stats* gets ``all_words``: how many had every word.
+        """
         assert self._db is not None
         # Words only, each quoted: FTS5 reads punctuation (a path's "/", a URL's ":", a
         # hyphen) and bare AND/OR/NOT as syntax, and a syntax error fails the search.
@@ -444,20 +451,24 @@ class Database:
         words = _re.findall(r"\w+", query)
         if not words:
             return []
-        safe_query = " ".join(f'"{w}"' for w in words)
+        quoted = [f'"{w}"' for w in words]
         clause, params = where or ("1", [])
-        async with self._db.execute(
-            f"""
+        sql = f"""
             SELECT m.*, memories_fts.rank as fts_rank
             FROM memories_fts
             JOIN memories m ON memories_fts.rowid = m.rowid
             WHERE memories_fts MATCH ? AND ({clause})
             ORDER BY memories_fts.rank
             LIMIT ?
-            """,
-            (safe_query, *params, limit),
-        ) as cursor:
-            rows = await cursor.fetchall()
+            """
+        async with self._db.execute(sql, (" ".join(quoted), *params, limit)) as cursor:
+            rows = list(await cursor.fetchall())
+        if stats is not None:
+            stats["all_words"] = len(rows)
+        if any_words and len(quoted) > 1 and len(rows) < limit:
+            have = {row["id"] for row in rows}
+            async with self._db.execute(sql, (" OR ".join(quoted), *params, limit + len(rows))) as cursor:
+                rows += [row for row in await cursor.fetchall() if row["id"] not in have][:limit - len(rows)]
         return [MemoryItem.from_row(dict(row)) for row in rows]
 
     async def search_vector(

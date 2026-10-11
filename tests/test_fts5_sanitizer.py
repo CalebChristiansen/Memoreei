@@ -112,3 +112,12 @@ async def test_punctuation_never_breaks_the_search(db, query):
 async def test_words_inside_punctuation_still_match(db):
     results = await db.search_fts("project/message")
     assert any("project" in r.content for r in results)
+
+
+async def test_any_words_fills_after_all_words(db):
+    stats = {}
+    both = await db.search_fts("project message", stats=stats)
+    assert stats["all_words"] == len(both) == 1
+    some = await db.search_fts("project zeppelin", any_words=True, stats=stats)
+    assert stats["all_words"] == 0 and any("project" in r.content for r in some)
+    assert await db.search_fts("project zeppelin") == []

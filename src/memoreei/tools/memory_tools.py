@@ -100,6 +100,7 @@ class MemoryTools:
         after: str | None = None,
         before: str | None = None,
         weak_match_note: bool = False,
+        any_words: bool = False,
     ) -> dict[str, Any]:
         """Search, narrowed first by any filters; see server.search_memoreei for the contract.
 
@@ -187,7 +188,7 @@ class MemoryTools:
                 out["note"] = " ".join(notes)
 
         stats: dict[str, int] = {}
-        scored = await self.search.search_items(query, limit, filt, stats)
+        scored = await self.search.search_items(query, limit, filt, stats, any_words=any_words)
         out["results"] = [present(item, contacts) for _, item in scored]
         if weak_match_note and out["results"] and not stats.get("keyword_hits"):
             weak = ("No message contains all of these words; these are only the nearest by "

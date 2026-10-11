@@ -279,3 +279,18 @@ async def test_weak_matches_say_so_when_asked(tools):
     assert "nearest by meaning" not in (found.get("note") or "")
     found = await tools.search_memoreei("zeppelin", participant="Zezima")
     assert "note" not in found
+
+
+async def test_any_words_reaches_the_keyword_search(tools, monkeypatch):
+    """The fallback itself is tested in test_fts5_sanitizer; here, that the switch gets there."""
+    seen = []
+    real = tools.db.search_fts
+
+    async def spy(*args, **kwargs):
+        seen.append(kwargs.get("any_words"))
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(tools.db, "search_fts", spy)
+    await tools.search_memoreei("bank zeppelin", participant="Zezima")
+    await tools.search_memoreei("bank zeppelin", participant="Zezima", any_words=True)
+    assert seen == [False, True]

@@ -52,24 +52,28 @@ class HybridSearch:
         return [{**item.to_dict(), "score": round(score, 6)} for score, item in items]
 
     async def search_items(self, query: str, limit: int, filter: Filter,
-                           stats: dict | None = None) -> list[tuple[float, MemoryItem]]:
+                           stats: dict | None = None,
+                           any_words: bool = False) -> list[tuple[float, MemoryItem]]:
         """The best *limit* memories within *filter*, with their fused scores.
 
         *stats*, if given, gets ``keyword_hits``: how many messages contain every word.
+        *any_words* lets keyword matches with only some of the words fill in (search_fts).
         """
         # Fetch more candidates than needed for better RRF fusion
         candidate_limit = max(limit * 3, 30)
         where = None if filter.empty else filter.sql()
         keep = None if filter.empty else filter.mask
 
+        fts_stats: dict[str, int] = {}
         # FTS runs on the database's thread while the query is embedded on another
         fts_results, query_embedding = await asyncio.gather(
-            self.db.search_fts(query, limit=candidate_limit, where=where),
+            self.db.search_fts(query, limit=candidate_limit, where=where, any_words=any_words,
+                               stats=fts_stats),
             self.embedder.embed_query(query),
         )
         vec_results = await self.db.search_vector(query_embedding, limit=candidate_limit, keep=keep)
         if stats is not None:
-            stats["keyword_hits"] = len(fts_results)
+            stats["keyword_hits"] = fts_stats.get("all_words", 0)
 
         fts_ranks = {item.id: rank for rank, item in enumerate(fts_results, 1)}
         vec_ranks = {item.id: rank for rank, item in enumerate(vec_results, 1)}
