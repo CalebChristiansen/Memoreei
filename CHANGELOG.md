@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.7rc1] - 2026-10-12
+
 ### Changed
 - **Search finds people by name or number.** `participant` takes a name, part of one or
   a phone number in any format, and finds that person on every app, joined through your
@@ -393,7 +395,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...HEAD
+[0.4.7rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7rc1
 [0.4.6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6
 [0.4.6rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6rc1
 [0.4.5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.4...v0.4.5
