@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The search index takes about 250 MB less memory.** Building it held every embedding
+  twice, once as read from the database and once in the index, and the second copy was
+  never given back to the system. With 155,710 messages the server held 571 MB for the
+  index (514 MB in 0.4.6); now it holds 311 MB, and building it peaks at 344 MB, not
+  606 MB. A 4 GB Mac felt the difference.
+
 ## [0.4.7rc1] - 2026-10-12
 
 ### Changed

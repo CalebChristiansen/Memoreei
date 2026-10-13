@@ -5,7 +5,6 @@ import json
 import sqlite3
 import sys
 import time
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +184,59 @@ def _norms(matrix: np.ndarray) -> np.ndarray:
     return norms
 
 
+class _Rows:
+    """One embedding model's rows for an index, each vector copied into the matrix as it
+    arrives.
+
+    Holding every row until the end kept each embedding twice, once as SQLite's bytes and
+    once in the matrix, and the allocator never handed the bytes' half back: about 250 MB
+    at 155k rows, which a 4 GB MacBook Air felt. The matrix is allocated for every row that
+    might come; the system only gives it memory for the rows that do.
+    """
+
+    def __init__(self, dim: int, capacity: int) -> None:
+        self.matrix = np.empty((capacity, dim), np.float32)
+        self.ids: list[str] = []
+        self.columns: tuple[list, ...] = ([], [], [], [], [])  # source, sender, phone, ts, group
+
+    def add(self, row: tuple, vector: np.ndarray) -> None:
+        n = len(self.ids)
+        if n == len(self.matrix):  # more rows than counted: grow rather than drop
+            grown = np.empty((max(2 * n, 1), self.matrix.shape[1]), np.float32)
+            grown[:n] = self.matrix
+            self.matrix = grown
+        self.matrix[n] = vector
+        self.ids.append(row[1])
+        for column, value in zip(self.columns, row[2:3] + row[4:]):
+            column.append(value)
+
+
+class _Batch:
+    """Rows read for an index, by embedding dimension."""
+
+    def __init__(self, capacity: int, dim: int | None = None) -> None:
+        self.capacity, self.dim = capacity, dim
+        self.by_dim: dict[int, _Rows] = {}
+        self.read = 0  # rows seen, with an embedding or not
+
+    def add(self, rows: list) -> None:
+        """Take (rowid, id, source, embedding, sender, phone, ts, group) rows."""
+        self.read += len(rows)
+        for row in rows:
+            vector = _stored_to_vector(row[3])
+            if vector is None or self.dim not in (None, vector.shape[0]):
+                continue
+            dim = vector.shape[0]
+            if dim not in self.by_dim:
+                self.by_dim[dim] = _Rows(dim, self.capacity)
+            self.by_dim[dim].add(row, vector)
+
+    def best(self) -> _Rows | None:
+        """The rows from the embedding model most rows came from: another model's vectors
+        are not comparable."""
+        return max(self.by_dim.values(), key=lambda rows: len(rows.ids), default=None)
+
+
 class _VectorIndex:
     """The embeddings of the memories table, as a matrix, with ids and sources alongside.
 
@@ -217,30 +269,18 @@ class _VectorIndex:
     def _columns(self) -> tuple[np.ndarray, ...]:
         return self.sources, self.senders, self.phones, self.ts, self.groups
 
-    def extend(self, rows: list, count: int, max_rowid: int) -> "_VectorIndex":
-        """A new index with *rows* (rowid, id, source, embedding, sender, phone, ts, group) added."""
-        decoded = [(row[1], row[2:3] + row[4:], _stored_to_vector(row[3])) for row in rows]
-        decoded = [(i, c, v) for i, c, v in decoded if v is not None]
-        if len(self.matrix):
-            dim = self.matrix.shape[1]
-        elif decoded:  # the embedding model most rows came from
-            dim = Counter(v.shape[0] for _, _, v in decoded).most_common(1)[0][0]
-        else:
-            dim = 0
-        # another embedding model's vectors are not comparable
-        decoded = [(i, c, v) for i, c, v in decoded if v.shape[0] == dim]
-        if not decoded:
+    def append(self, batch: "_Batch", count: int, max_rowid: int) -> "_VectorIndex":
+        """A new index with *batch*'s rows added."""
+        rows = batch.best()
+        if rows is None:
             return _VectorIndex(self.ids, self.sources, self.matrix, count, max_rowid, self.norms,
                                 self.senders, self.phones, self.ts, self.groups)
 
-        old = len(self.matrix)
-        matrix = np.empty((old + len(decoded), dim), np.float32)
-        if old:
-            matrix[:old] = self.matrix
-        for n, (_, _, vector) in enumerate(decoded, old):
-            matrix[n] = vector
-        norms = np.concatenate([self.norms, _norms(matrix[old:])])
-        added = list(zip(*(c for _, c, _ in decoded)))  # one tuple per column
+        fresh = rows.matrix[:len(rows.ids)]
+        # A first build takes the batch's matrix as it is: no second copy of every embedding
+        matrix = np.concatenate([self.matrix, fresh]) if len(self.matrix) else fresh
+        norms = np.concatenate([self.norms, _norms(fresh)])
+        added = rows.columns
         new = (np.array(added[0], dtype=object),
                np.array([s or "" for s in added[1]], dtype=object),
                np.array([p or "" for p in added[2]], dtype=object),
@@ -248,7 +288,7 @@ class _VectorIndex:
                np.array([bool(g) for g in added[4]], dtype=bool))
         sources, senders, phones, ts, groups = (
             np.concatenate([mine, theirs]) for mine, theirs in zip(self._columns(), new))
-        index = _VectorIndex(self.ids + [i for i, _, _ in decoded], sources, matrix, count,
+        index = _VectorIndex(self.ids + rows.ids, sources, matrix, count,
                              max_rowid, norms, senders, phones, ts, groups)
         # Carry the codes forward, adding only the new rows', rather than recode them all
         for column, added_values in (("sources", new[0]), ("senders", new[1]), ("phones", new[2])):
@@ -333,25 +373,29 @@ def _read_vectors(db_path: str, base: _VectorIndex | None) -> _VectorIndex | Non
     ``max(rowid)`` are read in one transaction, so the index describes one snapshot. WAL
     mode means this read holds up neither the server's connection nor its writers.
     """
+    after = base.max_rowid if base else 0
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("BEGIN")
         count, max_rowid = conn.execute(
             "SELECT count(*), coalesce(max(rowid), 0) FROM memories").fetchone()
+        if base is not None and len(base.matrix):
+            batch = _Batch(max(count - base.count, 0), base.matrix.shape[1])
+        else:
+            batch = _Batch(count)
         cursor = conn.execute(
             f"SELECT rowid, id, source, embedding, {SENDER_SQL}, {PHONE_SQL}, ts, {GROUP_SQL} "
             "FROM memories WHERE rowid > ? ORDER BY rowid",
-            (base.max_rowid if base else 0,),
+            (after,),
         )
-        rows: list = []
         while chunk := cursor.fetchmany(_STEP):
-            rows.extend(chunk)
+            batch.add(chunk)
         conn.rollback()
     finally:
         conn.close()
-    if base is not None and base.count + len(rows) != count:
+    if base is not None and base.count + batch.read != count:
         return None
-    index = (base or _VectorIndex.empty()).extend(rows, count, max_rowid).prepare()
+    index = (base or _VectorIndex.empty()).append(batch, count, max_rowid).prepare()
     if base is not None:
         index.data_version = base.data_version
     return index
