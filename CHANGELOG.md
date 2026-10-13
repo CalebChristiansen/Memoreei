@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-12
+
+People by name or number, filters before ranking, and tools a small local model can use,
+tried on the Mac as rc1 and rc2. Nothing changed since 0.4.7rc2. On the 4 GB MacBook
+Air the server itself went from 576 MB under rc1 to 461 MB under rc2: macOS gave back
+part of the copy that Linux kept, so the saving there is smaller than rc2's figures,
+which were measured on Linux.
+
 ## [0.4.7rc2] - 2026-10-12
 
 ### Fixed
@@ -404,7 +412,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc2...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7
 [0.4.7rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...v0.4.7rc2
 [0.4.7rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7rc1
 [0.4.6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6
