@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.7rc2] - 2026-10-12
+
 ### Fixed
 - **The search index takes about 250 MB less memory.** Building it held every embedding
   twice, once as read from the database and once in the index, and the second copy was
@@ -402,7 +404,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc2...HEAD
+[0.4.7rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...v0.4.7rc2
 [0.4.7rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7rc1
 [0.4.6]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6
 [0.4.6rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.5...v0.4.6rc1
