@@ -37,6 +37,16 @@
 </section>
 {% endif %}
 
+{% if cloud_offer %}
+<section class="bubble" aria-label="Memoreei Cloud">
+  <div><b>Use memoreei from Claude.ai or ChatGPT.</b> Memoreei Cloud connects this computer to them, with
+  nothing to open on your router; your messages stay here.
+  <span class="caption">Or <a href="https://github.com/CalebChristiansen/Memoreei#your-own-tunnel-and-sign-in">use your own tunnel and sign-in</a>.</span></div>
+  <a class="button" href="/admin/cloud">Connect to Memoreei Cloud</a>
+  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
+</section>
+{% endif %}
+
 {% if welcome %}
 <ol class="steps">
   <li class="card {{ 'done' if has_source else 'current' }}">

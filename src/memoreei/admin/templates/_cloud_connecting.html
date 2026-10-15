@@ -1,0 +1,26 @@
+<section class="card" id="cloud-connecting"{% if connecting.state != "failed" %} hx-get="/admin/cloud/progress" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if connecting.state == "failed" %}
+  <h2>That didn't work</h2>
+  <p class="bad" role="alert">{{ connecting.error }}</p>
+  {% elif connecting.state == "certificate" %}
+  <h2>Approved</h2>
+  <p>Getting a certificate for this computer. This takes about half a minute.</p>
+  {% elif connecting.state == "approved" %}
+  <h2>Approved</h2>
+  <p>Setting this computer up…</p>
+  {% elif connecting.code %}
+  <h2>Approve this computer</h2>
+  <p>Sign in to Memoreei Cloud and approve it. Check the page shows this same code:</p>
+  <pre class="key" style="font-size:2em;text-align:center">{{ connecting.code.user_code }}</pre>
+  <p><a class="button" href="{{ connecting.code.verification_uri_complete }}" target="_blank" rel="noopener">Open the sign-in page</a></p>
+  <p class="caption">Or go to {{ connecting.code.verification_uri }} on any device and type the code. If someone sent you a link to approve, don't: it would put their computer on your account.</p>
+  {% else %}
+  <h2>Starting…</h2>
+  {% endif %}
+  {% if connecting.state == "failed" %}
+  <form method="post" action="/admin/cloud/connect" class="row"><button>Try again</button></form>
+  <form method="post" action="/admin/cloud/cancel"><button class="quiet small">Dismiss</button></form>
+  {% else %}
+  <form method="post" action="/admin/cloud/cancel"><button class="quiet small">Cancel</button></form>
+  {% endif %}
+</section>

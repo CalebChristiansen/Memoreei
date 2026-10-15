@@ -195,6 +195,8 @@ def _static(name: str) -> str:
 
 
 templates.env.filters["ago"] = _ago
+templates.env.filters["date"] = lambda ts: (
+    f"{time.localtime(ts).tm_mday} {time.strftime('%b %Y', time.localtime(ts))}" if ts else "never")
 templates.env.globals["static"] = _static
 templates.env.filters["tilde"] = _tilde
 templates.env.filters["linkify"] = _linkify
@@ -399,8 +401,14 @@ async def status(request: Request) -> Response:
     return _page(
         request, "status.html", nav="status", **await _status_context(), **_page_notices(),
         service=await _service_context(), linger_failed="linger" in request.query_params,
-        address=_address(),
+        address=_address(), cloud_offer=_cloud_offer(),
     )
+
+
+def _cloud_offer() -> bool:
+    from memoreei.admin.cloud import offer_visible
+
+    return offer_visible()
 
 
 async def status_fragment(request: Request) -> Response:
@@ -670,6 +678,8 @@ async def root_redirect(request: Request) -> Response:
 
 
 def build_admin_app() -> Any:
+    from memoreei.admin.cloud import routes as cloud_routes
+
     """The dashboard, meant to be mounted at /admin."""
     routes = [
         Route("/", status),
@@ -689,6 +699,7 @@ def build_admin_app() -> Any:
         Route("/service/linger", service_linger, methods=["POST"]),
         Route("/service/stop", service_stop, methods=["POST"]),
         Route("/log", log_page),
+        *cloud_routes(),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),
     ]
     return AdminGuard(Starlette(routes=routes))

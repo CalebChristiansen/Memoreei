@@ -21,9 +21,11 @@ app = typer.Typer(help="Memoreei — personal memory MCP server CLI", invoke_wit
 import_app = typer.Typer(help="Import data from various sources")
 service_app = typer.Typer(help="Manage the Memoreei background service (macOS launchd, Linux systemd)")
 key_app = typer.Typer(help="Manage API keys for the network server")
+cloud_app = typer.Typer(help="Memoreei Cloud: use this memoreei from Claude.ai, ChatGPT and agents")
 app.add_typer(import_app, name="import")
 app.add_typer(service_app, name="service")
 app.add_typer(key_app, name="key")
+app.add_typer(cloud_app, name="cloud")
 
 
 @app.callback(invoke_without_command=True)
@@ -712,6 +714,112 @@ def key_revoke(
     typer.echo(f"  ✓ Revoked '{name}'.")
 
 
+# ── Memoreei Cloud ───────────────────────────────────────────────────────────
+
+
+def _has_browser() -> bool:
+    import os
+    import sys
+
+    return sys.platform == "darwin" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+@cloud_app.command(name="connect")
+def cloud_connect(
+    name: Optional[str] = typer.Option(None, "--name", help="What to call this computer on your account"),
+    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open the sign-in page here, if there's a browser"),
+) -> None:
+    """Connect this computer to Memoreei Cloud, for Claude.ai, ChatGPT and agents."""
+    from memoreei.cloud.connect import connect
+    from memoreei.cloud.service import CloudError
+    from memoreei.cloud.state import CloudState
+
+    state = CloudState()
+    if state.ready():
+        device = state.device()
+        assert device is not None
+        typer.echo(f"Already connected as {device.hostname}.\n\n  {device.mcp_url}\n")
+        typer.echo("That's the address to add in Claude or ChatGPT. To start over: memoreei cloud disconnect")
+        return
+
+    def step(what: str, detail: object) -> None:
+        if what == "code":
+            code = detail  # a DeviceCode
+            typer.echo("To connect this computer, sign in to Memoreei Cloud and approve it:\n")
+            typer.echo(f"  {code.verification_uri_complete}\n")  # type: ignore[attr-defined]
+            typer.echo(f"or go to {code.verification_uri} and enter the code")  # type: ignore[attr-defined]
+            typer.echo(f"\n      {typer.style(code.user_code, bold=True)}\n")  # type: ignore[attr-defined]
+            typer.echo("Check the page shows this same code. If someone sent you a link to approve, "
+                       "don't: it would put their computer on your account.\n")
+            if browser and _has_browser():
+                import webbrowser
+
+                webbrowser.open(code.verification_uri_complete)  # type: ignore[attr-defined]
+            typer.echo("Waiting for you to approve it (Ctrl-C to stop)...")
+        elif what == "approved":
+            typer.echo(f"  ✓ Approved: this computer is {detail}")
+        elif what == "certificate":
+            typer.echo("  Getting a certificate for it (about half a minute)...")
+
+    try:
+        device = asyncio.run(connect(name, step, state))
+    except CloudError as e:
+        typer.echo(f"\n  ✗ {e}", err=True)
+        raise typer.Exit(1)
+    except KeyboardInterrupt:
+        typer.echo("\nStopped. Nothing was added.", err=True)
+        raise typer.Exit(130)
+    typer.echo(f"  ✓ Connected.\n\nAdd this address as a connector in Claude or ChatGPT:\n\n  {device.mcp_url}\n")
+    typer.echo("The memoreei service picks this up within a few seconds; if it isn't running, "
+               "set it up with: memoreei service install")
+
+
+@cloud_app.command(name="status")
+def cloud_status() -> None:
+    """Whether this computer is connected to Memoreei Cloud, and online."""
+    import time
+
+    from memoreei.cloud import certs
+    from memoreei.cloud.state import CloudState
+
+    state = CloudState()
+    device = state.device()
+    if device is None:
+        typer.echo("Not connected to Memoreei Cloud. To connect: memoreei cloud connect")
+        return
+    typer.echo(f"Connected as {device.hostname} ({device.name})\n\n  {device.mcp_url}\n")
+    if not state.has_certificate():
+        typer.echo("No certificate yet, so it can't go online. Run memoreei cloud connect to finish.")
+    cert = certs.describe(state)
+    if cert:
+        typer.echo(f"Certificate: valid until {_fmt_time(cert['not_after'])}, renews from {_fmt_time(cert['renews_at'])}")
+    status = state.status()
+    if not status or time.time() - status.get("written_at", 0) > 180:
+        typer.echo("Tunnel: the memoreei service doesn't seem to be running here, so this computer is "
+                   "offline. Set it up with: memoreei service install")
+        return
+    tunnel = status.get("tunnel") or {}
+    typer.echo(f"Tunnel: {tunnel.get('state', '?')}: {tunnel.get('message', '')}")
+    if status.get("error"):
+        typer.echo(f"Problem: {status['error']}")
+    if status.get("last_call_at"):
+        typer.echo(f"Last call: {_fmt_time(status['last_call_at'])}")
+
+
+@cloud_app.command(name="disconnect")
+def cloud_disconnect(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask first"),
+) -> None:
+    """Take this computer off your Memoreei Cloud account, and forget it here."""
+    from memoreei.cloud.connect import disconnect
+    from memoreei.cloud.state import CloudState
+
+    device = CloudState().device()
+    if device is not None and not yes:
+        typer.confirm(f"Disconnect {device.hostname}? Chatbot connectors using it stop working.", abort=True)
+    typer.echo(asyncio.run(disconnect()))
+
+
 def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     """Prompt the user for a single connector's variables. Returns list of (var, value)."""
     import questionary
@@ -1051,6 +1159,7 @@ def setup(
         if not selected_keys:
             typer.echo("\nNothing selected.")
             _offer_first_key()
+            _offer_cloud()
             raise typer.Exit(0)
 
     # If --reset, remove existing vars for selected connectors from env_lines
@@ -1080,6 +1189,7 @@ def setup(
     if not all_updates:
         typer.echo("\n  Nothing to save.")
         _offer_first_key()
+        _offer_cloud()
         raise typer.Exit(0)
 
     _write_env_updates(env_path, env_lines, all_updates)
@@ -1090,6 +1200,7 @@ def setup(
         typer.echo(f"  Test: memoreei sync {sync_name}")
     typer.echo(f"\n  Check all: memoreei config\n")
     _offer_first_key()
+    _offer_cloud()
 
 
 def _offer_first_key() -> None:
@@ -1113,6 +1224,17 @@ def _offer_first_key() -> None:
         typer.echo("\n  Later: memoreei key create <name>\n")
         return
     _create_key(name.strip())
+
+
+def _offer_cloud() -> None:
+    """At the end of setup, say how to reach memoreei from Claude.ai or ChatGPT. Says only."""
+    from memoreei.admin.cloud import offer_visible
+
+    if not offer_visible():
+        return
+    typer.echo("  ☁  Claude.ai and ChatGPT\n")
+    typer.echo("  To use memoreei from them, with nothing to open on your router: memoreei cloud connect")
+    typer.echo("  (Or your own tunnel and sign-in: https://github.com/CalebChristiansen/Memoreei#your-own-tunnel-and-sign-in)\n")
 
 
 @app.command()

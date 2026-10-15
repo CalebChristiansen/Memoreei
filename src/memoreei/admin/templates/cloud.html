@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Cloud · Memoreei{% endblock %}
+{% block main %}
+<header class="page-head">
+  <div>
+    <h1>Memoreei Cloud</h1>
+    <p>Use this memoreei from Claude.ai, ChatGPT and agents, wherever you are.</p>
+  </div>
+  {% if ready %}
+  {% set s = tunnel.state or "connecting" %}
+  <span class="pill big {{ '' if s == 'online' else ('off' if s in ('revoked', 'replaced') else 'warn') }}"><span class="dot"></span>{{ {"online": "Online", "connecting": "Connecting", "offline": "Offline", "blocked": "Blocked", "relay": "Retrying", "revoked": "Removed", "replaced": "Stepped aside"}.get(s, s|capitalize) }}</span>
+  {% elif custom %}
+  <span class="pill big"><span class="dot"></span>Your own setup</span>
+  {% endif %}
+</header>
+
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+
+{% if connecting %}
+{% include "_cloud_connecting.html" %}
+
+{% elif custom %}
+<section class="card">
+  <h2>Public listener</h2>
+  <p>This memoreei is set up for your own tunnel or proxy (<code>MEMOREEI_PUBLIC_PORT</code>), so Memoreei Cloud isn't used.</p>
+  <dl class="facts">
+    <dt>Listening on</dt><dd class="mono">{{ live.port or "?" }} (loopback unless MEMOREEI_PUBLIC_HOST says otherwise)</dd>
+    <dt>Address</dt><dd class="mono">{{ live.url or "not set (MEMOREEI_PUBLIC_MCP_URL)" }}</dd>
+    <dt>Sign-in</dt><dd class="mono">{{ live.issuer or "mem_ keys only" }}</dd>
+  </dl>
+  {% if live.error %}<p class="bad" role="alert">{{ live.error }}</p>{% endif %}
+</section>
+
+{% elif device %}
+<section class="card">
+  <h2>This computer</h2>
+  {% if tunnel.message and tunnel.state != "online" %}<p class="{{ 'bad' if tunnel.state in ('blocked', 'revoked') else '' }}" role="status">{{ tunnel.message }}</p>{% endif %}
+  {% if not ready %}<p class="bad">It has no certificate yet, so it can't go online.</p>
+  <form method="post" action="/admin/cloud/connect"><button>Finish connecting</button></form>{% endif %}
+  {% if live.error %}<p class="bad" role="alert">{{ live.error }}</p>{% endif %}
+  <h3>Add this address as a connector</h3>
+  <div class="copyable">
+    <pre id="cloud-url" class="key">{{ device.mcp_url }}</pre>
+    <button type="button" data-copy="cloud-url">Copy</button>
+  </div>
+  <p class="caption">In Claude.ai: Customize → Connectors → add a custom connector. In ChatGPT: Settings → Plugins.
+  You'll sign in to Memoreei Cloud and allow it; your messages stay on this computer.</p>
+  <dl class="facts">
+    <dt>Name</dt><dd>{{ device.name }}</dd>
+    <dt>Hostname</dt><dd class="mono">{{ device.hostname }}</dd>
+    {% if certificate %}<dt>Certificate</dt><dd>Valid until {{ certificate.not_after|date }}; renews itself from {{ certificate.renews_at|date }}{% if live.certificate and live.certificate.last_error %}<br><span class="bad">Last renewal failed: {{ live.certificate.last_error }}</span>{% endif %}</dd>{% endif %}
+    <dt>Last call</dt><dd>{{ live.last_call_at|ago|capitalize }}</dd>
+  </dl>
+  <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.</p>
+</section>
+
+{% else %}
+<section class="card">
+  <h2>Connect this computer</h2>
+  <p>Claude.ai and ChatGPT live on the internet, and your memoreei lives here. Memoreei Cloud joins them up,
+  with nothing to open on your router: this computer holds a connection out to our relay, and chatbots reach it through that.</p>
+  <ul>
+    <li>Your messages stay on this computer. The relay carries encrypted traffic it can't read: this computer holds the only key.</li>
+    <li>Only memoreei's search reaches the internet. This dashboard, and everything else, never does.</li>
+    <li>Each chatbot signs in to your Memoreei Cloud account, and every call is listed here.</li>
+  </ul>
+  {% if refused %}
+  <p class="bad">{{ refused }}</p>
+  {% else %}
+  <form method="post" action="/admin/cloud/connect" class="row">
+    <button>Connect to Memoreei Cloud</button>
+    <span class="caption">Opens a sign-in page at {{ cloud_url }}</span>
+  </form>
+  {% endif %}
+  <p class="caption">Rather use your own tunnel and sign-in? <a href="{{ advanced_url }}">Here's how</a>: memoreei works with Cloudflare Tunnel, Tailscale Funnel or your own proxy, and any OAuth server.</p>
+</section>
+{% endif %}
+
+{% if device or custom %}
+<section class="card">
+  {% if device and not custom %}
+  <div class="row" style="float:right">
+    <button class="danger small" hx-post="/admin/cloud/disconnect" hx-confirm="Disconnect this computer? Chatbot connectors using it stop working.">Disconnect</button>
+  </div>
+  {% endif %}
+  <h2>Who has called</h2>
+  {% if clients %}
+  <table>
+    <thead><tr><th scope="col">Client</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Calls</th></tr></thead>
+    <tbody>
+    {% for c in clients %}
+    <tr><td class="mono">{{ c.client }}{% if c.kind == "key" %} <span class="tag">key</span>{% endif %}</td><td>{{ c.first_seen_at|ago|capitalize }}</td><td>{{ c.last_seen_at|ago|capitalize }}</td><td>{{ c.calls }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <details>
+    <summary>The last {{ calls|length }} calls</summary>
+    <table>
+      <thead><tr><th scope="col">When</th><th scope="col">Client</th><th scope="col">What</th><th scope="col">From</th><th scope="col">Answer</th></tr></thead>
+      <tbody>
+      {% for c in calls %}
+      <tr><td>{{ c.at|ago|capitalize }}</td><td class="mono">{{ c.client }}</td><td>{{ c.tool or c.method or "?" }}</td><td class="mono">{{ c.peer or "?" }}</td><td>{{ c.status }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% else %}
+  <p class="muted">Nobody yet. Calls show up here as they happen: when, which chatbot, which tool.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
