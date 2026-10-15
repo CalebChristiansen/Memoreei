@@ -7,6 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Use memoreei from Claude.ai, ChatGPT and agents.** A second front door for the
+  internet, the public listener: `/mcp` and its OAuth protected-resource metadata
+  only, OAuth access tokens from one issuer (checked here against the issuer's keys)
+  or `mem_` keys, rate limits on failed attempts, and an access log of every call on
+  the dashboard's new Cloud page. Off unless you turn it on; the LAN listener is
+  unchanged.
+- **Memoreei Cloud**, optional: `memoreei cloud connect | status | disconnect`, or the
+  Cloud page. Enrolls the computer by device code, gets a certificate for its hostname
+  with a key made here, renews it, and holds a tunnel to the relay, which carries TLS it
+  can't open. Nothing contacts Memoreei Cloud until you connect; the offer on the status
+  page and at the end of `memoreei setup` hides with `MEMOREEI_CLOUD_OFFER=0`.
+- **Or your own:** `MEMOREEI_PUBLIC_PORT`, `MEMOREEI_PUBLIC_MCP_URL` and
+  `MEMOREEI_OAUTH_ISSUER` put the public listener behind any tunnel or proxy and any
+  OAuth server (Keycloak, Authentik, Auth0, …).
+- Chatbots reaching memoreei through the public listener are told that silence probably
+  means the computer is asleep or offline.
+
 ## [0.4.7] - 2026-10-12
 
 People by name or number, filters before ranking, and tools a small local model can use,

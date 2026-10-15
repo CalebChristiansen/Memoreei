@@ -32,6 +32,8 @@ src/memoreei/
 ├── imports.py             # registered import files, re-read by `sync`
 ├── catalog.py             # what can be set up (setup wizard and dashboard share it)
 ├── admin/                 # the /admin dashboard and its login rules
+├── public/                # the public listener: /mcp for the internet, OAuth tokens, access log
+├── cloud/                 # Memoreei Cloud (optional): enroll, certificate, tunnel to the relay
 ├── storage/database.py    # SQLite + FTS5 + vector search
 ├── search/hybrid.py       # Hybrid search with RRF fusion
 ├── connectors/            # iMessage, WhatsApp, Signal, Discord, Telegram, Slack, Email, …

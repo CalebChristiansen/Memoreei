@@ -199,9 +199,53 @@ Any MCP client with Streamable HTTP and custom headers works the same way. A los
 costs one `memoreei key revoke laptop`; `memoreei key list` shows when each key was last
 used.
 
-**claude.ai connectors** call from Anthropic's servers, not your browser, so they can't
-reach your home network. They need a public HTTPS URL (below), with the key in an
-`Authorization: Bearer <key>` header.
+### From Claude.ai, ChatGPT and agents
+
+Claude.ai and ChatGPT call from their own servers, not your browser, so they can't reach
+your home network, and they sign in with OAuth rather than a pasted key. Memoreei has a
+second, stricter front door for them, the **public listener**: it answers `/mcp` and the
+OAuth metadata that tells a chatbot where to sign in, and nothing else (the dashboard is
+never reachable through it). It takes OAuth access tokens from one sign-in server, and
+your `mem_` keys for agents that only send a header. Failed attempts are rate-limited,
+and every call is listed on the dashboard's Cloud page: when, which chatbot or key, which
+tool, from where. It's off until you choose one of these:
+
+#### Memoreei Cloud
+
+The easy way. `memoreei cloud connect` (or **Connect to Memoreei Cloud** in the
+dashboard) opens a sign-in page, you approve this computer there, and it gets an address
+like `https://k3x9q2mfa7td.memoreei.net/mcp` to add as a connector in Claude or ChatGPT.
+Nothing to open on your router: memoreei holds a connection out to the relay, and
+chatbots reach it through that. Your messages stay on your computer. The relay carries
+TLS it can't open: the certificate's key is made on your computer and never leaves it.
+`memoreei cloud status` says whether it's online; `memoreei cloud disconnect` takes the
+computer off your account. While the computer sleeps, chatbots can't reach it, and
+memoreei tells them to say so.
+
+Nothing contacts Memoreei Cloud until you connect. To hide the offer, set
+`MEMOREEI_CLOUD_OFFER=0`.
+
+#### Your own tunnel and sign-in
+
+Everything Memoreei Cloud does uses standards, so you can bring your own. Turn on the
+public listener and point any tunnel or proxy at it: Cloudflare Tunnel, Tailscale Funnel,
+ngrok, or Caddy on a machine with a public address.
+
+```bash
+MEMOREEI_PUBLIC_PORT=3680                                  # on 127.0.0.1 unless MEMOREEI_PUBLIC_HOST says otherwise
+MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com/mcp   # what clients use; tokens must be for this audience
+MEMOREEI_OAUTH_ISSUER=https://id.example.com/realms/me     # optional: Keycloak, Authentik, Auth0, …
+MEMOREEI_TRUSTED_PROXY=127.0.0.1                           # optional: read the caller's address from X-Forwarded-For
+```
+
+With an issuer, memoreei checks access tokens itself against the issuer's published keys
+(found through its RFC 8414 or OpenID metadata): an asymmetric signature, `iss` exactly
+the issuer, `aud` your `/mcp` URL, in date. Your issuer does the signing in, the
+consent and the client registration that Claude and ChatGPT expect (dynamic or
+metadata-document client registration, PKCE). Without one, the public listener takes
+`mem_` keys only. To serve TLS from memoreei itself, add `MEMOREEI_PUBLIC_TLS_CERT` and
+`MEMOREEI_PUBLIC_TLS_KEY`. The public listener has one identity at a time, so it's this
+or Memoreei Cloud.
 
 ---
 
@@ -240,7 +284,8 @@ Dashboard sessions and API keys are separate: neither opens the other.
 
 ### HTTPS
 
-Plain HTTP is fine on a home network or a VPN. For anything public, put HTTPS in front.
+Plain HTTP is fine on a home network or a VPN. For anything public, put HTTPS in front,
+and prefer the public listener (above), which answers only `/mcp`.
 [Caddy](https://caddyserver.com) gets its own certificate:
 
 ```
