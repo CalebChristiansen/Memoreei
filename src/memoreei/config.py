@@ -148,6 +148,21 @@ class Config:
     auto_sync: bool = False
     sync_interval: int = 300
 
+    # The public listener (memoreei.public): /mcp for the internet, behind OAuth tokens
+    # and mem_ keys. Off unless a port is set or Memoreei Cloud is connected.
+    public_port: int | None = None
+    public_host: str = "127.0.0.1"
+    public_mcp_url: str | None = None
+    oauth_issuer: str | None = None
+    public_tls_cert: str | None = None
+    public_tls_key: str | None = None
+    trusted_proxy: str | None = None
+
+    # Memoreei Cloud (memoreei.cloud): where to enroll, and whether to offer it.
+    cloud_url: str = "https://auth.dev.memoreei.com"
+    cloud_tunnel_url: str | None = None
+    cloud_offer: bool = True
+
     # Discord
     discord_token: str | None = None
     discord_channel_id: str | None = None
@@ -229,6 +244,16 @@ def get_config() -> Config:
             openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
             auto_sync=os.environ.get("AUTO_SYNC", "").lower() in ("1", "true", "yes"),
             sync_interval=int(os.environ.get("AUTO_SYNC_INTERVAL") or os.environ.get("SYNC_INTERVAL") or "300"),
+            public_port=int(os.environ["MEMOREEI_PUBLIC_PORT"]) if os.environ.get("MEMOREEI_PUBLIC_PORT") else None,
+            public_host=os.environ.get("MEMOREEI_PUBLIC_HOST") or "127.0.0.1",
+            public_mcp_url=(os.environ.get("MEMOREEI_PUBLIC_MCP_URL") or "").rstrip("/") or None,
+            oauth_issuer=os.environ.get("MEMOREEI_OAUTH_ISSUER") or None,
+            public_tls_cert=os.environ.get("MEMOREEI_PUBLIC_TLS_CERT") or None,
+            public_tls_key=os.environ.get("MEMOREEI_PUBLIC_TLS_KEY") or None,
+            trusted_proxy=os.environ.get("MEMOREEI_TRUSTED_PROXY") or None,
+            cloud_url=(os.environ.get("MEMOREEI_CLOUD_URL") or "https://auth.dev.memoreei.com").rstrip("/"),
+            cloud_tunnel_url=(os.environ.get("MEMOREEI_CLOUD_TUNNEL_URL") or "").rstrip("/") or None,
+            cloud_offer=os.environ.get("MEMOREEI_CLOUD_OFFER", "1").lower() not in ("0", "false", "no", "off"),
             discord_token=os.environ.get("DISCORD_BOT_TOKEN") or None,
             discord_channel_id=os.environ.get("DISCORD_CHANNEL_ID") or None,
             telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,

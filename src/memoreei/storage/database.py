@@ -112,6 +112,31 @@ CREATE TABLE IF NOT EXISTS admin_tokens (
     expires_at INTEGER NOT NULL
 );
 
+-- Every authenticated call to the public listener (memoreei.public): who, from where,
+-- what. Never the arguments or the answer. Kept 90 days.
+CREATE TABLE IF NOT EXISTS access_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    peer TEXT,
+    kind TEXT NOT NULL,
+    client TEXT,
+    subject TEXT,
+    method TEXT,
+    tool TEXT,
+    status INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS access_log_at ON access_log(at);
+
+-- Each OAuth client or key the public listener has let in, and when it first did.
+CREATE TABLE IF NOT EXISTS access_clients (
+    kind TEXT NOT NULL,
+    client TEXT NOT NULL,
+    first_seen_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    calls INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (kind, client)
+);
+
 CREATE TABLE IF NOT EXISTS import_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,
@@ -1083,6 +1108,47 @@ class Database:
             (when if when is not None else int(time.time()), name),
         )
         await self._db.commit()
+
+    # ── The public listener's access log ────────────────────────────────────
+    # See memoreei.public.
+
+    async def record_access(self, entry: dict[str, Any], keep_seconds: int = 90 * 86400,
+                            when: int | None = None) -> None:
+        assert self._db is not None
+        now = when if when is not None else int(time.time())
+        client = entry.get("client") or "?"
+        await self._db.execute(
+            "INSERT INTO access_log (at, peer, kind, client, subject, method, tool, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (now, entry.get("peer"), entry["kind"], client, entry.get("subject"),
+             entry.get("method"), entry.get("tool"), int(entry.get("status") or 0)),
+        )
+        await self._db.execute(
+            "INSERT INTO access_clients (kind, client, first_seen_at, last_seen_at, calls) "
+            "VALUES (?, ?, ?, ?, 1) ON CONFLICT(kind, client) DO UPDATE SET "
+            "last_seen_at = excluded.last_seen_at, calls = calls + 1",
+            (entry["kind"], client, now, now),
+        )
+        if now - getattr(self, "_access_pruned_at", 0) >= 3600:  # an hourly sweep is plenty
+            self._access_pruned_at = now
+            await self._db.execute("DELETE FROM access_log WHERE at < ?", (now - keep_seconds,))
+        await self._db.commit()
+
+    async def list_access(self, limit: int = 100) -> list[dict[str, Any]]:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT at, peer, kind, client, subject, method, tool, status FROM access_log "
+            "ORDER BY id DESC LIMIT ?", (limit,)
+        ) as cursor:
+            return [dict(row) for row in await cursor.fetchall()]
+
+    async def list_access_clients(self) -> list[dict[str, Any]]:
+        assert self._db is not None
+        async with self._db.execute(
+            "SELECT kind, client, first_seen_at, last_seen_at, calls FROM access_clients "
+            "ORDER BY last_seen_at DESC"
+        ) as cursor:
+            return [dict(row) for row in await cursor.fetchall()]
 
     # ── Dashboard logins ────────────────────────────────────────────────────
     # Hashes of one-time login tokens and session tokens; see memoreei.admin.auth.

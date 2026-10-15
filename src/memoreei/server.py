@@ -678,8 +678,34 @@ def build_network_server() -> FastMCP:
     return server
 
 
+# Said only to chatbots reaching memoreei from the internet (memoreei.public), where the
+# usual reason for silence is a computer asleep or offline. Claude.ai otherwise calls it
+# "server-not-responding" and suggests restarting a server the person doesn't have.
+PUBLIC_NOTE = """
+Memoreei runs on the person's own computer. If this connector stops answering, that \
+computer is probably asleep or offline: say so, and suggest they wake it or check it is \
+connected, rather than retrying or reinstalling anything.
+"""
+
+
+def build_public_server() -> FastMCP:
+    """The network tools, for the public listener: the same surface as the LAN's."""
+    server = _Server(
+        "memoreei",
+        instructions=INSTRUCTIONS + PUBLIC_NOTE,
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+    _add_tools(server, NETWORK_TOOLS)
+    return server
+
+
 def build_http_app(verify: "Verifier") -> Any:
     """The HTTP server: MCP at /mcp behind bearer keys, and the dashboard at /admin.
+
+    It also runs the public listener when one is set up (memoreei.public.runtime),
+    a separate, stricter front door for the internet.
 
     The dashboard has its own guard (memoreei.admin.auth) and never accepts API keys;
     everything else needs one. The background sync loop runs here, once per process,
@@ -687,6 +713,7 @@ def build_http_app(verify: "Verifier") -> Any:
     """
     from memoreei.admin.app import build_admin_app
     from memoreei.auth import BearerAuthMiddleware
+    from memoreei.public.runtime import public_runtime
     from memoreei.service._systemd import bundle_root
     from memoreei.updates import update_checks
 
@@ -696,8 +723,9 @@ def build_http_app(verify: "Verifier") -> Any:
     @asynccontextmanager
     async def lifespan(a: Any) -> AsyncIterator[None]:
         # Only the Linux packages look for updates here; Memoreei.app does its own.
+        # The public listener (and Memoreei Cloud) runs only when set up: see memoreei.public.
         async with inner_lifespan(a), _auto_sync(), _warm_search(), \
-                update_checks(enabled=bundle_root() is not None):
+                update_checks(enabled=bundle_root() is not None), public_runtime(verify):
             yield
 
     app.router.lifespan_context = lifespan

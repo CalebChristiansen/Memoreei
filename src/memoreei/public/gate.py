@@ -1,0 +1,247 @@
+"""The public listener's front door.
+
+Everything that reaches memoreei from the internet comes through here, whatever
+carried it: Memoreei Cloud's relay, or an expert's own tunnel or proxy. Three
+paths answer and nothing else does:
+
+  /mcp                                         the network tools, with a bearer
+  /.well-known/oauth-protected-resource        RFC 9728 metadata naming the
+  /.well-known/oauth-protected-resource/mcp    issuer (when there is one)
+
+Everything else is 404: /admin is never reachable from here, and neither is any
+file a scanner fishes for (they ask for /.env within seconds of a hostname
+appearing in certificate logs).
+
+A bearer is either one of memoreei's own ``mem_`` keys or an access token from
+the configured issuer (memoreei.public.tokens). Without one, /mcp answers 401
+with ``WWW-Authenticate: Bearer resource_metadata=...``, which is how Claude.ai
+and ChatGPT find where to sign in. That hint is what the LAN listener leaves out
+on purpose, and why this is a separate front door rather than a setting on it.
+
+Failed requests (no bearer, a bad one, or a path that doesn't exist) count
+against the caller's address and against everyone; past either limit the answer
+is 429. A caller over its own limit is refused before its bearer is looked at,
+so a limit can't be used to test keys. Successful calls are never counted:
+Claude's and OpenAI's servers share addresses, and a busy chatbot isn't an
+attacker.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import time
+from collections import deque
+from typing import Any, Awaitable, Callable
+
+from memoreei.auth import KEY_PREFIX, Verifier, _bearer_token
+from memoreei.public.tokens import TokenRejected, TokenVerifier
+
+log = logging.getLogger("memoreei.public")
+
+PRM_PATHS = ("/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp")
+MAX_BODY = 1 << 20
+PER_ADDRESS = (20, 60)  # failures, seconds
+OVERALL = (120, 60)
+
+
+class FailureLimiter:
+    """Counts failures in a sliding window, per address and in all."""
+
+    def __init__(self, per_address: tuple[int, int] = PER_ADDRESS, overall: tuple[int, int] = OVERALL,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.per_address, self.overall, self.clock = per_address, overall, clock
+        self._by_address: dict[str, deque[float]] = {}
+        self._all: deque[float] = deque()
+
+    @staticmethod
+    def _trim(q: deque[float], now: float, window: int) -> None:
+        while q and q[0] <= now - window:
+            q.popleft()
+
+    def address_blocked(self, address: str) -> bool:
+        q = self._by_address.get(address)
+        if q is None:
+            return False
+        self._trim(q, self.clock(), self.per_address[1])
+        if not q:
+            del self._by_address[address]
+            return False
+        return len(q) >= self.per_address[0]
+
+    def overall_blocked(self) -> bool:
+        self._trim(self._all, self.clock(), self.overall[1])
+        return len(self._all) >= self.overall[0]
+
+    def fail(self, address: str) -> None:
+        now = self.clock()
+        self._by_address.setdefault(address, deque()).append(now)
+        self._all.append(now)
+        if len(self._by_address) > 10_000:  # a sweep of addresses: drop the quiet ones
+            for addr in [a for a, q in self._by_address.items() if not q or q[-1] <= now - self.per_address[1]]:
+                del self._by_address[addr]
+
+
+Caller = dict[str, Any]
+Recorder = Callable[[Caller], Awaitable[None]]
+
+
+def rpc_summary(body: bytes) -> tuple[str | None, str | None]:
+    """The JSON-RPC method(s) in a request body, and the tool if it calls one. Best effort."""
+    try:
+        msg = json.loads(body) if body else None
+    except ValueError:
+        return None, None
+    msgs = msg if isinstance(msg, list) else [msg]
+    methods, tools = [], []
+    for m in msgs:
+        if not isinstance(m, dict) or not isinstance(m.get("method"), str):
+            continue
+        methods.append(m["method"][:64])
+        params = m.get("params")
+        if m["method"] == "tools/call" and isinstance(params, dict) and isinstance(params.get("name"), str):
+            tools.append(params["name"][:64])
+    return (",".join(methods) or None), (",".join(tools) or None)
+
+
+class PublicGate:
+    def __init__(
+        self,
+        mcp_app: Any,
+        *,
+        resource: str,
+        keys: Verifier,
+        tokens: TokenVerifier | None = None,
+        limiter: FailureLimiter | None = None,
+        record: Recorder | None = None,
+        peer_of: Callable[[dict], str] | None = None,
+        resource_name: str = "memoreei",
+    ) -> None:
+        self.mcp_app = mcp_app
+        self.resource = resource
+        origin = resource[: -len("/mcp")] if resource.endswith("/mcp") else resource.rstrip("/")
+        self.metadata_url = origin + PRM_PATHS[0]
+        self.keys, self.tokens = keys, tokens
+        self.limiter = limiter or FailureLimiter()
+        self.record = record
+        self.peer_of = peer_of or (lambda scope: (scope.get("client") or ("?", 0))[0])
+        self.resource_name = resource_name
+
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        if scope["type"] == "lifespan":  # the runtime runs the MCP app's lifespan itself
+            while (await receive())["type"] != "lifespan.shutdown":
+                await send({"type": "lifespan.startup.complete"})
+            await send({"type": "lifespan.shutdown.complete"})
+            return
+        if scope["type"] != "http":
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+            return
+
+        peer = self.peer_of(scope)
+        method, path = scope.get("method", "?"), scope.get("path", "?")
+
+        if self.limiter.address_blocked(peer):
+            log.warning("%s %s from %s refused: too many failures", method, path, peer)
+            return await _reply(send, 429, {"error": "slow_down"}, [(b"retry-after", b"60")])
+
+        if path in PRM_PATHS and method in ("GET", "HEAD") and self.tokens is not None:
+            return await _reply(send, 200, {
+                "resource": self.resource,
+                "authorization_servers": [self.tokens.issuer],
+                "bearer_methods_supported": ["header"],
+                "resource_name": self.resource_name,
+            }, [(b"cache-control", b"public, max-age=300")])
+        if path != "/mcp":
+            self.limiter.fail(peer)
+            log.info("%s %s from %s: 404", method, path[:120], peer)
+            return await _reply(send, 404, {"error": "not_found"})
+
+        body, too_big = await _read_body(receive)
+        if too_big:
+            return await _reply(send, 413, {"error": "request too large"})
+
+        token = _bearer_token(scope.get("headers", []))
+        caller: Caller | None = None
+        why = "no bearer"
+        if token and token.startswith(KEY_PREFIX):
+            name = await self.keys(token)
+            caller = {"kind": "key", "client": name, "subject": None} if name else None
+            why = "invalid key"
+        elif token and self.tokens is not None:
+            try:
+                claims = await self.tokens.verify(token)
+                caller = {"kind": "oauth", "client": claims.client_id, "subject": claims.subject}
+            except TokenRejected as e:
+                why = f"token {e}"
+        elif token:
+            why = "a token, but no issuer is configured"
+
+        if caller is None:
+            self.limiter.fail(peer)
+            log.warning("%s %s from %s rejected: %s", method, path, peer, why)
+            if self.limiter.overall_blocked():
+                return await _reply(send, 429, {"error": "slow_down"}, [(b"retry-after", b"60")])
+            challenge = "Bearer"
+            if self.tokens is not None:
+                challenge += f' resource_metadata="{self.metadata_url}"'
+            if token:
+                challenge += ', error="invalid_token"'
+            return await _reply(send, 401, {"error": "invalid_token" if token else "unauthorized",
+                                            "error_description": why},
+                                [(b"www-authenticate", challenge.encode())])
+
+        rpc, tool = rpc_summary(body)
+        status = 0
+        sent_body = False
+
+        async def replay() -> dict:
+            nonlocal sent_body
+            if not sent_body:
+                sent_body = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
+
+        async def watch(message: dict) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        scope.setdefault("state", {})["memoreei_caller"] = caller
+        try:
+            await self.mcp_app(scope, replay, watch)
+        finally:
+            log.info("%s %s %d from %s %s=%s%s", method, path, status, peer, caller["kind"],
+                     caller["client"], f" tool={tool}" if tool else "")
+            if self.record is not None:
+                try:
+                    await self.record({**caller, "peer": peer, "method": rpc, "tool": tool, "status": status})
+                except Exception as e:  # the access log never takes a call down with it
+                    log.warning("access log: %r", e)
+
+
+async def _read_body(receive: Callable) -> tuple[bytes, bool]:
+    chunks, size = [], 0
+    while True:
+        message = await receive()
+        if message["type"] == "http.disconnect":
+            break
+        chunk = message.get("body", b"")
+        size += len(chunk)
+        if size > MAX_BODY:
+            return b"", True
+        chunks.append(chunk)
+        if not message.get("more_body"):
+            break
+    return b"".join(chunks), False
+
+
+async def _reply(send: Callable, status: int, obj: dict, headers: list[tuple[bytes, bytes]] | None = None) -> None:
+    body = json.dumps(obj).encode()
+    await send({
+        "type": "http.response.start",
+        "status": status,
+        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode()),
+                    *(headers or [])],
+    })
+    await send({"type": "http.response.body", "body": body})
