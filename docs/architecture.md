@@ -21,6 +21,7 @@ Memoreei is an MCP (Model Context Protocol) server that aggregates personal mess
                │              Storage Layer                    │
                │          storage/database.py                  │
                │    SQLite + FTS5 (keyword) + float32 blobs   │
+               │    encrypted by SQLCipher: storage/key.py    │
                └──────────────────────────────────────────────┘
 ```
 
@@ -53,6 +54,14 @@ Filters (`participant`, `source`, `after`, `before`) narrow both rankers before 
 A `participant` is resolved first (`search/people.py`, `Directory`): a number or address is normalized and matched against iMessage handles and the `sender_phone` WhatsApp and Signal store; a name, or part of one, matches stored sender names and contact names, and contacts add that person's numbers. Only shared identifiers link one app's sender to another's. `participant_scope` then adds the person's one-to-one chats (`conversation`) or every chat they wrote in (`any_chat`).
 
 ## Database Schema
+
+The database is a SQLCipher file: every page is AES-256 on disk, opened with a raw
+256-bit key (`PRAGMA key = "x'…'"`, so no key derivation at each open). Every connection
+comes from `storage/key.py` (`connect`, and `connect_async` for aiosqlite), which finds
+the key (`MEMOREEI_DB_KEY`, `memoreei.key` beside the database, or the desktop keyring)
+and converts a plain database from an earlier memoreei on its first open
+(`sqlcipher_export` into a copy, checked, swapped in). FTS5 and the embedding blobs work
+unchanged.
 
 ### Core Table
 
@@ -104,6 +113,13 @@ Signal also keeps `signal_seen`: each message read so far and how long it was th
 later reaction, edit or deletion brings its memoreei up to date. Lengths only, never content.
 
 On the next sync, the connector fetches only messages newer than its checkpoint.
+
+### Secrets
+
+`secrets` (`storage/vault.py`): name, value, updated_at. Connector tokens and passwords
+(the catalog's secret rows, and `OPENAI_API_KEY`), saved by the dashboard and `memoreei
+setup`, and moved in from `config.env` when found there at startup. They reach the
+connectors as environment variables at load; real environment variables win.
 
 ## Connector Architecture
 

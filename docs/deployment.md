@@ -36,8 +36,9 @@ memoreei setup
 ```
 
 This walks you through choosing an embedding provider, background sync and connectors,
-and writes everything to `config.env` in the home directory (mode 600). At the end it offers to
-create the first API key for the network server.
+and writes settings to `config.env` in the home directory (mode 600) and tokens and
+passwords into the encrypted database. At the end it offers to create the first API key
+for the network server.
 
 You can also configure a single connector directly:
 
@@ -46,7 +47,8 @@ memoreei setup gmail
 memoreei setup discord
 ```
 
-Or edit `config.env` by hand (see `.env.example` for all variables).
+Or edit `config.env` by hand (see `.env.example` for all variables). A token or password
+written there moves into the encrypted database at the next start.
 
 ### Home directory
 
@@ -56,12 +58,29 @@ Everything lives in one directory: `~/.local/share/memoreei` on Linux
 
 | File | What |
 |------|------|
-| `config.env` | settings and connector credentials |
-| `memoreei.db` | the memories, API key hashes and the list of registered import files |
+| `config.env` | settings: ports, paths, flags |
+| `memoreei.db` | the memories, connector tokens and passwords, API key hashes and the list of registered import files; encrypted (SQLCipher) |
+| `memoreei.key` | the database's key, mode 600, unless it's in GNOME Keyring or KWallet (see below) |
 | `memoreei.log` | the service log, on macOS |
 
 Use another directory with `memoreei --home <dir> …` or `MEMOREEI_HOME=<dir>`. Back up
-this directory and you have backed up memoreei.
+this directory and you have backed up memoreei, as long as the key is in it: on a Linux
+desktop the key may be in the keyring instead, as "Memoreei database key", and a backup
+of `memoreei.db` without its key is noise.
+
+### The database key
+
+`memoreei.db` is always encrypted, with a random 256-bit key made on first start. It's
+looked for in `MEMOREEI_DB_KEY` (64 hex characters, for containers), then
+`memoreei.key` beside the database, then the desktop keyring (Secret Service: GNOME
+Keyring, KWallet). A new key goes into the keyring when there is one and it's unlocked,
+and into `memoreei.key` otherwise: on a Mac, a headless Linux box, and elsewhere.
+`memoreei config` says where it is. A database from an earlier memoreei is encrypted on
+its first start.
+
+If the key can't be found, or is the wrong one, memoreei stops and says where it
+looked. A locked keyring is one cause: the service started before anyone logged in. The
+Linux unit restarts until it can read it.
 
 ### Run as a local MCP server (stdio)
 
@@ -140,14 +159,16 @@ service start at boot. `memoreei service status`, `logs` and `uninstall` do what
 
 All configuration is via environment variables. They are read from the environment,
 then a `.env` in the current directory (for development), then
-`$MEMOREEI_HOME/config.env`; earlier sources win.
+`$MEMOREEI_HOME/config.env` and the tokens and passwords kept in the database; earlier
+sources win.
 
 ### Core
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MEMOREEI_HOME` | `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere | Directory holding `config.env` and `memoreei.db` |
-| `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | Path to SQLite database file |
+| `MEMOREEI_HOME` | `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere | Directory holding `config.env`, `memoreei.db` and `memoreei.key` |
+| `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | Path to the (encrypted) SQLite database file; its key file sits beside it |
+| `MEMOREEI_DB_KEY` | — | The database key, 64 hex characters, in place of `memoreei.key` or the keyring |
 | `EMBEDDING_PROVIDER` | `fastembed` | `fastembed` (local) or `openai` |
 | `OPENAI_API_KEY` | — | Required if `EMBEDDING_PROVIDER=openai` |
 | `AUTO_SYNC` | `false` | Enable background sync on server start |
@@ -224,5 +245,5 @@ then a `.env` in the current directory (for development), then
 
 | Variable | Description |
 |----------|-------------|
-| `SIGNAL_DB_KEY` | Signal Desktop's database key. Written by *Connect* (Sources, or `memoreei setup signal`), which reads it from the system keyring once |
+| `SIGNAL_DB_KEY` | Signal Desktop's database key. Written by *Connect* (Sources, or `memoreei setup signal`), which reads it from the system keyring once and keeps it in the encrypted database |
 | `SIGNAL_DIR` | Signal Desktop's data folder, if it isn't in its usual place |

@@ -18,7 +18,8 @@ Configure connectors interactively:
 memoreei setup
 ```
 
-That writes `config.env` in memoreei's home (`~/.local/share/memoreei` on Linux). For
+That writes `config.env` in memoreei's home (`~/.local/share/memoreei` on Linux), and
+puts tokens and passwords in its encrypted database. For
 development you can instead keep a `.env` in the checkout, which overrides it while you
 work from that directory:
 
