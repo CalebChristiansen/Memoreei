@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set nav = "none" %}
+{% block title %}Sign in · Memoreei{% endblock %}
+{% block solo %}
+<img class="logo" src="{{ static("icon.svg") }}" alt="Memoreei">
+<div class="msg">
+  <h1>Sign in to Memoreei</h1>
+</div>
+<form method="post" action="/admin/signin" class="card stack signin">
+  {% if error %}<p class="problem" role="alert"><b>{{ error }}</b></p>{% endif %}
+  <input type="hidden" name="next" value="{{ next }}">
+  {# For password managers, which file a password under a user name. There's only one account. #}
+  <input type="text" name="username" value="memoreei" autocomplete="username" hidden>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+  </div>
+  {% if totp %}
+  <div class="field">
+    <label for="code">Code from your authenticator app</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
+    <p class="hint">Lost your phone? A recovery code works here too.</p>
+  </div>
+  {% endif %}
+  <button>Sign in</button>
+</form>
+<p class="caption">{% if local %}{% if in_app() %}Or choose <b>Open Dashboard</b> in the Memoreei menu in the menu bar.{% else %}Or sign in without it: <code>memoreei admin-url</code>{% endif %}
+{% else %}Forgot it? Reset it on the computer memoreei runs on: <code>memoreei admin reset</code>{% endif %}</p>
+{% endblock %}

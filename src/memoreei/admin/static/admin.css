@@ -259,3 +259,9 @@ pre.log { margin: 0; flex-grow: 1; padding: 24px; border-radius: var(--radius-bu
           white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.log .warn { color: var(--amber); }
 pre.log .err { color: #F08A74; }
+
+/* Signing in, 2FA, and approving a chatbot away from the computer. */
+form.signin { width: 100%; max-width: 360px; text-align: left; }
+.qr { align-self: flex-start; line-height: 0; }
+.qr svg { display: block; width: 220px; height: auto; border-radius: var(--radius-sm); }
+p.code { font: 700 36px/44px var(--mono); letter-spacing: .2em; }

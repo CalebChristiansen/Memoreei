@@ -86,10 +86,12 @@ class PublicRuntime:
     def __init__(self, mcp_app: Any, keys: Verifier,
                  record: Callable[[dict], Awaitable[None]] | None = None,
                  state: CloudState | None = None,
-                 oauth_store: Callable[[], Awaitable[Any]] | None = None) -> None:
+                 oauth_store: Callable[[], Awaitable[Any]] | None = None,
+                 admin_open: Callable[[], Awaitable[bool]] | None = None) -> None:
         self.mcp_app = mcp_app
         self.keys = keys
         self.oauth_store = oauth_store  # () -> OAuthStore; without it, mem_ keys only
+        self.admin_open = admin_open    # () -> whether the dashboard answers here (memoreei.admin.account)
         self._record = record
         self.state = state or CloudState()
         self.limiter = FailureLimiter()
@@ -167,14 +169,21 @@ class PublicRuntime:
         self._save_status()
 
     async def _start(self, p: Plan) -> None:
-        signin = None
+        signin = admin = None
         if p.issuer and self.oauth_store is not None:
             from memoreei.oauth.notify import notify
             from memoreei.oauth.server import SignIn
 
-            signin = SignIn(self.oauth_store, p.issuer, p.resource, notify=notify)
+            signin = SignIn(self.oauth_store, p.issuer, p.resource, notify=notify, admin_open=self.admin_open)
+        if p.issuer and self.admin_open is not None:
+            # The dashboard, for when it's opened from anywhere. It checks Origin and Host
+            # against the public address, so without one it never answers here.
+            from memoreei.admin.app import build_admin_app
+
+            admin = build_admin_app(public_origin=p.issuer)
         gate = PublicGate(self.mcp_app, resource=p.resource, keys=self.keys, signin=signin,
-                          limiter=self.limiter, record=self.record, peer_of=self.peer_of)
+                          limiter=self.limiter, record=self.record, peer_of=self.peer_of,
+                          admin=admin, admin_open=self.admin_open)
         self.listener = Listener(gate, p.host, p.port, p.cert, p.key)
         await self.listener.start()
         scheme = "https" if p.cert else "http"
@@ -286,9 +295,14 @@ async def public_runtime(keys: Verifier) -> AsyncIterator[PublicRuntime]:
 
         return OAuthStore(await _get_db())
 
+    async def admin_open() -> bool:
+        from memoreei.admin.account import account_store
+
+        return await (await account_store()).remote_open()
+
     app = build_public_server().streamable_http_app()
     async with app.router.lifespan_context(app):
-        runtime = RUNTIME = PublicRuntime(app, keys, record, oauth_store=oauth_store)
+        runtime = RUNTIME = PublicRuntime(app, keys, record, oauth_store=oauth_store, admin_open=admin_open)
         task = asyncio.create_task(runtime.run(), name="public-runtime")
         try:
             yield runtime

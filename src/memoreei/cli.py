@@ -22,7 +22,9 @@ service_app = typer.Typer(help="Manage the Memoreei background service (macOS la
 key_app = typer.Typer(help="Manage API keys for the network server")
 cloud_app = typer.Typer(help="Memoreei Cloud: use this memoreei from Claude.ai, ChatGPT and agents")
 chatbots_app = typer.Typer(help="Chatbots and agents signed in to this memoreei: approve, list, remove")
+admin_app = typer.Typer(help="The dashboard's password, and whether it answers away from this computer")
 app.add_typer(import_app, name="import")
+app.add_typer(admin_app, name="admin")
 app.add_typer(service_app, name="service")
 app.add_typer(key_app, name="key")
 app.add_typer(cloud_app, name="cloud")
@@ -773,6 +775,22 @@ def cloud_connect(
     typer.echo(f"  ✓ Connected.\n\nAdd this address as a connector in Claude or ChatGPT:\n\n  {device.mcp_url}\n")
     typer.echo("The memoreei service picks this up within a few seconds; if it isn't running, "
                "set it up with: memoreei service install")
+    _offer_password()
+
+
+def _offer_password() -> None:
+    """After connecting, suggest a password, for the dashboard from anywhere. Says only."""
+    from memoreei.admin.account import AccountStore
+    from memoreei.config import get_config
+
+    async def _has() -> bool:
+        async with _open_db() as db:
+            return await AccountStore(db).has_password()
+
+    if not get_config().password_offer or asyncio.run(_has()):
+        return
+    typer.echo("\nTo manage memoreei and approve chatbots from anywhere, not just this computer, set a "
+               "password (optional):\n\n  memoreei admin password\n  memoreei admin remote on")
 
 
 @cloud_app.command(name="status")
@@ -1013,6 +1031,112 @@ def admin_url() -> None:
         typer.echo(_tunnel_hint(get_config().port), err=True)
     typer.echo(link)
     typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
+
+
+# ── The dashboard's password, 2FA and access from anywhere (memoreei.admin.account) ──
+
+
+def _account_store_run(fn):  # type: ignore[no-untyped-def]
+    """Run fn(AccountStore) against this home's database."""
+    from memoreei.admin.account import AccountStore
+
+    async def _run():  # type: ignore[no-untyped-def]
+        async with _open_db() as db:
+            return await fn(AccountStore(db))
+
+    return asyncio.run(_run())
+
+
+@admin_app.command(name="password")
+def admin_password(
+    from_stdin: bool = typer.Option(False, "--stdin", help="Read the new password from standard input, for scripts"),
+) -> None:
+    """Set or change the dashboard's password. Every browser signed in with the old one is signed out."""
+    import sys
+
+    from memoreei.admin import credentials
+
+    if from_stdin:
+        password = sys.stdin.readline().rstrip("\r\n")
+    else:
+        password = typer.prompt("New password", hide_input=True, confirmation_prompt="Again")
+    problem = credentials.password_problem(password)
+    if problem:
+        typer.echo(f"  ✗ {problem}", err=True)
+        raise typer.Exit(1)
+    hashed = credentials.hash_password(password)
+
+    async def _set(store):  # type: ignore[no-untyped-def]
+        had = await store.has_password()
+        await store.set_password(hashed)
+        return had, (await store.account())["remote"]
+
+    had, remote = _account_store_run(_set)
+    typer.echo(f"  ✓ Password {'changed: browsers signed in with the old one are signed out' if had else 'set'}.")
+    if not remote:
+        typer.echo("The dashboard still answers only on this computer. To open it from anywhere too: "
+                   "memoreei admin remote on")
+
+
+@admin_app.command(name="reset")
+def admin_reset(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask first"),
+) -> None:
+    """Forgot the password, or lost your authenticator? Remove both, here on the computer."""
+    if not yes:
+        typer.confirm("Remove the dashboard's password and 2FA, and close it to everywhere but this computer?",
+                      abort=True)
+
+    async def _reset(store):  # type: ignore[no-untyped-def]
+        await store.reset()
+
+    _account_store_run(_reset)
+    typer.echo("  ✓ No password, no 2FA: the dashboard answers only on this computer, to a one-time link "
+               "(memoreei admin-url). Set a new password with: memoreei admin password")
+
+
+@admin_app.command(name="remote")
+def admin_remote(
+    switch: str = typer.Argument(..., help="on or off"),
+) -> None:
+    """Let the dashboard answer away from this computer (on), or not (off). On needs a password."""
+    if switch not in ("on", "off"):
+        typer.echo("Say on or off.", err=True)
+        raise typer.Exit(2)
+    on = switch == "on"
+
+    async def _switch(store):  # type: ignore[no-untyped-def]
+        ok = await store.set_remote(on)
+        if ok and not on:
+            await store.end_sessions("password")
+        return ok
+
+    if not _account_store_run(_switch):
+        typer.echo("Set a password first, with: memoreei admin password", err=True)
+        raise typer.Exit(1)
+    typer.echo("  ✓ The dashboard answers away from this computer now, to the password." if on else
+               "  ✓ The dashboard answers only on this computer again; browsers signed in from away are signed out.")
+
+
+@admin_app.command(name="status")
+def admin_status() -> None:
+    """Whether the dashboard has a password and 2FA, and answers away from this computer."""
+    async def _read(store):  # type: ignore[no-untyped-def]
+        return await store.account(), await store.recovery_codes_left(), await store.sessions(), await store.signins(5)
+
+    account, left, sessions, signins = _account_store_run(_read)
+    if not account["password_hash"]:
+        typer.echo("Password: none. The dashboard answers only on this computer (memoreei admin-url).")
+        return
+    typer.echo(f"Password: set {_fmt_time(account['password_set_at'])}")
+    typer.echo(f"2FA: on since {_fmt_time(account['totp_set_at'])}, {left} recovery codes left"
+               if account["totp_secret"] else "2FA: off (set it up on the dashboard's Security page)")
+    typer.echo("From anywhere: " + ("on" if account["remote"] else "off (memoreei admin remote on)"))
+    typer.echo(f"Signed in: {sum(s['how'] == 'password' for s in sessions)} by password, "
+               f"{sum(s['how'] == 'link' for s in sessions)} by link")
+    for s in signins:
+        typer.echo(f"  {_fmt_time(s['at'])}  {'signed in' if s['ok'] else 'refused'}  from {s['peer'] or '?'}"
+                   f"  ({s['why']})")
 
 
 def _tell(title: str, text: str) -> None:

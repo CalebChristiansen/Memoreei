@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Set up 2FA · Memoreei{% endblock %}
+{% block main_class %} class="narrow"{% endblock %}
+{% block main %}
+<a class="back" href="/admin/security">← Security</a>
+<header class="page-head">
+  <div>
+    <h1>Set up two-step sign-in</h1>
+    <p>Scan this with your authenticator app, then type the code it shows.</p>
+  </div>
+</header>
+
+<section class="card">
+  {% if error %}<p class="problem" role="alert"><b>{{ error }}</b></p>{% endif %}
+  <div class="qr">{{ qr }}</div>
+  <details>
+    <summary>Can't scan it? Type this key instead</summary>
+    <div class="copyable">
+      <pre id="totp-key" class="key">{{ secret }}</pre>
+      <button type="button" class="quiet" data-copy="totp-key">Copy</button>
+    </div>
+    <p class="caption">Time-based, six digits, every 30 seconds. On a phone, <a href="{{ uri }}">this link</a> opens an authenticator app directly.</p>
+  </details>
+  <form method="post" action="/admin/security/2fa/confirm" class="new-key">
+    <div class="field">
+      <label for="code">Code from the app</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" required autofocus>
+    </div>
+    <button>Turn on 2FA</button>
+  </form>
+  <p class="caption">Nothing changes until the code matches. Browsers signed in with the password alone are signed out when it does.</p>
+</section>
+{% endblock %}

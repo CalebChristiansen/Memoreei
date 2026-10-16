@@ -9,9 +9,15 @@ paths answer and nothing else does:
   /.well-known/oauth-protected-resource/mcp    memoreei as its own issuer
   /authorize, /token, ... (memoreei.oauth)     the sign-in itself
 
-Everything else is 404: /admin is never reachable from here, and neither is any
-file a scanner fishes for (they ask for /.env within seconds of a hostname
-appearing in certificate logs).
+  /admin/...                                   the dashboard, only once the person has
+                                               set a password and switched on "from
+                                               anywhere" (memoreei.admin.account)
+
+Everything else is 404, /admin too until it's opened, and so is any file a
+scanner fishes for (they ask for /.env within seconds of a hostname appearing in
+certificate logs). The dashboard that answers here is its own copy, which knows it
+came through this door: nothing here is ever "on the computer", though every
+request the relay's tunnel carries arrives from 127.0.0.1 (memoreei.admin.auth).
 
 A bearer is either one of memoreei's own ``mem_`` keys or an access token from
 memoreei's own sign-in (memoreei.oauth). Without one, /mcp answers 401 with
@@ -45,6 +51,7 @@ log = logging.getLogger("memoreei.public")
 PRM_PATHS = ("/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp")
 MAX_BODY = 1 << 20
 MAX_SIGNIN_BODY = 64 << 10  # sign-in's forms and registrations are a few hundred bytes
+MAX_ADMIN_BODY = 1 << 20
 PER_ADDRESS = (20, 60)  # failures, seconds
 OVERALL = (120, 60)
 
@@ -120,6 +127,8 @@ class PublicGate:
         record: Recorder | None = None,
         peer_of: Callable[[dict], str] | None = None,
         resource_name: str = "memoreei",
+        admin: Any = None,
+        admin_open: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self.mcp_app = mcp_app
         self.resource = resource
@@ -130,6 +139,7 @@ class PublicGate:
         self.record = record
         self.peer_of = peer_of or (lambda scope: (scope.get("client") or ("?", 0))[0])
         self.resource_name = resource_name
+        self.admin, self.admin_open = admin, admin_open  # the dashboard's public copy, and whether it's open
 
     async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
         if scope["type"] == "lifespan":  # the runtime runs the MCP app's lifespan itself
@@ -163,6 +173,9 @@ class PublicGate:
                 return await _reply(send, 413, {"error": "request too large"})
             scope.setdefault("state", {})["memoreei_peer"] = peer  # sign-in logs what matters itself
             return await self.signin(scope, _replay(body, receive), send)
+        if (path == "/admin" or path.startswith("/admin/")) and self.admin is not None \
+                and self.admin_open is not None and await self.admin_open():
+            return await self._dashboard(scope, receive, send, peer)
         if path != "/mcp":
             self.limiter.fail(peer)
             log.info("%s %s from %s: 404", method, path[:120], peer)
@@ -222,6 +235,35 @@ class PublicGate:
                     await self.record({**caller, "peer": peer, "method": rpc, "tool": tool, "status": status})
                 except Exception as e:  # the access log never takes a call down with it
                     log.warning("access log: %r", e)
+
+
+    async def _dashboard(self, scope: dict, receive: Callable, send: Callable, peer: str) -> None:
+        """The dashboard, mounted at /admin as on the LAN listener. Its guard asks for
+        the password; its sign-in counts failures itself (memoreei.admin.account)."""
+        if scope["path"] == "/admin":
+            location = b"/admin/"
+            await send({"type": "http.response.start", "status": 307,
+                        "headers": [(b"location", location), (b"content-length", b"0")]})
+            await send({"type": "http.response.body", "body": b""})
+            return
+        body, too_big = await _read_body(receive, MAX_ADMIN_BODY)
+        if too_big:
+            self.limiter.fail(peer)
+            return await _reply(send, 413, {"error": "request too large"})
+        scope.setdefault("state", {})["memoreei_peer"] = peer
+        status = 0
+
+        async def watch(message: dict) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.admin({**scope, "root_path": scope.get("root_path", "") + "/admin"},
+                             _replay(body, receive), watch)
+        finally:
+            log.info("%s %s %d from %s (dashboard)", scope.get("method", "?"), scope["path"][:120], status, peer)
 
 
 def _replay(body: bytes, receive: Callable) -> Callable[[], Awaitable[dict]]:

@@ -113,6 +113,58 @@ CREATE TABLE IF NOT EXISTS admin_tokens (
     expires_at INTEGER NOT NULL
 );
 
+-- The dashboard's one account (memoreei.admin.account): an optional password (an scrypt
+-- hash), optional 2FA (an authenticator's secret, and the last step used, so a code
+-- works once), and whether the dashboard answers away from this computer.
+CREATE TABLE IF NOT EXISTS admin_account (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    password_hash TEXT,
+    password_set_at INTEGER,
+    totp_secret TEXT,
+    totp_pending TEXT,
+    totp_last_step INTEGER,
+    totp_set_at INTEGER,
+    remote INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+);
+
+-- Recovery codes for a lost authenticator: hashes, each good once.
+CREATE TABLE IF NOT EXISTS admin_recovery_codes (
+    code_hash TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    used_at INTEGER
+);
+
+-- Dashboard sessions. 'link' came from a one-time link (admin-url, the Mac app's menu)
+-- and works only on this computer, 'password' from the password, anywhere it's allowed.
+-- Sessions from before this table are in admin_tokens, and count as 'link'.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    how TEXT NOT NULL CHECK (how IN ('link', 'password')),
+    peer TEXT,
+    user_agent TEXT,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+-- Browsers that have signed in with the password before. They skip the limit on
+-- everyone's failed sign-ins, so a stranger's guessing can't keep the owner out.
+CREATE TABLE IF NOT EXISTS admin_browsers (
+    token_hash TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+-- Sign-ins to the dashboard, good and bad, for the Security page. Kept 90 days.
+CREATE TABLE IF NOT EXISTS admin_signins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    peer TEXT,
+    how TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    why TEXT
+);
+
 -- Every authenticated call to the public listener (memoreei.public): who, from where,
 -- what. Never the arguments or the answer. Kept 90 days.
 CREATE TABLE IF NOT EXISTS access_log (

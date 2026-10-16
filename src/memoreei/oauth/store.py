@@ -16,12 +16,11 @@ import hashlib
 import secrets
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import sqlcipher3
 
-if TYPE_CHECKING:
-    from memoreei.storage.database import Database
+from memoreei.storage.rows import Rows
 
 REQUEST_TTL = 10 * 60          # a request waits ten minutes for the person
 CODE_TTL = 60
@@ -59,29 +58,7 @@ class Busy(Exception):
     """Too many requests are waiting already."""
 
 
-class OAuthStore:
-    def __init__(self, db: "Database") -> None:
-        self.db = db
-
-    @property
-    def conn(self) -> Any:
-        assert self.db._db is not None
-        return self.db._db
-
-    async def _one(self, sql: str, args: tuple = ()) -> dict[str, Any] | None:
-        async with self.conn.execute(sql, args) as cursor:
-            row = await cursor.fetchone()
-        return dict(row) if row is not None else None
-
-    async def _all(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
-        async with self.conn.execute(sql, args) as cursor:
-            return [dict(r) for r in await cursor.fetchall()]
-
-    async def _write(self, sql: str, args: tuple = ()) -> int:
-        cursor = await self.conn.execute(sql, args)
-        await self.conn.commit()
-        return cursor.rowcount
-
+class OAuthStore(Rows):
     # ── clients ─────────────────────────────────────────────────────────────
 
     async def get_client(self, client_id: str) -> dict[str, Any] | None:

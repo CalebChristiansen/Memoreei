@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Recovery codes · Memoreei{% endblock %}
+{% block main_class %} class="narrow"{% endblock %}
+{% block main %}
+<header class="page-head">
+  <div>
+    <h1>{{ "2FA is on" if first else "New recovery codes" }}</h1>
+    <p>Keep these recovery codes somewhere other than your phone, like your password manager.</p>
+  </div>
+</header>
+
+<section class="card created">
+  <div class="row"><span class="tag">Shown once</span></div>
+  <p>If you lose your authenticator app, each of these signs you in once, in place of a code.{% if not first %} The old ones no longer work.{% endif %}</p>
+  <div class="copyable">
+    <pre id="recovery-codes" class="key">{% for c in codes %}{{ c }}
+{% endfor %}</pre>
+    <button type="button" data-copy="recovery-codes">Copy</button>
+  </div>
+  <p class="caption">Lost both? On this computer, <code>memoreei admin reset</code> clears the password and 2FA.</p>
+  <div class="row"><a class="button" href="/admin/security">I've saved them</a></div>
+</section>
+{% endblock %}

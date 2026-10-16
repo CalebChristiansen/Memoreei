@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Approve a chatbot · Memoreei{% endblock %}
+{% block main_class %} class="narrow"{% endblock %}
+{% block main %}
+<header class="page-head">
+  <div>
+    <h1>{% if r %}{{ r.client_name }} wants to use memoreei{% else %}Approve a chatbot{% endif %}</h1>
+  </div>
+</header>
+
+{% if said %}<p role="status">{{ said }}</p>{% endif %}
+
+{% if r %}
+<section class="card">
+  <p class="code">{{ r.user_code }}</p>
+  <dl class="facts">
+    <dt>Who</dt><dd>{{ r.client_name }} <span class="caption">{% if r.self_registered %}(it named itself{% if r.client_host %}; {{ r.client_host }}{% endif %}){% else %}({{ r.client_host }}){% endif %}{% if r.kind == "device" %}, an agent{% endif %}</span></dd>
+    <dt>Asked</dt><dd>{{ r.created_at|ago|capitalize }}{% if r.peer %} <span class="caption mono">from {{ r.peer }}</span>{% endif %}</dd>
+  </dl>
+  <p>Only approve it if you just asked {{ r.client_name }} to connect, and it's showing you <b>{{ r.user_code }}</b>.
+  If someone sent you this link, deny it: approving lets it read your messages.</p>
+  <div class="row">
+    <form method="post" action="/admin/chatbots/requests/{{ r.id|urlencode }}/approve">
+      <input type="hidden" name="page" value="1"><button>Approve</button>
+    </form>
+    <form method="post" action="/admin/chatbots/requests/{{ r.id|urlencode }}/deny">
+      <input type="hidden" name="page" value="1"><button class="danger">Deny</button>
+    </form>
+  </div>
+</section>
+{% elif not said %}
+<section class="card">
+  <p>That request has already been answered, or has lapsed. Requests wait ten minutes. Go back to the chatbot and connect again.</p>
+</section>
+{% endif %}
+{% if said %}<p class="caption">You can close this page{% if r is none %} and go back to the chatbot or agent{% endif %}.</p>{% endif %}
+{% endblock %}

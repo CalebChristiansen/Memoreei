@@ -16,6 +16,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
@@ -28,6 +29,7 @@ from markupsafe import Markup, escape
 
 from memoreei import __version__
 from memoreei.admin import auth
+from memoreei.admin.account import account_store
 from memoreei.catalog import (
     CONNECTORS,
     DASHBOARD_CONNECTORS,
@@ -69,48 +71,109 @@ _background: set[asyncio.Task] = set()
 
 
 class AdminGuard:
-    """ASGI middleware enforcing the dashboard's three locks (admin/auth.py)."""
+    """ASGI middleware enforcing the dashboard's three locks (admin/auth.py).
 
-    def __init__(self, app: Any) -> None:
+    One guard per listener. The LAN listener's (``public_origin`` None) tells the
+    computer from elsewhere by address and ``Host``. The public listener's is built
+    with the public address it answers to, and nothing through it is ever "on the
+    computer", whatever its address or ``Host`` say.
+    """
+
+    def __init__(self, app: Any, public_origin: str | None = None) -> None:
         self.app = app
+        self.public_origin = auth.origin_of(public_origin) if public_origin else None
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+
         request = Request(scope)
         host = request.headers.get("host", "")
         client = request.client.host if request.client else None
+        path = scope.get("path", "")
+        peer = (scope.get("state") or {}).get("memoreei_peer") or client or "?"
+        static = "/admin/static/" in path
+        store = await account_store()
 
-        if not auth.local_request(client, host):
-            log.warning("%s %s from %s refused: not loopback (Host %s)",
-                        request.method, scope.get("path", ""), client, host)
-            await _plain(403, "The Memoreei dashboard only answers on the computer it runs on.")(
-                scope, receive, send
-            )
-            return
-        if request.method not in ("GET", "HEAD") and not auth.same_origin(
-            request.headers.get("origin"), host, request.url.scheme,
-            request.headers.get("sec-fetch-site"),
-        ):
-            log.warning("%s %s refused: cross-origin (Origin %s, Sec-Fetch-Site %s)",
-                        request.method, scope.get("path", ""), request.headers.get("origin"),
+        if self.public_origin is not None:
+            # The gate only passes /admin on when it's open; this says so again, and
+            # answers only to the address memoreei is known by.
+            local = False
+            if auth.host_name(host) != urlsplit(self.public_origin).hostname or not await store.remote_open():
+                log.warning("%s %s from %s refused: the dashboard isn't open from anywhere (Host %s)",
+                            request.method, path, peer, host)
+                await _plain(404, "Not found.")(scope, receive, send)
+                return
+            origins = {self.public_origin}
+            secure = self.public_origin.startswith("https:")
+        else:
+            local = auth.local_request(client, host)
+            public_url = get_config().public_url  # behind a proxy of your own, at that address
+            if not local and not (await store.remote_open() and auth.names_this_computer(host, public_url)):
+                log.warning("%s %s from %s refused: not loopback (Host %s)", request.method, path, client, host)
+                await _plain(403, "The Memoreei dashboard only answers on the computer it runs on.")(
+                    scope, receive, send
+                )
+                return
+            origins = {f"{request.url.scheme}://{host}".lower()}
+            secure = request.url.scheme == "https"
+            if not local and public_url and auth.host_name(host) == (urlsplit(public_url).hostname or ""):
+                origins.add(auth.origin_of(public_url))
+                secure = secure or public_url.startswith("https:")
+
+        if request.method not in ("GET", "HEAD") and not _origin_allowed(request, origins):
+            log.warning("%s %s from %s refused: cross-origin (Origin %s, Sec-Fetch-Site %s)",
+                        request.method, path, peer, request.headers.get("origin"),
                         request.headers.get("sec-fetch-site"))
             await _plain(403, "Cross-origin request refused.")(scope, receive, send)
             return
 
-        path = scope.get("path", "")
-        if not (path.endswith("/admin/login") or "/admin/static/" in path):
-            from memoreei.server import _get_db
-
-            if not await auth.session_valid(await _get_db(), request.cookies.get(auth.COOKIE)):
-                response = templates.TemplateResponse(
-                    request, "signed_out.html", {"version": __version__}, status_code=401
-                )
-                _secure(response)
-                await response(scope, receive, send)
-                return
+        if path.endswith("/admin/login") and not local:
+            await _plain(403, "One-time dashboard links work only on the computer memoreei runs on.")(
+                scope, receive, send
+            )
+            return
+        session = None if static else await store.session(request.cookies.get(auth.COOKIE))
+        if session is not None and session["how"] == "link" and not local:
+            session = None  # a link's session never leaves the computer
+        scope.setdefault("state", {})["memoreei_admin"] = {
+            "local": local, "public": self.public_origin is not None, "peer": peer,
+            "session": session, "secure": secure,
+        }
+        if session is None and not (path.endswith(("/admin/login", "/admin/signin")) or static):
+            next_path = path if request.method in ("GET", "HEAD") else None
+            response = await signin_page(request, next_path=next_path, status_code=401)
+            await response(scope, receive, send)
+            return
         await self.app(scope, receive, send)
+
+
+def _origin_allowed(request: Request, origins: set[str]) -> bool:
+    origin = request.headers.get("origin")
+    if origin is None or origin == "null":
+        return request.headers.get("sec-fetch-site") == "same-origin"
+    return origin.rstrip("/").lower() in origins
+
+
+def where(request: Request) -> dict[str, Any]:
+    """What the guard found out about this request: local, public, peer, session, secure."""
+    return (request.scope.get("state") or {}).get("memoreei_admin") or {
+        "local": False, "public": False, "peer": None, "session": None, "secure": False}
+
+
+async def signin_page(request: Request, next_path: str | None = None, error: str | None = None,
+                      status_code: int = 200) -> Response:
+    """Signed out: the password form, where there's a password, else how to get a link."""
+
+    account = await (await account_store()).account()
+    if not account["password_hash"]:
+        return _secure(templates.TemplateResponse(
+            request, "signed_out.html", {"version": __version__}, status_code=status_code))
+    return _secure(templates.TemplateResponse(request, "signin.html", {
+        "version": __version__, "next": auth.safe_next(next_path), "totp": bool(account["totp_secret"]),
+        "error": error, "local": where(request)["local"],
+    }, status_code=status_code))
 
 
 def _plain(status: int, text: str) -> Response:
@@ -123,10 +186,11 @@ def _secure(response: Response) -> Response:
     return response
 
 
-def _page(request: Request, template: str, **context: Any) -> Response:
+def _page(request: Request, template: str, status_code: int = 200, **context: Any) -> Response:
     context.setdefault("version", __version__)
     context.setdefault("nav", "")
-    return _secure(templates.TemplateResponse(request, template, context))
+    context.setdefault("local", where(request)["local"])
+    return _secure(templates.TemplateResponse(request, template, context, status_code=status_code))
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -311,6 +375,8 @@ async def _status_context() -> dict[str, Any]:
         # A new install: the two setup steps lead the page until both are done.
         "welcome": not has_source or not keys,
         "problems": failed or fda is False,
+        # The welcome's third step, which is optional and leaves with the other two.
+        "has_password": await (await account_store()).has_password(),
     }
 
 
@@ -362,26 +428,85 @@ def _page_notices() -> dict[str, Any]:
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 
+def _set_cookie(request: Request, response: Response, name: str, value: str, max_age: int) -> None:
+    response.set_cookie(name, value, max_age=max_age, path="/admin", httponly=True, samesite="lax",
+                        secure=where(request)["secure"])
+
+
 async def login(request: Request) -> Response:
     from memoreei.server import _get_db
 
-    session = await auth.redeem_login_token(await _get_db(), request.query_params.get("token", ""))
+    db = await _get_db()
+    session = await auth.redeem_login_token(db, request.query_params.get("token", ""), where(request)["peer"],
+                                            request.headers.get("user-agent"))
     if session is None:
         return _secure(
             templates.TemplateResponse(
                 request, "signed_out.html", {"version": __version__, "expired": True}, status_code=401
             )
         )
+    await auth.end_session(db, request.cookies.get(auth.COOKIE))  # whatever this browser had, it's done
     response = RedirectResponse("/admin/", status_code=303)
-    response.set_cookie(
-        auth.COOKIE,
-        session,
-        max_age=auth.SESSION_TTL,
-        path="/admin",
-        httponly=True,
-        samesite="lax",
-        secure=request.url.scheme == "https",
-    )
+    _set_cookie(request, response, auth.COOKIE, session, auth.SESSION_TTL)
+    return _secure(response)
+
+
+SIGNIN_LIMITS: Any = None  # memoreei.admin.account.SignInLimits, made on first use
+
+
+def _limits() -> Any:
+    global SIGNIN_LIMITS
+    if SIGNIN_LIMITS is None:
+        from memoreei.admin.account import SignInLimits
+
+        SIGNIN_LIMITS = SignInLimits()
+    return SIGNIN_LIMITS
+
+
+async def signin(request: Request) -> Response:
+    """The password form (GET), and signing in with it (POST)."""
+    from memoreei.admin.account import BROWSER_TTL, PASSWORD_SESSION_TTL
+
+    if request.method == "GET":
+        next_path = request.query_params.get("next")
+        if where(request)["session"] is not None:
+            return RedirectResponse(auth.safe_next(next_path), status_code=303)
+        return await signin_page(request, next_path=next_path)
+
+    form = await request.form()
+    password = str(form.get("password", ""))
+    code = str(form.get("code", ""))[:64]
+    next_path = str(form.get("next", "")) or None
+    store = await account_store()
+    w = where(request)
+    peer = w["peer"]
+    if not await store.has_password():
+        return await signin_page(request, status_code=401)
+    known = await store.browser_known(request.cookies.get(auth.BROWSER_COOKIE))
+    # On the computer there's no limit (it has the one-time link anyway). Elsewhere the
+    # attempt is counted before the slow check, so many at once can't all slip in.
+    limited = not w["local"]
+    if limited and (why := _limits().take(peer, known)) is not None:
+        log.warning("dashboard sign-in from %s refused: %s", peer, why)
+        return await signin_page(request, next_path, status_code=429,
+                                 error="Too many failed sign-ins. Wait a few minutes and try again.")
+    ok, how = await store.check(password, code)
+    if ok and limited:
+        _limits().forgive(peer)
+    if not ok:
+        log.warning("dashboard sign-in from %s failed: %s", peer, how)
+        await store.record_signin(peer, "password", False, how)
+        return await signin_page(request, next_path, status_code=401,
+                                 error="That didn't work. Check the password" +
+                                       (" and the code." if (await store.account())["totp_secret"] else "."))
+    await store.end_session(request.cookies.get(auth.COOKIE))  # never carry a session across a sign-in
+    session = await store.add_session("password", peer, request.headers.get("user-agent"))
+    await store.record_signin(peer, "password", True, how)
+    log.info("dashboard: signed in from %s with the %s%s", peer, how, "" if w["local"] else ", away from the computer")
+    response = RedirectResponse(auth.safe_next(next_path), status_code=303)
+    _set_cookie(request, response, auth.COOKIE, session, PASSWORD_SESSION_TTL)
+    if not known:
+        _set_cookie(request, response, auth.BROWSER_COOKIE, await store.add_browser(), BROWSER_TTL)
     return _secure(response)
 
 
@@ -390,7 +515,8 @@ async def logout(request: Request) -> Response:
 
     await auth.end_session(await _get_db(), request.cookies.get(auth.COOKIE))
     response = RedirectResponse("/admin/", status_code=303)
-    response.delete_cookie(auth.COOKIE, path="/admin")
+    response.delete_cookie(auth.COOKIE, path="/admin", secure=where(request)["secure"], httponly=True,
+                           samesite="lax")
     return _secure(response)
 
 
@@ -666,13 +792,16 @@ async def root_redirect(request: Request) -> Response:
     return RedirectResponse("/admin/", status_code=307)
 
 
-def build_admin_app() -> Any:
+def build_admin_app(public_origin: str | None = None) -> Any:
+    """The dashboard, meant to be mounted at /admin. With ``public_origin``, the public
+    listener's copy, answering only to that address (see AdminGuard)."""
     from memoreei.admin.cloud import routes as cloud_routes
+    from memoreei.admin.security import routes as security_routes
 
-    """The dashboard, meant to be mounted at /admin."""
     routes = [
         Route("/", status),
         Route("/login", login),
+        Route("/signin", signin, methods=["GET", "POST"]),
         Route("/logout", logout, methods=["POST"]),
         Route("/status", status_fragment),
         Route("/sync", sync_now, methods=["POST"]),
@@ -689,6 +818,7 @@ def build_admin_app() -> Any:
         Route("/service/stop", service_stop, methods=["POST"]),
         Route("/log", log_page),
         *cloud_routes(),
+        *security_routes(),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),
     ]
-    return AdminGuard(Starlette(routes=routes))
+    return AdminGuard(Starlette(routes=routes), public_origin=public_origin)

@@ -37,6 +37,7 @@ dependencies = [
     "python-multipart>=0.0.9",  # its forms
     "sqlcipher3>=0.6.2",  # Signal Desktop's database; wheels bundle SQLCipher itself
     "secretstorage>=3.3; sys_platform == 'linux'",  # Signal's key, from GNOME Keyring; jeepney for KWallet
+    "segno>=1.5",  # the QR code an authenticator app scans to set up the dashboard's 2FA; pure Python
 ]
 
 [project.urls]

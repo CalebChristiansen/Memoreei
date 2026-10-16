@@ -206,7 +206,7 @@ Claude.ai and ChatGPT call from their own servers, not your browser, so they can
 your home network, and they sign in with OAuth rather than a pasted key. Memoreei has a
 second, stricter front door for them, the **public listener**: it answers `/mcp`, the
 sign-in, and the OAuth metadata that tells a chatbot where to sign in, and nothing else
-(the dashboard is never reachable through it). Agents that only send a header can use
+(the dashboard only if you [open it from anywhere](#from-anywhere)). Agents that only send a header can use
 your `mem_` keys there too. Failed attempts are rate-limited, and every call is listed on
 the dashboard's Cloud page: when, which chatbot or key, which tool, from where. It's off
 until you choose one of the two ways below.
@@ -220,7 +220,10 @@ computer, approve that code:
 
 - in the dashboard's Cloud page (every page shows a note while one waits), or
 - with `memoreei chatbots approve K7QM`, or
-- from the desktop notification, where there is a desktop.
+- from the desktop notification, where there is a desktop, or
+- away from the computer, if you've [opened the dashboard from anywhere](#from-anywhere):
+  the chatbot's page offers **Sign in to approve it here**, and sends you back to the
+  chatbot once you have.
 
 The chatbot's page moves on by itself within a couple of seconds. Only approve a code you
 just asked for: anyone can ask, and approving lets them read your messages. Compare the
@@ -254,7 +257,8 @@ disconnect` takes the computer off your account. While the computer sleeps, chat
 can't reach it, and memoreei tells them to say so.
 
 Nothing contacts Memoreei Cloud until you connect. To hide the offer, set
-`MEMOREEI_CLOUD_OFFER=0`.
+`MEMOREEI_CLOUD_OFFER=0`. Once connected, memoreei suggests a dashboard password, so you
+can [manage it from anywhere](#from-anywhere); `MEMOREEI_PASSWORD_OFFER=0` hides that too.
 
 #### Your own tunnel
 
@@ -310,6 +314,42 @@ memoreei admin-url     # http://localhost:3679/admin/login?token=…
 The link works once, within five minutes, and signs that browser in for a month. With no
 display, `admin-url` also prints the `ssh -L` that brings the dashboard to your laptop.
 Dashboard sessions and API keys are separate: neither opens the other.
+
+#### From anywhere
+
+The dashboard can have a password. It's optional: without one, nothing above changes.
+Set one on the dashboard's **Security** page, or:
+
+```bash
+memoreei admin password       # set or change it (--stdin for scripts)
+memoreei admin remote on      # let the dashboard answer away from this computer
+memoreei admin status         # password, 2FA, from anywhere, recent sign-ins
+memoreei admin reset          # forgot it? removes the password and 2FA, here
+```
+
+The rule: **with no password, the dashboard answers only on the computer**, as above.
+With a password and **Manage memoreei from anywhere** switched on, it also answers
+elsewhere, to the password: at your [Memoreei Cloud](#memoreei-cloud) address
+(`https://<name>.memoreei.net/admin/`), through [your own tunnel](#your-own-tunnel) at
+`MEMOREEI_PUBLIC_MCP_URL`'s address, and on your network at this computer's address or
+name (`http://192.168.1.5:3679/admin/`, plain HTTP, so prefer the https addresses on a
+network you don't trust). Anyone who reaches it sees only a sign-in page. Through a
+tunnel, the dashboard checks that `Host` and `Origin` name that public address, so the
+tunnel must pass `Host` on unchanged (Cloudflare Tunnel, Tailscale Funnel and Caddy do).
+
+- **2FA**, optional: a code from an authenticator app as well as the password. Set it up
+  on the Security page (scan the QR code), and keep the ten recovery codes it shows
+  once, for a lost phone.
+- **Signing in** with the password lasts a week. On the computer, the one-time link
+  still signs you in without it. A new password, or switching on 2FA, signs out every
+  browser that signed in with the old way.
+- **Failed sign-ins** away from the computer are limited per address and in all, and
+  listed on the Security page. Nobody can lock you out by guessing: a browser you've
+  signed in with before isn't held up by strangers' failures, and on the computer
+  there's no limit at all.
+- **Away from the computer, the password and 2FA can't be changed**, and the switch
+  can only be turned off. So a stolen session can't lock you out, and a forgotten
+  password is reset where memoreei runs.
 
 ### HTTPS
 
@@ -415,6 +455,7 @@ memoreei serve                      # stdio, for a local client
 memoreei serve --http [--port 3679] [--tls-cert … --tls-key …]
 memoreei open                       # the dashboard, starting Memoreei if needed
 memoreei admin-url                  # a one-time dashboard sign-in link
+memoreei admin password | remote on|off | status | reset   # the dashboard from anywhere
 memoreei key create | list | revoke <name>
 memoreei service install | status | logs | uninstall | grant-access
 memoreei status                     # message counts, sources, last sync times

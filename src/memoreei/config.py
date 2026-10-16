@@ -228,6 +228,8 @@ class Config:
     cloud_url: str = "https://auth.dev.memoreei.com"
     cloud_tunnel_url: str | None = None
     cloud_offer: bool = True
+    # Whether the Cloud page suggests a password, for the dashboard from anywhere.
+    password_offer: bool = True
 
     # Discord
     discord_token: str | None = None
@@ -317,6 +319,7 @@ def get_config() -> Config:
             cloud_url=(os.environ.get("MEMOREEI_CLOUD_URL") or "https://auth.dev.memoreei.com").rstrip("/"),
             cloud_tunnel_url=(os.environ.get("MEMOREEI_CLOUD_TUNNEL_URL") or "").rstrip("/") or None,
             cloud_offer=os.environ.get("MEMOREEI_CLOUD_OFFER", "1").lower() not in ("0", "false", "no", "off"),
+            password_offer=os.environ.get("MEMOREEI_PASSWORD_OFFER", "1").lower() not in ("0", "false", "no", "off"),
             discord_token=os.environ.get("DISCORD_BOT_TOKEN") or None,
             discord_channel_id=os.environ.get("DISCORD_CHANNEL_ID") or None,
             telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,

@@ -48,6 +48,6 @@ src/memoreei/
 - **Database key:** `MEMOREEI_DB_KEY` › `memoreei.key` beside the db (mode 600) › GNOME Keyring/KWallet (item "Memoreei database key"). New keys go to the keyring on a Linux desktop with it unlocked, else the file (Mac included, until a Developer ID). Open memoreei.db only through `storage.key.connect` / `connect_async`; plain `sqlite3` sees noise. Tests keep the key in a file beside each test db (conftest `no_keyring`)
 - **Mac app:** `macos/` (Swift menu-bar app, build script, lock file); see `macos/README.md`
 - **Linux packages:** `linux/` (.deb, .rpm, tarball of one `/opt/memoreei` tree; build, lock, smoke test); see `linux/README.md`
-- **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx, loopback-only; `ssh -L` for a headless box)
+- **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx; loopback-only and `ssh -L` for a headless box, unless it has a password and "from anywhere" is on: then also the LAN and the public listener, to the password. The rules are in `admin/auth.py` and `admin/account.py`)
 - **Dev config:** a `.env` in the checkout overrides `config.env` while you work here
 - **Venv:** `.venv/bin/python`, with memoreei installed editable (`pip install -e '.[dev]'`)

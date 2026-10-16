@@ -32,6 +32,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   listener, and memoreei's sign-in, behind any tunnel or proxy.
 - Chatbots reaching memoreei through the public listener are told that silence probably
   means the computer is asleep or offline.
+- **The dashboard from anywhere, with a password.** Optional: set one on the new
+  Security page or with `memoreei admin password`, then switch on **Manage memoreei from
+  anywhere** (`memoreei admin remote on`), and the dashboard also answers at your
+  Memoreei Cloud or own-tunnel address and on your network, to the password. Without a
+  password nothing changes: it answers only on the computer. Optional 2FA by
+  authenticator app, with recovery codes. Chatbots asking to connect can then be approved
+  from their own sign-in page, after signing in. Failed sign-ins are rate-limited without
+  any lockout a stranger could use, and listed; the password and 2FA are changed, and
+  reset (`memoreei admin reset`), only on the computer. One-time links, and the sessions
+  they start, never work away from it. Passwords are hashed with scrypt; everything is
+  kept in the encrypted database.
 
 ### Changed
 - **The database is always encrypted** (SQLCipher, AES-256, with a random 256-bit key).

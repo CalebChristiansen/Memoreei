@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Security · Memoreei{% endblock %}
+{% block main_class %} class="narrow"{% endblock %}
+{% block main %}
+<header class="page-head">
+  <div>
+    <h1>Security</h1>
+    <p>Who can open this dashboard, and from where.</p>
+  </div>
+  {% if account.remote and account.password_hash %}
+  <span class="pill big"><span class="dot"></span>Open from anywhere</span>
+  {% else %}
+  <span class="pill big off"><span class="dot"></span>This computer only</span>
+  {% endif %}
+</header>
+
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+{% if error %}<p class="problem" role="alert"><b>{{ error }}</b></p>{% endif %}
+{% if not local %}<p class="caption">You're signed in away from the computer. The password and 2FA can only be changed there.</p>{% endif %}
+
+<section class="card" id="password">
+  <h2>Password</h2>
+  {% if account.password_hash %}
+  <p>Set {{ account.password_set_at|date }}. Signing in with it lasts a week.{% if local %} On this computer, the
+  one-time link{% if in_app() %} from the menu bar{% else %} (<code>memoreei admin-url</code>){% endif %} still signs you in without it.{% endif %}</p>
+  {% else %}
+  <p>Optional. Without one, the dashboard answers only on this computer, to a one-time link. With one, you can
+  also open it from your phone or another computer (switch that on below), and approve chatbots from there.</p>
+  {% endif %}
+  {% if local %}
+  <form method="post" action="/admin/security/password" class="stack">
+    <input type="text" name="username" value="memoreei" autocomplete="username" hidden>
+    <div class="field">
+      <label for="password">{{ "New password" if account.password_hash else "Password" }}</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="{{ min_password }}" required>
+      <p class="hint">At least {{ min_password }} characters. A few unrelated words are strong and easy to type on a phone.</p>
+    </div>
+    <div class="field">
+      <label for="confirm">Again</label>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="{{ min_password }}" required>
+    </div>
+    <div class="row"><button>{{ "Change password" if account.password_hash else "Set password" }}</button></div>
+  </form>
+  {% endif %}
+</section>
+
+{% if account.password_hash %}
+<section class="card" id="twofa">
+  <h2>Two-step sign-in (2FA)</h2>
+  {% if account.totp_secret %}
+  <p><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>On</span>
+  Since {{ account.totp_set_at|date }}: signing in takes the password and a code from your authenticator app.
+  {{ recovery_left }} recovery code{{ "" if recovery_left == 1 else "s" }} left.</p>
+  {% if local %}
+  <div class="row">
+    <form method="post" action="/admin/security/recovery"><button class="quiet">New recovery codes</button></form>
+    <form method="post" action="/admin/security/2fa/off"><button class="danger small">Turn off 2FA</button></form>
+  </div>
+  {% endif %}
+  {% else %}
+  <p>Optional. A code from an authenticator app (1Password, Bitwarden, Google Authenticator and the like) as
+  well as the password, so a password that leaks isn't enough on its own.</p>
+  {% if local %}<form method="post" action="/admin/security/2fa"><button>Set up 2FA</button></form>{% endif %}
+  {% endif %}
+</section>
+
+<section class="card" id="remote">
+  <h2>Manage memoreei from anywhere</h2>
+  <div class="switch-row">
+    {% if local or account.remote %}
+    <form method="post" action="/admin/security/remote">
+      <input type="hidden" name="on" value="{{ 0 if account.remote else 1 }}">
+      <button class="switch" aria-pressed="{{ 'true' if account.remote else 'false' }}" aria-label="Manage memoreei from anywhere"><span></span></button>
+    </form>
+    {% endif %}
+    <span class="caption">{% if account.remote %}On: the dashboard answers away from this computer, to the password{{ " and a code" if account.totp_secret }}.{% else %}Off: the dashboard answers only on this computer.{% endif %}</span>
+  </div>
+  {% if account.remote %}
+  {% if addresses %}
+  <dl class="facts">
+    {% for a in addresses %}<dt>{{ a.what|capitalize }}</dt><dd class="mono">{{ a.url }}</dd>{% endfor %}
+  </dl>
+  {% else %}
+  <p class="caption">Nothing reaches it from away yet: connect to Memoreei Cloud on the <a href="/admin/cloud">Cloud page</a>, or use your own tunnel.</p>
+  {% endif %}
+  <p class="caption">Chatbots asking to connect can then be approved from their own sign-in page, after signing in here.</p>
+  {% else %}
+  <p class="caption">Turn it on to open the dashboard from your phone or another computer, through Memoreei Cloud,
+  your own tunnel, or this network, and to approve chatbots from wherever you add them. Anyone who reaches it
+  sees only a sign-in page.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Signed in</h2>
+  {% if sessions %}
+  <table>
+    <thead><tr><th scope="col">Browser</th><th scope="col">How</th><th scope="col">From</th><th scope="col">Since</th></tr></thead>
+    <tbody>
+    {% for s in sessions %}
+    <tr><td>{{ s.browser }}{% if s.current %} <span class="caption">(this one)</span>{% endif %}</td>
+      <td>{{ "Password" if s.how == "password" else "One-time link" }}</td>
+      <td class="mono">{{ s.peer or "?" }}</td><td>{{ s.created_at|ago|capitalize }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="caption">Browsers signed in by an earlier version of memoreei aren't listed here.</p>
+  {% endif %}
+  <form method="post" action="/admin/security/sign-out-others"><button class="quiet">Sign out every other browser</button></form>
+</section>
+
+{% if signins %}
+<section class="card">
+  <details>
+    <summary>The last {{ signins|length }} password sign-ins</summary>
+    <table>
+      <thead><tr><th scope="col">When</th><th scope="col">From</th><th scope="col">Result</th></tr></thead>
+      <tbody>
+      {% for s in signins %}
+      <tr><td>{{ s.at|ago|capitalize }}</td><td class="mono">{{ s.peer or "?" }}</td>
+        <td>{% if s.ok %}Signed in{% else %}<span class="bad">Refused</span>{% endif %} <span class="caption">({{ s.why }})</span></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+{% endif %}
+
+{% if local and account.password_hash %}
+<form method="post" action="/admin/security/password/remove" class="aside">
+  <div>
+    <b>Remove the password</b>
+    <span class="caption">2FA and access from anywhere go with it. The dashboard answers only on this computer again.</span>
+  </div>
+  <button class="danger" hx-post="/admin/security/password/remove" hx-target="body" hx-confirm="Remove the password? Every browser away from this computer is signed out.">Remove</button>
+</form>
+{% endif %}
+{% endblock %}

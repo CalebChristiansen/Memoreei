@@ -19,6 +19,7 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import Response
 
+from memoreei.admin.account import account_store
 from memoreei.config import get_config
 
 ADVANCED_URL = "https://github.com/CalebChristiansen/Memoreei#your-own-tunnel"
@@ -55,6 +56,7 @@ async def _context() -> dict[str, Any]:
     store = await _store()
     device = state.device()
     shown = live.get("mode") != "off" or device is not None
+    account = await (await account_store()).account()
     return {
         "device": device,
         "ready": state.ready(),
@@ -69,6 +71,9 @@ async def _context() -> dict[str, Any]:
         "calls": await db.list_access(50) if shown else [],
         "advanced_url": ADVANCED_URL,
         "cloud_url": get_config().cloud_url,
+        "account": account,
+        # Connected, and no password yet: suggest one, for the dashboard from anywhere.
+        "password_offer": shown and get_config().password_offer and not account["password_hash"],
     }
 
 
@@ -172,10 +177,29 @@ async def chatbots_waiting(request: Request) -> Response:
     return _page(request, "_chatbot_requests.html", waiting=waiting)
 
 
+async def chatbot_request(request: Request) -> Response:
+    """One waiting request, on a page of its own: where "sign in to approve" on the
+    chatbot's waiting page leads, away from the computer."""
+    from memoreei.admin.app import _page
+
+    store = await _store()
+    row = await store.request(request.path_params["request_id"])
+    waiting = row is not None and row["decided_at"] is None and row["expires_at"] >= _now()
+    return _page(request, "chatbot_request.html", nav="cloud", r=row if waiting else None)
+
+
+def _now() -> int:
+    import time
+
+    return int(time.time())
+
+
 async def chatbot_decide(request: Request) -> Response:
     import logging
 
-    from memoreei.admin.app import _page
+    from starlette.responses import RedirectResponse
+
+    from memoreei.admin.app import _page, where
 
     answer = request.path_params["answer"]
     if answer not in ("approve", "deny"):
@@ -183,14 +207,23 @@ async def chatbot_decide(request: Request) -> Response:
     approve = answer == "approve"
     store = await _store()
     row = await store.request(request.path_params["request_id"])
-    if row is None or not await store.decide(row["id"], approve):
+    decided = row is not None and await store.decide(row["id"], approve)
+    if not decided:
         said = "That request had already been answered, or has lapsed."
     else:
+        w = where(request)
         logging.getLogger("memoreei.oauth").info(
-            "the person %s %s (%s), code %s", "approved" if approve else "denied", row["client_name"],
-            row["client_host"], row["user_code"])
+            "the person %s %s (%s), code %s%s", "approved" if approve else "denied", row["client_name"],
+            row["client_host"], row["user_code"], "" if w["local"] else f", signed in from {w['peer']}")
         said = (f"Approved {row['client_name']}. It finishes connecting by itself in a few seconds."
                 if approve else f"Denied {row['client_name']}.")
+    if "page" in (await request.form()):  # from chatbot_request's page rather than the list
+        if decided and row["kind"] == "authorize" and where(request)["public"]:
+            # The chatbot's own waiting page, on this same address, now sends it on its way.
+            from urllib.parse import urlencode
+
+            return RedirectResponse(f"/authorize/wait?{urlencode({'request': row['id']})}", status_code=303)
+        return _page(request, "chatbot_request.html", nav="cloud", r=None, said=said)
     return _page(request, "_chatbot_requests.html", waiting=await store.waiting(), said=said)
 
 
@@ -216,6 +249,7 @@ def routes() -> list:
         Route("/cloud/cancel", cloud_cancel, methods=["POST"]),
         Route("/cloud/disconnect", cloud_disconnect, methods=["POST"]),
         Route("/chatbots/waiting", chatbots_waiting),
+        Route("/chatbots/requests/{request_id}", chatbot_request),
         Route("/chatbots/requests/{request_id}/{answer:str}", chatbot_decide, methods=["POST"]),
         Route("/chatbots/{grant_id}/remove", chatbot_remove, methods=["POST"]),
     ]

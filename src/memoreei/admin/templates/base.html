@@ -29,6 +29,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 13L21 3 M16 8l3 3 M18.5 5.5l2 2 M12 16a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg><span>Clients</span></a>
     <a href="/admin/cloud" {% if nav == "cloud" %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></svg><span>Cloud</span></a>
+    <a href="/admin/security" {% if nav == "security" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg><span>Security</span></a>
   </nav>
   <div class="foot">
     <form method="post" action="/admin/logout">

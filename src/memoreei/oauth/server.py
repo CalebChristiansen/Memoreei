@@ -16,9 +16,12 @@
 
 **The person approves on the computer**, in the dashboard (or `memoreei chatbots
 approve CODE`), never on these pages: anyone on the internet can reach them, and
-only someone at the computer can say yes. The chatbot's page and the dashboard
-show the same short code, so the person can tell their request from someone
-else's. Requests wait ten minutes, and only so many can wait at once.
+only someone at the computer can say yes. Or, once they've set a password and
+opened the dashboard from anywhere (memoreei.admin.account), in the dashboard at
+this same address, after signing in to it: the waiting page links there. The
+chatbot's page and the dashboard show the same short code, so the person can tell
+their request from someone else's. Requests wait ten minutes, and only so many can
+wait at once.
 
 Until the redirect URI is known good, errors are a page of ours. After, they go
 back to the chatbot as error=... (RFC 6749 §4.1.2.1). Every redirect to the
@@ -40,7 +43,7 @@ import re
 import secrets
 import time
 from typing import Any, Awaitable, Callable
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -157,11 +160,15 @@ class SignIn:
 
     def __init__(self, store: Callable[[], Awaitable[OAuthStore]], issuer: str, resource: str,
                  fetch: clients.Fetch = clients.fetch_json, notify: Notify | None = None,
-                 access_ttl: int = ACCESS_TTL, clock: Callable[[], float] = time.time) -> None:
+                 access_ttl: int = ACCESS_TTL, clock: Callable[[], float] = time.time,
+                 admin_open: Callable[[], Awaitable[bool]] | None = None) -> None:
         self._store = store
         self.issuer = issuer.rstrip("/")
         self.resource = resource
         self.fetch, self.notify, self.access_ttl, self.clock = fetch, notify, access_ttl, clock
+        # Whether the dashboard answers at this address too (a password, and "from
+        # anywhere"): then the waiting page also offers to sign in there and approve.
+        self.admin_open = admin_open
         self.token_endpoint = f"{self.issuer}/token"
         self.authorize_limit = Limiter(60, 600)
         self.wait_limit = Limiter(600, 600)
@@ -303,7 +310,7 @@ class SignIn:
             return self.finished(self.back_to_client(req["redirect_uri"], req["state"], error="access_denied",
                                                      error_description="nobody approved it in time"))
         if req["decided_at"] is None:
-            return self.waiting_page(req)
+            return self.waiting_page(req, approve_here=await self._admin_open())
         if not req["approved"]:
             return self.finished(self.back_to_client(req["redirect_uri"], req["state"], error="access_denied",
                                                      error_description="the person said no"))
@@ -313,14 +320,26 @@ class SignIn:
         log.info("authorize: %s approved, code handed over", req["client_name"])
         return self.finished(self.back_to_client(req["redirect_uri"], req["state"], code=code))
 
-    def waiting_page(self, req: dict[str, Any]) -> Response:
+    async def _admin_open(self) -> bool:
+        if self.admin_open is None:
+            return False
+        try:
+            return await self.admin_open()
+        except Exception as e:  # the computer is still there to approve on
+            log.warning("couldn't tell whether the dashboard is open from anywhere: %r", e)
+            return False
+
+    def waiting_page(self, req: dict[str, Any], approve_here: bool = False) -> Response:
         code = html.escape(req["user_code"])
+        here = (f"<p><a href='/admin/chatbots/requests/{quote(req['id'])}'>Sign in to approve it here</a> "
+                f"with memoreei's password, if you're away from the computer.</p>") if approve_here else ""
         return page(200, "Approve it on your computer",
                     f"<p>{who(req)} wants to use memoreei. To let it, approve this code on the computer "
                     f"memoreei runs on:</p>"
                     f"<p class=code>{code}</p>"
                     f"<p>Open memoreei's dashboard there (from the menu bar on a Mac), or run "
                     f"<code>memoreei chatbots approve {code}</code>. This page moves on by itself.</p>"
+                    f"{here}"
                     f"<form method=post action=/authorize/cancel>"
                     f"<input type=hidden name=request value='{html.escape(req['id'])}'>"
                     f"<div class=buttons><button>Cancel</button></div></form>"
@@ -604,10 +623,12 @@ class SignIn:
 
     # GET /device
     async def device_page(self, request: Request) -> Response:
+        here = ("<p>Away from the computer? <a href='/admin/cloud'>Sign in to memoreei's dashboard here</a> "
+                "with its password, and approve it on the Cloud page.</p>") if await self._admin_open() else ""
         return page(200, "Approve it on your computer",
                     "<p>An app asked to use memoreei and gave you a code. To let it, approve that code on "
                     "the computer memoreei runs on: in memoreei's dashboard (from the menu bar on a Mac), "
-                    "or with <code>memoreei chatbots approve CODE</code>.</p>"
+                    "or with <code>memoreei chatbots approve CODE</code>.</p>" + here +
                     "<p class=small>Only approve a code you started yourself, just now. If someone sent you a "
                     "code, don't: it would let them into your memoreei.</p>")
 

@@ -18,6 +18,21 @@
 
 {% include "_chatbot_requests.html" %}
 
+{% if password_offer and not connecting %}
+<section class="bubble" aria-label="A password">
+  <div><b>Manage memoreei and connect chatbots from anywhere.</b> Set a password, and you can open this dashboard
+  from your phone, and approve a chatbot from wherever you add it, instead of coming back to this computer.
+  <span class="caption">Optional. Without one, nothing changes.</span></div>
+  <div class="row">
+    <a class="button" href="/admin/security#password">Set a password</a>
+    <form method="post" action="/admin/security/skip-offer"><button class="quiet">Skip</button></form>
+  </div>
+  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
+</section>
+{% elif (device or custom) and account.password_hash and not account.remote %}
+<p class="caption">This dashboard answers only on this computer. To open it from anywhere, switch that on in <a href="/admin/security#remote">Security</a>.</p>
+{% endif %}
+
 {% if connecting %}
 {% include "_cloud_connecting.html" %}
 
@@ -63,7 +78,7 @@
   with nothing to open on your router: this computer holds a connection out to our relay, and chatbots reach it through that.</p>
   <ul>
     <li>Your messages stay on this computer. The relay carries encrypted traffic it can't read: this computer holds the only key.</li>
-    <li>Only memoreei's search reaches the internet. This dashboard, and everything else, never does.</li>
+    <li>Only memoreei's search reaches the internet. This dashboard never does, unless you give it a password and open it from anywhere.</li>
     <li>Each chatbot asks this computer to let it in, and you approve it here. Every call is listed here too.</li>
   </ul>
   <form method="post" action="/admin/cloud/connect" class="row">

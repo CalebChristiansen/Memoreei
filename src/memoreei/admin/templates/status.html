@@ -73,6 +73,18 @@
     <div><a class="button" href="/admin/keys">Add a client</a></div>
     {% endif %}
   </li>
+  <li class="card {{ 'done' if has_password }}">
+    <div class="step-head">
+      <span class="num" {% if has_password %}aria-hidden="true"{% endif %}>{% if has_password %}<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>{% else %}3{% endif %}</span>
+      <h2>Set a password <span class="caption">Optional</span></h2>
+    </div>
+    {% if has_password %}
+    <p>Done. <a href="/admin/security">Security</a></p>
+    {% else %}
+    <p>Skip it, and the dashboard answers only on this computer. Set one to open it from your phone too.</p>
+    <div><a class="button quiet" href="/admin/security#password">Set a password</a></div>
+    {% endif %}
+  </li>
 </ol>
 {% include "_status_card.html" %}
 {% if service %}{% include "_server_card.html" %}{% endif %}
