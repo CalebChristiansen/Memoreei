@@ -1,22 +1,25 @@
 """The public listener's front door.
 
 Everything that reaches memoreei from the internet comes through here, whatever
-carried it: Memoreei Cloud's relay, or an expert's own tunnel or proxy. Three
+carried it: Memoreei Cloud's relay, or an expert's own tunnel or proxy. These
 paths answer and nothing else does:
 
   /mcp                                         the network tools, with a bearer
-  /.well-known/oauth-protected-resource        RFC 9728 metadata naming the
-  /.well-known/oauth-protected-resource/mcp    issuer (when there is one)
+  /.well-known/oauth-protected-resource        RFC 9728 metadata naming this
+  /.well-known/oauth-protected-resource/mcp    memoreei as its own issuer
+  /authorize, /token, ... (memoreei.oauth)     the sign-in itself
 
 Everything else is 404: /admin is never reachable from here, and neither is any
 file a scanner fishes for (they ask for /.env within seconds of a hostname
 appearing in certificate logs).
 
 A bearer is either one of memoreei's own ``mem_`` keys or an access token from
-the configured issuer (memoreei.public.tokens). Without one, /mcp answers 401
-with ``WWW-Authenticate: Bearer resource_metadata=...``, which is how Claude.ai
-and ChatGPT find where to sign in. That hint is what the LAN listener leaves out
-on purpose, and why this is a separate front door rather than a setting on it.
+memoreei's own sign-in (memoreei.oauth). Without one, /mcp answers 401 with
+``WWW-Authenticate: Bearer resource_metadata=...``, which is how Claude.ai and
+ChatGPT find where to sign in. That hint is what the LAN listener leaves out on
+purpose, and why this is a separate front door rather than a setting on it.
+Sign-in exists only when memoreei knows its public address (Memoreei Cloud's
+hostname, or MEMOREEI_PUBLIC_MCP_URL); without it, ``mem_`` keys are the only way in.
 
 Failed requests (no bearer, a bad one, or a path that doesn't exist) count
 against the caller's address and against everyone; past either limit the answer
@@ -34,12 +37,14 @@ from collections import deque
 from typing import Any, Awaitable, Callable
 
 from memoreei.auth import KEY_PREFIX, Verifier, _bearer_token
-from memoreei.public.tokens import TokenRejected, TokenVerifier
+from memoreei.oauth.server import PATHS as SIGNIN_PATHS
+from memoreei.oauth.server import Rejected, SignIn
 
 log = logging.getLogger("memoreei.public")
 
 PRM_PATHS = ("/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp")
 MAX_BODY = 1 << 20
+MAX_SIGNIN_BODY = 64 << 10  # sign-in's forms and registrations are a few hundred bytes
 PER_ADDRESS = (20, 60)  # failures, seconds
 OVERALL = (120, 60)
 
@@ -110,7 +115,7 @@ class PublicGate:
         *,
         resource: str,
         keys: Verifier,
-        tokens: TokenVerifier | None = None,
+        signin: SignIn | None = None,
         limiter: FailureLimiter | None = None,
         record: Recorder | None = None,
         peer_of: Callable[[dict], str] | None = None,
@@ -120,7 +125,7 @@ class PublicGate:
         self.resource = resource
         origin = resource[: -len("/mcp")] if resource.endswith("/mcp") else resource.rstrip("/")
         self.metadata_url = origin + PRM_PATHS[0]
-        self.keys, self.tokens = keys, tokens
+        self.keys, self.signin = keys, signin
         self.limiter = limiter or FailureLimiter()
         self.record = record
         self.peer_of = peer_of or (lambda scope: (scope.get("client") or ("?", 0))[0])
@@ -144,13 +149,20 @@ class PublicGate:
             log.warning("%s %s from %s refused: too many failures", method, path, peer)
             return await _reply(send, 429, {"error": "slow_down"}, [(b"retry-after", b"60")])
 
-        if path in PRM_PATHS and method in ("GET", "HEAD") and self.tokens is not None:
+        if path in PRM_PATHS and method in ("GET", "HEAD") and self.signin is not None:
             return await _reply(send, 200, {
                 "resource": self.resource,
-                "authorization_servers": [self.tokens.issuer],
+                "authorization_servers": [self.signin.issuer],
                 "bearer_methods_supported": ["header"],
                 "resource_name": self.resource_name,
             }, [(b"cache-control", b"public, max-age=300")])
+        if path in SIGNIN_PATHS and self.signin is not None:
+            body, too_big = await _read_body(receive, MAX_SIGNIN_BODY)
+            if too_big:
+                self.limiter.fail(peer)
+                return await _reply(send, 413, {"error": "request too large"})
+            scope.setdefault("state", {})["memoreei_peer"] = peer  # sign-in logs what matters itself
+            return await self.signin(scope, _replay(body, receive), send)
         if path != "/mcp":
             self.limiter.fail(peer)
             log.info("%s %s from %s: 404", method, path[:120], peer)
@@ -167,14 +179,13 @@ class PublicGate:
             name = await self.keys(token)
             caller = {"kind": "key", "client": name, "subject": None} if name else None
             why = "invalid key"
-        elif token and self.tokens is not None:
+        elif token and self.signin is not None:
             try:
-                claims = await self.tokens.verify(token)
-                caller = {"kind": "oauth", "client": claims.client_id, "subject": claims.subject}
-            except TokenRejected as e:
+                caller = await self.signin.verify(token)
+            except Rejected as e:
                 why = f"token {e}"
         elif token:
-            why = "a token, but no issuer is configured"
+            why = "a token, but sign-in isn't set up (no public address)"
 
         if caller is None:
             self.limiter.fail(peer)
@@ -182,7 +193,7 @@ class PublicGate:
             if self.limiter.overall_blocked():
                 return await _reply(send, 429, {"error": "slow_down"}, [(b"retry-after", b"60")])
             challenge = "Bearer"
-            if self.tokens is not None:
+            if self.signin is not None:
                 challenge += f' resource_metadata="{self.metadata_url}"'
             if token:
                 challenge += ', error="invalid_token"'
@@ -192,14 +203,7 @@ class PublicGate:
 
         rpc, tool = rpc_summary(body)
         status = 0
-        sent_body = False
-
-        async def replay() -> dict:
-            nonlocal sent_body
-            if not sent_body:
-                sent_body = True
-                return {"type": "http.request", "body": body, "more_body": False}
-            return await receive()
+        replay = _replay(body, receive)
 
         async def watch(message: dict) -> None:
             nonlocal status
@@ -220,7 +224,21 @@ class PublicGate:
                     log.warning("access log: %r", e)
 
 
-async def _read_body(receive: Callable) -> tuple[bytes, bool]:
+def _replay(body: bytes, receive: Callable) -> Callable[[], Awaitable[dict]]:
+    """A receive() that hands over a body already read, then carries on as the real one."""
+    sent = False
+
+    async def replay() -> dict:
+        nonlocal sent
+        if not sent:
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return await receive()
+
+    return replay
+
+
+async def _read_body(receive: Callable, limit: int = MAX_BODY) -> tuple[bytes, bool]:
     chunks, size = [], 0
     while True:
         message = await receive()
@@ -228,7 +246,7 @@ async def _read_body(receive: Callable) -> tuple[bytes, bool]:
             break
         chunk = message.get("body", b"")
         size += len(chunk)
-        if size > MAX_BODY:
+        if size > limit:
             return b"", True
         chunks.append(chunk)
         if not message.get("more_body"):

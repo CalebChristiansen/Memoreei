@@ -1,0 +1,8 @@
+{% if waiting %}
+<section class="bubble" aria-label="Sign-in requests">
+  <div><b>{% if waiting|length == 1 %}{{ waiting[0].client_name }} is asking to use memoreei (code {{ waiting[0].user_code }}).{% else %}{{ waiting|length }} chatbots are asking to use memoreei.{% endif %}</b>
+  Approve or deny it on the Cloud page.</div>
+  <a class="button" href="/admin/cloud">Review</a>
+  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
+</section>
+{% endif %}

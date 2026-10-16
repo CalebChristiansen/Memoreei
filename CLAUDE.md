@@ -32,7 +32,8 @@ src/memoreei/
 ├── imports.py             # registered import files, re-read by `sync`
 ├── catalog.py             # what can be set up (setup wizard and dashboard share it)
 ├── admin/                 # the /admin dashboard and its login rules
-├── public/                # the public listener: /mcp for the internet, OAuth tokens, access log
+├── public/                # the public listener: /mcp for the internet, the gate, access log
+├── oauth/                 # memoreei's own OAuth sign-in: approve chatbots on the computer
 ├── cloud/                 # Memoreei Cloud (optional): enroll, certificate, tunnel to the relay
 ├── storage/database.py    # SQLite (SQLCipher-encrypted) + FTS5 + vector search
 ├── storage/key.py         # the database key, and every connection to memoreei.db

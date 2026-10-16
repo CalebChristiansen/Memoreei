@@ -138,6 +138,95 @@ CREATE TABLE IF NOT EXISTS access_clients (
     PRIMARY KEY (kind, client)
 );
 
+-- memoreei's own OAuth sign-in for chatbots and agents (memoreei.oauth).
+-- A CIMD client is its document's URL, cached here, and one that registered itself (DCR)
+-- gets an id of ours. metadata is the JSON as checked.
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('cimd', 'dcr')),
+    metadata TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+-- A chatbot or agent asking to connect, waiting for the person at this computer to
+-- approve it. 'authorize' came from a browser (and only that browser, by a cookie's
+-- hash, can collect the answer), and 'device' from an agent polling with a device code.
+-- user_code is shown on both sides, so the person can tell which request is which.
+CREATE TABLE IF NOT EXISTS oauth_requests (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('authorize', 'device')),
+    user_code TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    client_host TEXT NOT NULL,
+    self_registered INTEGER NOT NULL,
+    peer TEXT,
+    resource TEXT NOT NULL,
+    redirect_uri TEXT,
+    state TEXT,
+    code_challenge TEXT,
+    browser_hash TEXT,
+    device_code_hash TEXT UNIQUE,
+    interval INTEGER,
+    last_poll_at REAL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    decided_at INTEGER,
+    approved INTEGER,
+    finished_at INTEGER,
+    grant_id TEXT
+);
+
+-- One yes to one chatbot. Its codes, access tokens and refresh tokens hang off it,
+-- and removing it ends them all at once. refresh_generation counts rotations: only
+-- the newest refresh token works (and the one before, for 30 seconds).
+CREATE TABLE IF NOT EXISTS oauth_grants (
+    id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    client_host TEXT NOT NULL,
+    self_registered INTEGER NOT NULL,
+    resource TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_used_at INTEGER,
+    refresh_generation INTEGER NOT NULL DEFAULT 0,
+    refreshed_at INTEGER,
+    revoked_at INTEGER,
+    revoked_why TEXT
+);
+
+-- Authorization codes, a minute each. The grant is made when one is first redeemed.
+CREATE TABLE IF NOT EXISTS oauth_codes (
+    code_hash TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    used_at INTEGER,
+    grant_id TEXT
+);
+
+-- Access tokens: opaque, ten minutes, hashes only, like api_keys.
+CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+    token_hash TEXT PRIMARY KEY,
+    grant_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+-- private_key_jwt assertions seen, so none is accepted twice.
+CREATE TABLE IF NOT EXISTS oauth_jtis (
+    client_id TEXT NOT NULL,
+    jti TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    PRIMARY KEY (client_id, jti)
+);
+
+-- The key refresh tokens are signed with. Inside the encrypted database, like everything.
+CREATE TABLE IF NOT EXISTS oauth_keys (
+    id TEXT PRIMARY KEY,
+    secret BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS import_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,

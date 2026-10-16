@@ -6,16 +6,16 @@ Three ways it can be:
            contacts Memoreei Cloud. A self-hoster who never asks sees no change
   cloud    <home>/cloud has an enrollment and a certificate: the listener runs on
            a loopback port with that certificate, the tunnel to the relay feeds it,
-           tokens come from Memoreei Cloud's token server, and the certificate is
-           renewed here
+           and the certificate is renewed here. memoreei signs chatbots in itself
+           at https://<hostname> (memoreei.oauth)
   custom   MEMOREEI_PUBLIC_PORT is set (and no enrollment): the listener runs where
-           it's told, for the expert's own tunnel or proxy, trusting
-           MEMOREEI_OAUTH_ISSUER's tokens if one is set, and mem_ keys either way
+           it's told, for the expert's own tunnel or proxy. With
+           MEMOREEI_PUBLIC_MCP_URL (https) memoreei signs chatbots in at that
+           address; mem_ keys work either way
 
 Every few seconds it looks again (config.env, and the cloud folder that `memoreei
 cloud connect` and the dashboard write), so connecting or disconnecting needs no
-restart. It has one identity at a time: cloud wins over a public port, and `cloud
-connect` refuses while MEMOREEI_OAUTH_ISSUER is set.
+restart. It has one identity at a time: cloud wins over a public port.
 """
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Awaitable, Callable
+from urllib.parse import urlsplit
 
 from memoreei.auth import Verifier
 from memoreei.cloud.state import CloudState
 from memoreei.config import get_config
 from memoreei.public.gate import FailureLimiter, PublicGate
 from memoreei.public.listener import Listener
-from memoreei.public.tokens import TokenVerifier
 
 log = logging.getLogger("memoreei.public")
 
@@ -46,8 +46,8 @@ class Plan:
     mode: str                  # "cloud" or "custom"
     host: str
     port: int
-    resource: str              # the public /mcp URL: tokens' audience
-    issuer: str | None
+    resource: str              # the public /mcp URL: what tokens are for
+    issuer: str | None         # its origin, when memoreei signs chatbots in there
     cert: str | None
     key: str | None
     trusted_proxy: str | None = None
@@ -59,30 +59,37 @@ class Plan:
 def plan(state: CloudState) -> Plan | None:
     cfg = get_config()
     device = state.device()
-    if device is not None and state.ready() and not cfg.oauth_issuer:
+    if device is not None and state.ready():
         return Plan(mode="cloud", host="127.0.0.1", port=cfg.public_port or 0, resource=device.mcp_url,
-                    issuer=device.auth_url, cert=str(state.cert_path), key=str(state.key_path),
+                    issuer=f"https://{device.hostname}", cert=str(state.cert_path), key=str(state.key_path),
                     tunnel_url=cfg.cloud_tunnel_url or device.tunnel_url, token=state.token())
     if cfg.public_port is None:
         return None
     problem = None
-    if cfg.oauth_issuer and not cfg.public_mcp_url:
-        problem = ("MEMOREEI_OAUTH_ISSUER is set but MEMOREEI_PUBLIC_MCP_URL isn't: tokens are checked "
-                   "against that URL, so nothing could get in. Set it to the address clients use, "
-                   "ending in /mcp.")
+    resource = cfg.public_mcp_url or ""
+    issuer = None
+    if resource:
+        u = urlsplit(resource)
+        if u.scheme != "https" or not u.hostname or u.path != "/mcp" or u.query or u.fragment or u.username:
+            problem = ("MEMOREEI_PUBLIC_MCP_URL must be the https address clients use, ending in /mcp "
+                       "(for example https://memoreei.example.com/mcp).")
+        else:
+            issuer = f"https://{u.netloc}"
     if bool(cfg.public_tls_cert) != bool(cfg.public_tls_key):
         problem = "MEMOREEI_PUBLIC_TLS_CERT and MEMOREEI_PUBLIC_TLS_KEY go together."
-    return Plan(mode="custom", host=cfg.public_host, port=cfg.public_port, resource=cfg.public_mcp_url or "",
-                issuer=cfg.oauth_issuer, cert=cfg.public_tls_cert, key=cfg.public_tls_key,
+    return Plan(mode="custom", host=cfg.public_host, port=cfg.public_port, resource=resource,
+                issuer=issuer, cert=cfg.public_tls_cert, key=cfg.public_tls_key,
                 trusted_proxy=cfg.trusted_proxy, problem=problem)
 
 
 class PublicRuntime:
     def __init__(self, mcp_app: Any, keys: Verifier,
                  record: Callable[[dict], Awaitable[None]] | None = None,
-                 state: CloudState | None = None) -> None:
+                 state: CloudState | None = None,
+                 oauth_store: Callable[[], Awaitable[Any]] | None = None) -> None:
         self.mcp_app = mcp_app
         self.keys = keys
+        self.oauth_store = oauth_store  # () -> OAuthStore; without it, mem_ keys only
         self._record = record
         self.state = state or CloudState()
         self.limiter = FailureLimiter()
@@ -160,8 +167,13 @@ class PublicRuntime:
         self._save_status()
 
     async def _start(self, p: Plan) -> None:
-        tokens = TokenVerifier(p.issuer, p.resource) if p.issuer else None
-        gate = PublicGate(self.mcp_app, resource=p.resource, keys=self.keys, tokens=tokens,
+        signin = None
+        if p.issuer and self.oauth_store is not None:
+            from memoreei.oauth.notify import notify
+            from memoreei.oauth.server import SignIn
+
+            signin = SignIn(self.oauth_store, p.issuer, p.resource, notify=notify)
+        gate = PublicGate(self.mcp_app, resource=p.resource, keys=self.keys, signin=signin,
                           limiter=self.limiter, record=self.record, peer_of=self.peer_of)
         self.listener = Listener(gate, p.host, p.port, p.cert, p.key)
         await self.listener.start()
@@ -269,9 +281,14 @@ async def public_runtime(keys: Verifier) -> AsyncIterator[PublicRuntime]:
     async def record(entry: dict) -> None:
         await (await _get_db()).record_access(entry)
 
+    async def oauth_store() -> Any:
+        from memoreei.oauth.store import OAuthStore
+
+        return OAuthStore(await _get_db())
+
     app = build_public_server().streamable_http_app()
     async with app.router.lifespan_context(app):
-        runtime = RUNTIME = PublicRuntime(app, keys, record)
+        runtime = RUNTIME = PublicRuntime(app, keys, record, oauth_store=oauth_store)
         task = asyncio.create_task(runtime.run(), name="public-runtime")
         try:
             yield runtime

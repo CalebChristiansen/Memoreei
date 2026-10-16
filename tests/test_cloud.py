@@ -218,13 +218,6 @@ async def test_saying_no_adds_nothing(fake):
     assert CloudState().device() is None and CloudState().token() is None
 
 
-async def test_connect_refuses_beside_a_custom_issuer(fake, monkeypatch):
-    monkeypatch.setenv("MEMOREEI_OAUTH_ISSUER", "https://keycloak.example.test/realms/me")
-    with pytest.raises(CloudError, match="MEMOREEI_OAUTH_ISSUER"):
-        await connect(None, service_for=fake.factory)
-    assert fake.names == []
-
-
 async def test_disconnect_revokes_then_forgets(fake):
     await connect(None, service_for=fake.factory)
     message = await disconnect(service_for=fake.factory)
@@ -318,7 +311,7 @@ async def test_the_tunnel_splices_callers_and_names_them(relay):
         await asyncio.sleep(0.05)
         assert tunnel.state == "online" and tunnel.hostname == HOST
         assert await relay.call("203.0.113.7:51234", b"ping") == b"pong:ping"
-        assert seen_peers == ["203.0.113.7:51234"]
+        assert seen_peers == ["203.0.113.7"]  # the address, not the connection
     finally:
         task.cancel()
         local.close()
@@ -393,3 +386,13 @@ async def test_a_taken_port_fails_without_taking_the_server_down():
         s.listen()
         with pytest.raises(OSError):
             await Listener(app, "127.0.0.1", s.getsockname()[1]).start()
+
+
+def test_the_relays_peer_becomes_an_address():
+    from memoreei.cloud.tunnel import address_of
+
+    assert address_of("203.0.113.7:51234") == "203.0.113.7"
+    assert address_of("[2001:db8::1]:443") == "2001:db8::1"
+    assert address_of("2001:db8::1") == "2001:db8::1"
+    assert address_of("203.0.113.7") == "203.0.113.7"
+    assert address_of(None) == "relay" and address_of("") == "relay"

@@ -46,14 +46,6 @@ async def _call(step: Step | None, what: str, detail: Any = None) -> None:
             await result
 
 
-def refuse_reason() -> str | None:
-    """Why Connect can't run here, if it can't."""
-    if get_config().oauth_issuer:
-        return ("This memoreei trusts its own sign-in server (MEMOREEI_OAUTH_ISSUER), and its public "
-                "listener has one identity at a time. Remove that setting to use Memoreei Cloud instead.")
-    return None
-
-
 async def connect(name: str | None = None, step: Step | None = None, state: CloudState | None = None,
                   service_for: Callable[[str], Service] | None = None) -> Device:
     """Enroll (if not already) and get a certificate (if there isn't one).
@@ -61,8 +53,6 @@ async def connect(name: str | None = None, step: Step | None = None, state: Clou
     ``step(what, detail)`` hears "code" (a DeviceCode to show), "approved", and
     "certificate" (asking; takes about half a minute).
     """
-    if reason := refuse_reason():
-        raise CloudError(reason)
     service_for = service_for or Service
     cfg = get_config()
     state = state or CloudState()

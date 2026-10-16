@@ -38,6 +38,7 @@
   </div>
 </aside>
 <main{% block main_class %}{% endblock %}>
+{% if nav != "cloud" %}<div hx-get="/admin/chatbots/waiting?banner=1" hx-trigger="load, every 5s"></div>{% endif %}
 {% block main %}{% endblock %}
 </main>
 </div>

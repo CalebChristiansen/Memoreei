@@ -1,0 +1,27 @@
+<section id="chatbot-requests" hx-get="/admin/chatbots/waiting" hx-trigger="every 3s" hx-swap="outerHTML">
+{% if waiting %}
+<div class="card">
+  <h2>Waiting for you</h2>
+  <p>Only approve a request you just started, by adding memoreei in a chatbot or signing in from an agent.
+  The code here should match the one it's showing you. If you didn't ask, deny it: approving lets it read your messages.</p>
+  <table>
+    <thead><tr><th scope="col">Code</th><th scope="col">Who</th><th scope="col">Asked</th><th scope="col"><span class="visually-hidden">Answer</span></th></tr></thead>
+    <tbody>
+    {% for r in waiting %}
+    <tr>
+      <td class="mono"><b>{{ r.user_code }}</b></td>
+      <td>{{ r.client_name }} <span class="caption">{% if r.self_registered %}(it named itself{% if r.client_host %}; {{ r.client_host }}{% endif %}){% else %}({{ r.client_host }}){% endif %}{% if r.kind == "device" %}, an agent{% endif %}</span></td>
+      <td>{{ r.created_at|ago|capitalize }}{% if r.peer %} <span class="caption mono">from {{ r.peer }}</span>{% endif %}</td>
+      <td class="row">
+        <button class="small" hx-post="/admin/chatbots/requests/{{ r.id|urlencode }}/approve" hx-target="#chatbot-requests" hx-swap="outerHTML"
+          hx-confirm="Is {{ r.client_name }} showing you the code {{ r.user_code }} right now, because you just asked it to connect? Approving lets it read your messages.">Approve<span class="visually-hidden"> {{ r.user_code }}</span></button>
+        <button class="danger small" hx-post="/admin/chatbots/requests/{{ r.id|urlencode }}/deny" hx-target="#chatbot-requests" hx-swap="outerHTML">Deny<span class="visually-hidden"> {{ r.user_code }}</span></button>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% if said %}<p role="status">{{ said }}</p>{% endif %}
+</section>

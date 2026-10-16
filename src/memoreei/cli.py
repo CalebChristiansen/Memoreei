@@ -21,10 +21,12 @@ import_app = typer.Typer(help="Import data from various sources")
 service_app = typer.Typer(help="Manage the Memoreei background service (macOS launchd, Linux systemd)")
 key_app = typer.Typer(help="Manage API keys for the network server")
 cloud_app = typer.Typer(help="Memoreei Cloud: use this memoreei from Claude.ai, ChatGPT and agents")
+chatbots_app = typer.Typer(help="Chatbots and agents signed in to this memoreei: approve, list, remove")
 app.add_typer(import_app, name="import")
 app.add_typer(service_app, name="service")
 app.add_typer(key_app, name="key")
 app.add_typer(cloud_app, name="cloud")
+app.add_typer(chatbots_app, name="chatbots")
 
 
 @app.callback(invoke_without_command=True)
@@ -819,6 +821,102 @@ def cloud_disconnect(
     typer.echo(asyncio.run(disconnect()))
 
 
+# ── Chatbots (memoreei.oauth) ────────────────────────────────────────────────
+
+
+def _who(row: dict) -> str:
+    if row["self_registered"]:
+        return f"{row['client_name']} (it named itself{'; ' + row['client_host'] if row['client_host'] else ''})"
+    return f"{row['client_name']} ({row['client_host']})"
+
+
+@chatbots_app.command(name="list")
+def chatbots_list() -> None:
+    """Chatbots waiting for your answer, and those connected."""
+    from memoreei.oauth.store import OAuthStore, short_id
+
+    async def _run() -> tuple[list[dict], list[dict]]:
+        async with _open_db() as db:
+            store = OAuthStore(db)
+            return await store.waiting(), await store.grants()
+
+    waiting, grants = asyncio.run(_run())
+    if waiting:
+        typer.echo("Waiting for you (memoreei chatbots approve CODE, or deny CODE):\n")
+        for r in waiting:
+            typer.echo(f"  {typer.style(r['user_code'], bold=True)}  {_who(r)}"
+                       f"{', an agent' if r['kind'] == 'device' else ''}, asked {_fmt_time(r['created_at'])}"
+                       f"{' from ' + r['peer'] if r['peer'] else ''}")
+        typer.echo("")
+    if not grants:
+        typer.echo("No chatbots connected." if not waiting else "None connected yet.")
+        return
+    typer.echo(f"  {'ID':8}  {'CHATBOT':40}  {'CONNECTED':16}  {'LAST USED':16}  CALLS")
+    for g in grants:
+        typer.echo(f"  {short_id(g['id']):8}  {_who(g)[:40]:40}  {_fmt_time(g['created_at']):16}  "
+                   f"{_fmt_time(g['last_used_at']):16}  {g['calls']}")
+
+
+def _answer(code: str, approve: bool) -> None:
+    from memoreei.oauth.store import OAuthStore
+
+    async def _run() -> tuple[dict | None, bool]:
+        async with _open_db() as db:
+            store = OAuthStore(db)
+            row = await store.waiting_by_code(code)
+            return row, row is not None and await store.decide(row["id"], approve)
+
+    row, done = asyncio.run(_run())
+    if row is None or not done:
+        typer.echo(f"Nothing is waiting with the code {code.upper()}. See: memoreei chatbots list")
+        raise typer.Exit(1)
+    if approve:
+        typer.echo(f"  ✓ Approved {_who(row)}. It finishes connecting by itself in a few seconds.")
+    else:
+        typer.echo(f"  ✓ Denied {_who(row)}.")
+
+
+@chatbots_app.command(name="approve")
+def chatbots_approve(
+    code: str = typer.Argument(..., help="The code the chatbot or agent is showing you"),
+) -> None:
+    """Let a chatbot or agent that's asking use this memoreei. Only one you just asked to connect."""
+    _answer(code, True)
+
+
+@chatbots_app.command(name="deny")
+def chatbots_deny(
+    code: str = typer.Argument(..., help="The code of the request to turn down"),
+) -> None:
+    """Turn down a chatbot or agent that's asking."""
+    _answer(code, False)
+
+
+@chatbots_app.command(name="remove")
+def chatbots_remove(
+    chatbot: str = typer.Argument(..., help="Its ID from memoreei chatbots list"),
+) -> None:
+    """Cut a chatbot off, at once. It would have to ask again."""
+    from memoreei.oauth.store import OAuthStore
+
+    async def _run() -> list[dict]:
+        async with _open_db() as db:
+            store = OAuthStore(db)
+            found = await store.grant_by_prefix(chatbot)
+            if len(found) == 1:
+                await store.revoke_grant(found[0]["id"], "removed with the CLI")
+            return found
+
+    found = asyncio.run(_run())
+    if not found:
+        typer.echo(f"No connected chatbot has the ID {chatbot}. See: memoreei chatbots list")
+        raise typer.Exit(1)
+    if len(found) > 1:
+        typer.echo(f"More than one chatbot's ID starts {chatbot}; give more of it.")
+        raise typer.Exit(1)
+    typer.echo(f"  ✓ Removed {_who(found[0])}.")
+
+
 def _prompt_connector_vars(key: str) -> list[tuple[str, str]]:
     """Prompt the user for a single connector's variables. Returns list of (var, value)."""
     import questionary
@@ -1238,7 +1336,7 @@ def _offer_cloud() -> None:
         return
     typer.echo("  ☁  Claude.ai and ChatGPT\n")
     typer.echo("  To use memoreei from them, with nothing to open on your router: memoreei cloud connect")
-    typer.echo("  (Or your own tunnel and sign-in: https://github.com/CalebChristiansen/Memoreei#your-own-tunnel-and-sign-in)\n")
+    typer.echo("  (Or your own tunnel: https://github.com/CalebChristiansen/Memoreei#your-own-tunnel)\n")
 
 
 @app.command()

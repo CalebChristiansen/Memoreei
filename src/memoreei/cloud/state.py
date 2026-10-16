@@ -32,7 +32,7 @@ def cloud_dir() -> Path:
 
 @dataclass(frozen=True)
 class Device:
-    auth_url: str      # the token server, which is also the OAuth issuer
+    auth_url: str      # the service: enrollment and certificates (memoreei signs chatbots in itself)
     tunnel_url: str
     hostname: str
     device_id: str

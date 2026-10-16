@@ -214,12 +214,12 @@ class Config:
     auto_sync: bool = False
     sync_interval: int = 300
 
-    # The public listener (memoreei.public): /mcp for the internet, behind OAuth tokens
-    # and mem_ keys. Off unless a port is set or Memoreei Cloud is connected.
+    # The public listener (memoreei.public): /mcp for the internet, behind memoreei's own
+    # sign-in (memoreei.oauth) and mem_ keys. Off unless a port is set or Memoreei Cloud
+    # is connected. Sign-in needs the public address, public_mcp_url, to be its issuer.
     public_port: int | None = None
     public_host: str = "127.0.0.1"
     public_mcp_url: str | None = None
-    oauth_issuer: str | None = None
     public_tls_cert: str | None = None
     public_tls_key: str | None = None
     trusted_proxy: str | None = None
@@ -311,7 +311,6 @@ def get_config() -> Config:
             public_port=int(os.environ["MEMOREEI_PUBLIC_PORT"]) if os.environ.get("MEMOREEI_PUBLIC_PORT") else None,
             public_host=os.environ.get("MEMOREEI_PUBLIC_HOST") or "127.0.0.1",
             public_mcp_url=(os.environ.get("MEMOREEI_PUBLIC_MCP_URL") or "").rstrip("/") or None,
-            oauth_issuer=os.environ.get("MEMOREEI_OAUTH_ISSUER") or None,
             public_tls_cert=os.environ.get("MEMOREEI_PUBLIC_TLS_CERT") or None,
             public_tls_key=os.environ.get("MEMOREEI_PUBLIC_TLS_KEY") or None,
             trusted_proxy=os.environ.get("MEMOREEI_TRUSTED_PROXY") or None,

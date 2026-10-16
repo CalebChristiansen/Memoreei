@@ -9,19 +9,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **Use memoreei from Claude.ai, ChatGPT and agents.** A second front door for the
-  internet, the public listener: `/mcp` and its OAuth protected-resource metadata
-  only, OAuth access tokens from one issuer (checked here against the issuer's keys)
-  or `mem_` keys, rate limits on failed attempts, and an access log of every call on
-  the dashboard's new Cloud page. Off unless you turn it on; the LAN listener is
-  unchanged.
+  internet, the public listener: `/mcp`, its OAuth metadata and memoreei's own sign-in
+  only, sign-in tokens or `mem_` keys, rate limits on failed attempts, and an access log
+  of every call on the dashboard's new Cloud page. Off unless you turn it on; the LAN
+  listener is unchanged.
+- **memoreei signs chatbots in itself, and you approve each one on the computer.** A
+  chatbot or agent asking to connect shows a short code and waits; you approve that code
+  in the dashboard (every page shows a note while one waits), with `memoreei chatbots
+  approve CODE`, or from a desktop notification. `memoreei chatbots list | deny |
+  remove`, and **Remove** on the Cloud page, which cuts a chatbot off at once. Claude.ai
+  and ChatGPT register by client metadata document, other apps by dynamic registration,
+  and agents without a browser by device code (RFC 8628). Access tokens last ten minutes;
+  refresh tokens are signed by memoreei, replaced on every use, and an old one coming
+  back cancels that chatbot's sign-in. Nothing outside your computer can mint a token for
+  your memoreei.
 - **Memoreei Cloud**, optional: `memoreei cloud connect | status | disconnect`, or the
   Cloud page. Enrolls the computer by device code, gets a certificate for its hostname
   with a key made here, renews it, and holds a tunnel to the relay, which carries TLS it
   can't open. Nothing contacts Memoreei Cloud until you connect; the offer on the status
   page and at the end of `memoreei setup` hides with `MEMOREEI_CLOUD_OFFER=0`.
-- **Or your own:** `MEMOREEI_PUBLIC_PORT`, `MEMOREEI_PUBLIC_MCP_URL` and
-  `MEMOREEI_OAUTH_ISSUER` put the public listener behind any tunnel or proxy and any
-  OAuth server (Keycloak, Authentik, Auth0, …).
+- **Or your own:** `MEMOREEI_PUBLIC_PORT` and `MEMOREEI_PUBLIC_MCP_URL` put the public
+  listener, and memoreei's sign-in, behind any tunnel or proxy.
 - Chatbots reaching memoreei through the public listener are told that silence probably
   means the computer is asleep or offline.
 

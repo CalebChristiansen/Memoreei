@@ -1,0 +1,19 @@
+<section id="chatbot-list">
+{% if chatbots %}
+<table>
+  <thead><tr><th scope="col">Chatbot</th><th scope="col">Connected</th><th scope="col">Last used</th><th scope="col">Calls</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+  <tbody>
+  {% for g in chatbots %}
+  <tr>
+    <td>{{ g.client_name }} <span class="caption">{% if g.self_registered %}(it named itself{% if g.client_host %}; {{ g.client_host }}{% endif %}){% else %}({{ g.client_host }}){% endif %}</span></td>
+    <td>{{ g.created_at|ago|capitalize }}</td><td>{{ g.last_used_at|ago|capitalize }}</td><td>{{ g.calls }}</td>
+    <td><button class="danger small" hx-post="/admin/chatbots/{{ g.id|urlencode }}/remove" hx-target="#chatbot-list" hx-swap="outerHTML"
+      hx-confirm="Remove {{ g.client_name }}? It's cut off at once, and would have to ask again.">Remove<span class="visually-hidden"> {{ g.client_name }}</span></button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No chatbots yet. Add this memoreei's address in one, and approve it here when it asks.</p>
+{% endif %}
+</section>

@@ -39,6 +39,17 @@ class Revoked(Exception):
     pass
 
 
+def address_of(peer: Any) -> str:
+    """The caller's address from the relay's "ip:port" or "[v6]:port". Limits count
+    addresses: with the port left on, every connection would be a stranger."""
+    if not isinstance(peer, str) or not peer:
+        return "relay"
+    if peer.startswith("["):
+        return peer[1:].partition("]")[0] or "relay"
+    host, sep, port = peer.rpartition(":")
+    return host if sep and port.isdigit() and ":" not in host else peer
+
+
 def explain(e: BaseException) -> tuple[str, str]:
     """(state, what to tell the person) for a failure to reach the relay."""
     dns = getattr(aiohttp, "ClientConnectorDNSError", None)
@@ -132,7 +143,7 @@ class Tunnel:
                     self.hostname = m.get("hostname")
                     self._set("online", f"Online as {self.hostname}")
                 elif m.get("type") == "open" and isinstance(m.get("id"), str):
-                    task = asyncio.create_task(self._serve(m["id"], str(m.get("peer") or "relay")))
+                    task = asyncio.create_task(self._serve(m["id"], address_of(m.get("peer"))))
                     self._data.add(task)
                     task.add_done_callback(self._data.discard)
             code = ws.close_code

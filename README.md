@@ -204,49 +204,77 @@ used.
 
 Claude.ai and ChatGPT call from their own servers, not your browser, so they can't reach
 your home network, and they sign in with OAuth rather than a pasted key. Memoreei has a
-second, stricter front door for them, the **public listener**: it answers `/mcp` and the
-OAuth metadata that tells a chatbot where to sign in, and nothing else (the dashboard is
-never reachable through it). It takes OAuth access tokens from one sign-in server, and
-your `mem_` keys for agents that only send a header. Failed attempts are rate-limited,
-and every call is listed on the dashboard's Cloud page: when, which chatbot or key, which
-tool, from where. It's off until you choose one of these:
+second, stricter front door for them, the **public listener**: it answers `/mcp`, the
+sign-in, and the OAuth metadata that tells a chatbot where to sign in, and nothing else
+(the dashboard is never reachable through it). Agents that only send a header can use
+your `mem_` keys there too. Failed attempts are rate-limited, and every call is listed on
+the dashboard's Cloud page: when, which chatbot or key, which tool, from where. It's off
+until you choose one of the two ways below.
+
+#### Approving a chatbot
+
+Memoreei signs chatbots in itself, and **you approve each one on the computer memoreei
+runs on**. Add memoreei's address as a connector in Claude or ChatGPT (or sign in from an
+agent) and it opens a page with a short code, like `K7QM`, that waits for you. On the
+computer, approve that code:
+
+- in the dashboard's Cloud page (every page shows a note while one waits), or
+- with `memoreei chatbots approve K7QM`, or
+- from the desktop notification, where there is a desktop.
+
+The chatbot's page moves on by itself within a couple of seconds. Only approve a code you
+just asked for: anyone can ask, and approving lets them read your messages. Compare the
+code, and check the name and address beside it. A chatbot with a published client
+document shows its own address (`claude.ai`, `chatgpt.com`); an app that registered
+itself is marked "it named itself", because it could have called itself anything.
+Requests that nobody answers lapse after ten minutes.
+
+Agents without a browser (`hermes mcp login --flow device`) get the same kind of code to
+approve the same way.
+
+`memoreei chatbots list` shows who's waiting and who's connected; **Remove** on the Cloud
+page, or `memoreei chatbots remove <id>`, cuts one off at once. Its next call fails, not
+its next sign-in. Sign-in tokens are memoreei's own: access tokens last ten minutes,
+refresh tokens are signed by memoreei, replaced on every use, and stop after a month
+unused, and an old one turning up again (someone else has a copy) cancels that chatbot's
+sign-in altogether. Nobody else, Memoreei Cloud included, can mint a token for your
+memoreei.
 
 #### Memoreei Cloud
 
-The easy way. `memoreei cloud connect` (or **Connect to Memoreei Cloud** in the
-dashboard) opens a sign-in page, you approve this computer there, and it gets an address
-like `https://k3x9q2mfa7td.memoreei.net/mcp` to add as a connector in Claude or ChatGPT.
-Nothing to open on your router: memoreei holds a connection out to the relay, and
-chatbots reach it through that. Your messages stay on your computer. The relay carries
-TLS it can't open: the certificate's key is made on your computer and never leaves it.
-`memoreei cloud status` says whether it's online; `memoreei cloud disconnect` takes the
-computer off your account. While the computer sleeps, chatbots can't reach it, and
-memoreei tells them to say so.
+The easy way to give memoreei an address. `memoreei cloud connect` (or **Connect to
+Memoreei Cloud** in the dashboard) opens a sign-in page, you approve this computer there,
+and it gets an address like `https://k3x9q2mfa7td.memoreei.net/mcp` to add as a connector
+in Claude or ChatGPT. Nothing to open on your router: memoreei holds a connection out to
+the relay, and chatbots reach it through that. Your messages stay on your computer. The
+relay carries TLS it can't open: the certificate's key is made on your computer and never
+leaves it. Your Memoreei Cloud account is for the address; chatbots sign in to memoreei
+itself, as above. `memoreei cloud status` says whether it's online; `memoreei cloud
+disconnect` takes the computer off your account. While the computer sleeps, chatbots
+can't reach it, and memoreei tells them to say so.
 
 Nothing contacts Memoreei Cloud until you connect. To hide the offer, set
 `MEMOREEI_CLOUD_OFFER=0`.
 
-#### Your own tunnel and sign-in
+#### Your own tunnel
 
-Everything Memoreei Cloud does uses standards, so you can bring your own. Turn on the
-public listener and point any tunnel or proxy at it: Cloudflare Tunnel, Tailscale Funnel,
-ngrok, or Caddy on a machine with a public address.
+Memoreei Cloud uses nothing but standards, so you can bring your own address instead.
+Turn on the public listener and point any tunnel or proxy at it: Cloudflare Tunnel,
+Tailscale Funnel, ngrok, or Caddy on a machine with a public address.
 
 ```bash
 MEMOREEI_PUBLIC_PORT=3680                                  # on 127.0.0.1 unless MEMOREEI_PUBLIC_HOST says otherwise
-MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com/mcp   # what clients use; tokens must be for this audience
-MEMOREEI_OAUTH_ISSUER=https://id.example.com/realms/me     # optional: Keycloak, Authentik, Auth0, …
+MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com/mcp   # the https address clients use
 MEMOREEI_TRUSTED_PROXY=127.0.0.1                           # optional: read the caller's address from X-Forwarded-For
 ```
 
-With an issuer, memoreei checks access tokens itself against the issuer's published keys
-(found through its RFC 8414 or OpenID metadata): an asymmetric signature, `iss` exactly
-the issuer, `aud` your `/mcp` URL, in date. Your issuer does the signing in, the
-consent and the client registration that Claude and ChatGPT expect (dynamic or
-metadata-document client registration, PKCE). Without one, the public listener takes
-`mem_` keys only. To serve TLS from memoreei itself, add `MEMOREEI_PUBLIC_TLS_CERT` and
-`MEMOREEI_PUBLIC_TLS_KEY`. The public listener has one identity at a time, so it's this
-or Memoreei Cloud.
+With `MEMOREEI_PUBLIC_MCP_URL` set, memoreei signs chatbots in at that address
+(`https://memories.example.com/authorize` and the rest, announced in its RFC 8414
+metadata): dynamic and metadata-document client registration, PKCE, and device codes
+for agents, as Claude, ChatGPT and agent harnesses expect, approved as above. Without
+it, the public listener takes `mem_` keys only. To serve TLS from memoreei itself, add
+`MEMOREEI_PUBLIC_TLS_CERT` and `MEMOREEI_PUBLIC_TLS_KEY`. The public listener has one
+identity at a time, so it's this or Memoreei Cloud.
 
 ---
 

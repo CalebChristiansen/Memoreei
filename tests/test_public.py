@@ -1,4 +1,4 @@
-"""The public listener: token checks, the gate, and the runtime that runs them."""
+"""The public listener: the gate, sign-in's place in it, and the runtime that runs them."""
 from __future__ import annotations
 
 import asyncio
@@ -6,133 +6,34 @@ import json
 import time
 
 import httpx
-import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from starlette.testclient import TestClient
 
+from memoreei.oauth.server import Rejected
 from memoreei.public.gate import FailureLimiter, PublicGate, rpc_summary
-from memoreei.public.tokens import IssuerKeys, TokenRejected, TokenVerifier, metadata_urls
 
-ISSUER = "https://auth.example.test"
-RESOURCE = "https://abcdefghjk23.devices.example.test/mcp"
+ISSUER = "https://abcdefghjk23.devices.example.test"
+RESOURCE = f"{ISSUER}/mcp"
 KEY = "mem_" + "k" * 43
+TOKEN = "mat_" + "t" * 43
 
 
-class Issuer:
-    """A fake OAuth issuer: metadata, a key set, and tokens signed with its keys."""
+class FakeSignIn:
+    """Stands in for memoreei.oauth.server.SignIn: one good token, and its own pages."""
 
-    def __init__(self) -> None:
-        self.keys: dict[str, object] = {"one": ec.generate_private_key(ec.SECP256R1())}
-        self.fetches = 0
+    issuer = ISSUER
 
-    def jwks(self) -> dict:
-        out = []
-        for kid, key in self.keys.items():
-            jwk = json.loads(jwt.algorithms.ECAlgorithm.to_jwk(key.public_key())) if isinstance(
-                key, ec.EllipticCurvePrivateKey) else json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
-            out.append({**jwk, "kid": kid, "use": "sig"})
-        return {"keys": out}
+    async def verify(self, token: str) -> dict:
+        if token != TOKEN:
+            raise Rejected("unknown")
+        return {"kind": "oauth", "client": "Claude", "subject": "grant-1"}
 
-    def handler(self, request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/.well-known/oauth-authorization-server":
-            return httpx.Response(200, json={"issuer": ISSUER, "jwks_uri": f"{ISSUER}/jwks.json"})
-        if request.url.path == "/jwks.json":
-            self.fetches += 1
-            return httpx.Response(200, json=self.jwks())
-        return httpx.Response(404)
-
-    def http(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
-
-    def token(self, kid: str = "one", alg: str | None = None, **claims) -> str:
-        key = self.keys[kid]
-        alg = alg or ("ES256" if isinstance(key, ec.EllipticCurvePrivateKey) else "RS256")
-        now = int(time.time())
-        body = {"iss": ISSUER, "aud": RESOURCE, "sub": "user_01", "client_id": "https://claude.ai/oauth/x",
-                "iat": now, "exp": now + 600, **claims}
-        return jwt.encode({k: v for k, v in body.items() if v is not None}, key, algorithm=alg,
-                          headers={"kid": kid})
+    async def __call__(self, scope, receive, send):
+        out = json.dumps({"signin": scope["path"], "peer": scope["state"]["memoreei_peer"]}).encode()
+        await send({"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"application/json")]})
+        await send({"type": "http.response.body", "body": out})
 
 
-@pytest.fixture
-def issuer() -> Issuer:
-    return Issuer()
-
-
-def verifier(issuer: Issuer, clock=time.monotonic) -> TokenVerifier:
-    return TokenVerifier(ISSUER, RESOURCE, IssuerKeys(ISSUER, issuer.http(), clock=clock))
-
-
-# ── tokens ───────────────────────────────────────────────────────────────────
-
-
-def test_metadata_urls_follow_rfc8414_then_openid():
-    assert metadata_urls("https://a.test") == [
-        "https://a.test/.well-known/oauth-authorization-server", "https://a.test/.well-known/openid-configuration"]
-    assert metadata_urls("https://a.test/realms/me") == [
-        "https://a.test/.well-known/oauth-authorization-server/realms/me",
-        "https://a.test/realms/me/.well-known/openid-configuration"]
-
-
-async def test_a_good_token_passes(issuer):
-    claims = await verifier(issuer).verify(issuer.token())
-    assert claims.subject == "user_01" and claims.client_id == "https://claude.ai/oauth/x"
-
-
-@pytest.mark.parametrize("claims, why", [
-    ({"aud": "https://another0device.devices.example.test/mcp"}, "another audience"),
-    ({"iss": "https://evil.test"}, "another issuer"),
-    ({"exp": int(time.time()) - 120}, "expired"),
-    ({"nbf": int(time.time()) + 600}, "not valid yet"),
-    ({"sub": None}, "sub"),
-    ({"exp": None}, "exp"),
-])
-async def test_bad_claims_are_refused(issuer, claims, why):
-    with pytest.raises(TokenRejected, match=why):
-        await verifier(issuer).verify(issuer.token(**claims))
-
-
-async def test_a_minute_of_clock_skew_is_fine(issuer):
-    await verifier(issuer).verify(issuer.token(exp=int(time.time()) - 30))
-
-
-async def test_symmetric_and_none_algorithms_are_refused(issuer):
-    hs = jwt.encode({"iss": ISSUER, "aud": RESOURCE, "sub": "x", "exp": int(time.time()) + 60}, "s" * 32,
-                    algorithm="HS256", headers={"kid": "one"})
-    with pytest.raises(TokenRejected, match="not accepted"):
-        await verifier(issuer).verify(hs)
-    none = jwt.encode({"iss": ISSUER, "aud": RESOURCE, "sub": "x"}, None, algorithm="none")
-    with pytest.raises(TokenRejected):
-        await verifier(issuer).verify(none)
-    with pytest.raises(TokenRejected, match="malformed"):
-        await verifier(issuer).verify("not.a.jwt")
-
-
-async def test_a_forged_signature_is_refused(issuer):
-    forger = Issuer()  # same kid, different key
-    with pytest.raises(TokenRejected):
-        await verifier(issuer).verify(forger.token())
-
-
-async def test_a_rotated_key_is_fetched_at_once_but_not_too_often(issuer):
-    now = [1000.0]
-    v = verifier(issuer, clock=lambda: now[0])
-    await v.verify(issuer.token())
-    issuer.keys["two"] = ec.generate_private_key(ec.SECP256R1())
-    now[0] += 11
-    await v.verify(issuer.token("two"))           # unknown kid: fetched again
-    assert issuer.fetches == 2
-    with pytest.raises(TokenRejected, match="unknown signing key"):
-        unknown = issuer.token("two").split(".")
-        unknown[0] = jwt.utils.base64url_encode(json.dumps({"alg": "ES256", "kid": "three"}).encode()).decode()
-        await v.verify(".".join(unknown))  # within ten seconds: no fetch
-    assert issuer.fetches == 2
-
-
-async def test_an_rsa_issuer_works_too(issuer):
-    issuer.keys["rsa"] = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    assert (await verifier(issuer).verify(issuer.token("rsa"))).subject == "user_01"
 
 
 # ── the gate ─────────────────────────────────────────────────────────────────
@@ -156,14 +57,14 @@ async def keys(token: str) -> str | None:
 
 
 @pytest.fixture
-def gate_client(issuer):
+def gate_client():
     records: list[dict] = []
 
     async def record(entry: dict) -> None:
         records.append(entry)
 
     peer = {"value": "203.0.113.7"}
-    gate = PublicGate(echo_mcp, resource=RESOURCE, keys=keys, tokens=verifier(issuer),
+    gate = PublicGate(echo_mcp, resource=RESOURCE, keys=keys, signin=FakeSignIn(),
                       limiter=FailureLimiter((5, 60), (50, 60)), record=record,
                       peer_of=lambda scope: peer["value"])
     client = TestClient(gate, base_url="https://abcdefghjk23.devices.example.test")
@@ -195,17 +96,16 @@ def test_no_bearer_gets_the_oauth_hint(gate_client):
         'Bearer resource_metadata="https://abcdefghjk23.devices.example.test/.well-known/oauth-protected-resource"')
 
 
-def test_a_bad_token_says_invalid_token(gate_client, issuer):
-    r = gate_client.post("/mcp", json=TOOL_CALL,
-                         headers={"Authorization": f"Bearer {issuer.token(aud='https://other/mcp')}"})
+def test_a_bad_token_says_invalid_token(gate_client):
+    r = gate_client.post("/mcp", json=TOOL_CALL, headers={"Authorization": "Bearer mat_someone_elses"})
     assert r.status_code == 401 and 'error="invalid_token"' in r.headers["www-authenticate"]
     assert gate_client.records == []
 
 
-def test_a_token_gets_in_and_is_logged(gate_client, issuer):
-    r = gate_client.post("/mcp", json=TOOL_CALL, headers={"Authorization": f"Bearer {issuer.token()}"})
+def test_a_token_gets_in_and_is_logged(gate_client):
+    r = gate_client.post("/mcp", json=TOOL_CALL, headers={"Authorization": f"Bearer {TOKEN}"})
     assert r.status_code == 200
-    assert r.json()["caller"] == {"kind": "oauth", "client": "https://claude.ai/oauth/x", "subject": "user_01"}
+    assert r.json()["caller"] == {"kind": "oauth", "client": "Claude", "subject": "grant-1"}
     assert json.loads(r.json()["body"]) == TOOL_CALL  # the body the gate read is passed on whole
     [entry] = gate_client.records
     assert entry["peer"] == "203.0.113.7" and entry["tool"] == "search_memoreei"
@@ -249,10 +149,30 @@ def test_the_overall_limit_counts_everyone():
     assert not limiter.overall_blocked()
 
 
-def test_without_an_issuer_there_is_no_metadata_and_no_hint():
+@pytest.mark.parametrize("path", ["/authorize", "/token", "/register", "/.well-known/oauth-authorization-server",
+                                  "/device", "/authorize/wait"])
+def test_sign_in_paths_go_to_sign_in_with_the_real_address(gate_client, path):
+    r = gate_client.get(path)
+    assert r.status_code == 200 and r.json() == {"signin": path, "peer": "203.0.113.7"}
+
+
+def test_sign_in_bodies_are_small(gate_client):
+    assert gate_client.post("/register", content=b"x" * (64 << 10)).status_code == 200
+    assert gate_client.post("/token", content=b"x" * ((64 << 10) + 1)).status_code == 413
+
+
+def test_sign_in_paths_are_still_behind_the_address_limit(gate_client):
+    for _ in range(5):
+        gate_client.get("/.env")
+    assert gate_client.get("/authorize").status_code == 429
+
+
+def test_without_sign_in_there_is_no_metadata_and_no_hint():
     gate = PublicGate(echo_mcp, resource="", keys=keys)
     client = TestClient(gate)
     assert client.get("/.well-known/oauth-protected-resource").status_code == 404
+    assert client.get("/authorize").status_code == 404
+    assert client.post("/mcp", json=TOOL_CALL, headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 401
     r = client.post("/mcp", json=TOOL_CALL)
     assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
     assert client.post("/mcp", json=TOOL_CALL, headers={"Authorization": f"Bearer {KEY}"}).status_code == 200
@@ -300,13 +220,30 @@ def test_plan_is_off_until_asked(monkeypatch):
     monkeypatch.setattr(config_module, "_config", None)
     p = plan(CloudState())
     assert p.mode == "custom" and p.host == "127.0.0.1" and p.port == 3680 and p.issuer is None
-    monkeypatch.setenv("MEMOREEI_OAUTH_ISSUER", ISSUER)
-    monkeypatch.setattr(config_module, "_config", None)
-    assert "MEMOREEI_PUBLIC_MCP_URL" in plan(CloudState()).problem
+    # Knowing its public address, memoreei signs chatbots in there.
     monkeypatch.setenv("MEMOREEI_PUBLIC_MCP_URL", RESOURCE + "/")
     monkeypatch.setattr(config_module, "_config", None)
     p = plan(CloudState())
     assert p.problem is None and p.resource == RESOURCE and p.issuer == ISSUER
+    for bad in ("http://memoreei.example.test/mcp", "https://memoreei.example.test/other"):
+        monkeypatch.setenv("MEMOREEI_PUBLIC_MCP_URL", bad)
+        monkeypatch.setattr(config_module, "_config", None)
+        p = plan(CloudState())
+        assert "MEMOREEI_PUBLIC_MCP_URL" in p.problem and p.issuer is None
+
+
+def test_a_cloud_device_is_its_own_issuer(tmp_path):
+    from memoreei.cloud.state import CloudState, Device
+    from memoreei.public.runtime import plan
+
+    state = CloudState(tmp_path / "cloud")
+    state.save_device(Device("https://auth.example.test", "wss://tunnel.example.test", "abcdefghjk23.devices.example.test",
+                             "d1", "laptop", 0))
+    state.save_token("mdt_x")
+    state.save_key(b"x")
+    state.save_certificate("x")
+    p = plan(state)
+    assert p.mode == "cloud" and p.issuer == ISSUER and p.resource == RESOURCE
 
 
 @pytest.fixture
@@ -391,3 +328,78 @@ def test_the_public_server_tells_chatbots_about_sleep(public_server):
     assert "asleep or offline" in r.json()["result"]["instructions"]
     r = public_server.post("/mcp", json=init, headers={**MCP_HEADERS, "Authorization": f"Bearer {KEY}"})
     assert "asleep or offline" not in r.json()["result"]["instructions"]
+
+
+# ── memoreei's own sign-in, end to end ───────────────────────────────────────
+
+
+@pytest.fixture
+def public_address(monkeypatch):
+    """Set before public_server starts: the address a tunnel gives this memoreei."""
+    monkeypatch.setenv("MEMOREEI_PUBLIC_MCP_URL", RESOURCE)
+
+
+def test_a_chatbot_signs_in_is_approved_from_the_cli_and_can_be_removed(public_address, public_server):
+    import base64
+    import hashlib
+    import re
+    import secrets
+    from urllib.parse import parse_qs, urlsplit
+
+    from typer.testing import CliRunner
+
+    from memoreei.cli import app
+
+    base = public_server.public_url
+    meta = httpx.get(base + "/.well-known/oauth-protected-resource").json()
+    assert meta["authorization_servers"] == [ISSUER]
+    assert httpx.get(base + "/.well-known/oauth-authorization-server").json()["token_endpoint"] == f"{ISSUER}/token"
+
+    reg = httpx.post(base + "/register", json={"client_name": "Test Bot",
+                                               "redirect_uris": ["http://127.0.0.1:9/cb"]}).json()
+    verifier = secrets.token_urlsafe(48)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    r = httpx.get(base + "/authorize", params={
+        "response_type": "code", "client_id": reg["client_id"], "redirect_uri": "http://127.0.0.1:9/cb",
+        "code_challenge": challenge, "code_challenge_method": "S256", "state": "s", "resource": RESOURCE})
+    assert r.status_code == 303
+    wait = base + r.headers["location"]
+    cookie = r.headers["set-cookie"].split(";")[0]  # a __Host- cookie: sent by hand over plain http
+    page = httpx.get(wait, headers={"Cookie": cookie}).text
+    code = re.search(r"<p class=code>(\w+)</p>", page).group(1)
+
+    # The person, at the computer, in another process altogether.
+    out = CliRunner().invoke(app, ["chatbots", "list"])
+    assert code in out.output and "Test Bot" in out.output and "it named itself" in out.output
+    out = CliRunner().invoke(app, ["chatbots", "approve", code.lower()])
+    assert out.exit_code == 0 and "Approved Test Bot" in out.output
+
+    r = httpx.get(wait, headers={"Cookie": cookie})
+    assert r.status_code == 303
+    auth_code = parse_qs(urlsplit(r.headers["location"]).query)["code"][0]
+    tok = httpx.post(base + "/token", data={"grant_type": "authorization_code", "code": auth_code,
+                                            "client_id": reg["client_id"], "code_verifier": verifier}).json()
+    headers = {**MCP_HEADERS, "Authorization": f"Bearer {tok['access_token']}"}
+    r = httpx.post(base + "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+                   headers=headers)
+    assert r.status_code == 200, r.text
+
+    out = CliRunner().invoke(app, ["chatbots", "list"])
+    assert "Test Bot" in out.output
+    grant_id = re.search(r"^  ([0-9a-f]{8})  Test Bot", out.output, re.M).group(1)
+    out = CliRunner().invoke(app, ["chatbots", "remove", grant_id])
+    assert out.exit_code == 0 and "Removed Test Bot" in out.output
+    r = httpx.post(base + "/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+                   headers=headers)
+    assert r.status_code == 401  # at once, not in ten minutes
+
+
+def test_the_cli_says_when_nothing_is_waiting():
+    from typer.testing import CliRunner
+
+    from memoreei.cli import app
+
+    out = CliRunner().invoke(app, ["chatbots", "approve", "BCDF"])
+    assert out.exit_code == 1 and "Nothing is waiting" in out.output
+    out = CliRunner().invoke(app, ["chatbots", "list"])
+    assert "No chatbots connected" in out.output
