@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sqlite3
+import sqlcipher3
 import sys
 import time
 from pathlib import Path
@@ -12,6 +12,7 @@ import aiosqlite
 import numpy as np
 
 from memoreei.search.people import GROUP_SQL, PHONE_SQL, SENDER_SQL
+from memoreei.storage.key import connect, connect_async
 from memoreei.storage.models import MemoryItem
 
 SCHEMA = """
@@ -399,7 +400,7 @@ def _read_vectors(db_path: str, base: _VectorIndex | None) -> _VectorIndex | Non
     mode means this read holds up neither the server's connection nor its writers.
     """
     after = base.max_rowid if base else 0
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     try:
         conn.execute("BEGIN")
         count, max_rowid = conn.execute(
@@ -447,8 +448,8 @@ class Database:
         parent = Path(self.db_path).parent
         if not parent.exists():
             parent.mkdir(parents=True, mode=0o700)
-        self._db = await aiosqlite.connect(self.db_path)
-        self._db.row_factory = aiosqlite.Row
+        self._db = await connect_async(self.db_path)
+        self._db.row_factory = sqlcipher3.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA foreign_keys=ON")
         await self.init_db()
@@ -502,7 +503,7 @@ class Database:
                 ),
             )
             await self._db.commit()
-        except aiosqlite.IntegrityError:
+        except sqlcipher3.IntegrityError:
             pass
         return memory.id
 
@@ -1074,7 +1075,7 @@ class Database:
                 "INSERT INTO api_keys (name, key_hash, created_at) VALUES (?, ?, ?)",
                 (name, key_hash, int(time.time())),
             )
-        except aiosqlite.IntegrityError:
+        except sqlcipher3.IntegrityError:
             return False
         await self._db.commit()
         return True

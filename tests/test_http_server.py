@@ -1,7 +1,6 @@
 """API keys and the Streamable HTTP network server."""
 from __future__ import annotations
 
-import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +13,7 @@ from memoreei.cli import app
 from memoreei.config import get_config
 from memoreei.server import NETWORK_TOOLS, build_http_app, build_network_server
 from memoreei.storage.database import Database
+from memoreei.storage.key import connect
 
 runner = CliRunner()
 
@@ -81,7 +81,7 @@ async def test_last_used_is_recorded_and_throttled(temp_db):
 
 
 def _db_rows(sql: str) -> list[tuple]:
-    conn = sqlite3.connect(get_config().db_path)
+    conn = connect(get_config().db_path)
     try:
         return conn.execute(sql).fetchall()
     finally:
@@ -337,7 +337,7 @@ def test_local_only_tool_is_not_callable_over_http(http_client):
 
 def test_last_used_updates_after_request(http_client):
     http_client.post("/mcp", json=INITIALIZE, headers=_auth(http_client.good_key))
-    rows = sqlite3.connect(get_config().db_path).execute(
+    rows = connect(get_config().db_path).execute(
         "SELECT name, last_used_at FROM api_keys"
     ).fetchall()
     assert rows == [(rows[0][0], rows[0][1])]

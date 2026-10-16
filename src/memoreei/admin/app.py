@@ -35,17 +35,14 @@ from memoreei.catalog import (
     UPLOADS,
     is_connector_configured,
     kind_name,
-    parse_env_vars,
-    read_env_lines,
-    write_env_updates,
 )
 from memoreei.config import (
-    config_env_path,
+    current_settings,
     ensure_home,
     get_config,
     legacy_home,
     memoreei_home,
-    reload_config,
+    save_settings,
 )
 from memoreei.connectors.signal.sync import DISAPPEARING_SKIPPED
 
@@ -207,7 +204,7 @@ templates.env.globals["in_app"] = lambda: bool(os.environ.get("MEMOREEI_APP"))
 
 
 def _env_vars() -> dict[str, str]:
-    return parse_env_vars(read_env_lines(config_env_path()))
+    return current_settings()
 
 
 def _on_mac() -> bool:
@@ -607,10 +604,7 @@ async def _connect(request: Request, connector: dict[str, Any]) -> Response:
     updates: list[tuple[str, str]] = [("SIGNAL_DB_KEY", key)]
     if "AUTO_SYNC" not in _env_vars():
         updates.append(("AUTO_SYNC", "true"))
-    ensure_home()
-    path = config_env_path()
-    write_env_updates(path, read_env_lines(path), updates)
-    reload_config()
+    save_settings(updates)
     await _start_sync()
     return RedirectResponse("/admin/", status_code=303)
 
@@ -633,10 +627,7 @@ async def source_save(request: Request) -> Response:
     env = _env_vars()
     if "AUTO_SYNC" not in env:
         updates.append(("AUTO_SYNC", "true"))
-    ensure_home()
-    path = config_env_path()
-    write_env_updates(path, read_env_lines(path), updates)
-    reload_config()
+    save_settings(updates)
     # Read it now rather than at the next round, and show that happening.
     await _start_sync()
     return RedirectResponse("/admin/", status_code=303)
@@ -646,9 +637,7 @@ async def source_remove(request: Request) -> Response:
     connector = _enabled_connector(request)
     if connector is None:
         return _plain(404, "Not available in the dashboard.")
-    path = config_env_path()
-    write_env_updates(path, read_env_lines(path), [(var[0], "") for var in connector["vars"]])
-    reload_config()
+    save_settings([(var[0], "") for var in connector["vars"]])
     return RedirectResponse("/admin/sources", status_code=303)
 
 

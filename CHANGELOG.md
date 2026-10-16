@@ -25,6 +25,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Chatbots reaching memoreei through the public listener are told that silence probably
   means the computer is asleep or offline.
 
+### Changed
+- **The database is always encrypted** (SQLCipher, AES-256, with a random 256-bit key).
+  The key is kept in GNOME Keyring or KWallet on a Linux desktop, and otherwise in
+  `memoreei.key` beside the database, mode 600 (the Mac too, until Memoreei.app has a
+  Developer ID); `MEMOREEI_DB_KEY` in the environment overrides both, for containers.
+  An existing database is encrypted on its first start, about 7 seconds for 150,000
+  messages, and opening one afterwards costs milliseconds. A wrong or missing key stops
+  memoreei with a message saying where it looked, rather than "file is not a database".
+  `memoreei config` shows where the key is. Back up the key with the database.
+- **Sources' tokens and passwords live in the encrypted database**, not in
+  `config.env`: Gmail's app password, the Discord, Telegram and Slack bot tokens, the
+  Matrix and Mastodon access tokens, Signal's key and `OPENAI_API_KEY`. The dashboard
+  and `memoreei setup` save them there. Ones already in `config.env` (or added there by
+  hand) move in at the next start and are removed from the file; the environment still
+  wins over both.
+
 ## [0.4.7] - 2026-10-12
 
 People by name or number, filters before ranking, and tools a small local model can use,

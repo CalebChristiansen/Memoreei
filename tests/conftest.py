@@ -28,6 +28,20 @@ def isolated_home(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_keyring(monkeypatch):
+    """Databases are encrypted in every test, with the key in a file beside them: never
+    the keyring of whoever runs the tests, and no key remembered from another test."""
+    import contextlib
+
+    from memoreei.storage import key
+
+    monkeypatch.setattr(key, "_keyring", contextlib.nullcontext)
+    monkeypatch.setattr(key, "_keyring_locked", lambda: False)
+    monkeypatch.delenv(key.DB_KEY_ENV, raising=False)
+    monkeypatch.setattr(key, "_keys", {})
+
+
+@pytest.fixture(autouse=True)
 def port_is_free(monkeypatch):
     """`serve` checks its port before binding it. Tests that mock uvicorn shouldn't fail
     because the machine running them has a Memoreei of its own on 3679."""

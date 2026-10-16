@@ -34,14 +34,17 @@ src/memoreei/
 ├── admin/                 # the /admin dashboard and its login rules
 ├── public/                # the public listener: /mcp for the internet, OAuth tokens, access log
 ├── cloud/                 # Memoreei Cloud (optional): enroll, certificate, tunnel to the relay
-├── storage/database.py    # SQLite + FTS5 + vector search
+├── storage/database.py    # SQLite (SQLCipher-encrypted) + FTS5 + vector search
+├── storage/key.py         # the database key, and every connection to memoreei.db
+├── storage/vault.py       # sources' secrets, in the database's secrets table
 ├── search/hybrid.py       # Hybrid search with RRF fusion
 ├── connectors/            # iMessage, WhatsApp, Signal, Discord, Telegram, Slack, Email, …
 └── tools/memory_tools.py  # MCP tool implementations
 ```
 
 ## Key Paths
-- **Home:** `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere (or `--home` / `MEMOREEI_HOME`): `config.env` + `memoreei.db`
+- **Home:** `~/.local/share/memoreei` on Linux, `~/Library/Application Support/Memoreei` on macOS, `~/.memoreei` elsewhere (or `--home` / `MEMOREEI_HOME`): `config.env` (settings) + `memoreei.db` (encrypted; sources' secrets too) + usually `memoreei.key`
+- **Database key:** `MEMOREEI_DB_KEY` › `memoreei.key` beside the db (mode 600) › GNOME Keyring/KWallet (item "Memoreei database key"). New keys go to the keyring on a Linux desktop with it unlocked, else the file (Mac included, until a Developer ID). Open memoreei.db only through `storage.key.connect` / `connect_async`; plain `sqlite3` sees noise. Tests keep the key in a file beside each test db (conftest `no_keyring`)
 - **Mac app:** `macos/` (Swift menu-bar app, build script, lock file); see `macos/README.md`
 - **Linux packages:** `linux/` (.deb, .rpm, tarball of one `/opt/memoreei` tree; build, lock, smoke test); see `linux/README.md`
 - **Dashboard:** `src/memoreei/admin/` (`/admin`, Jinja + htmx, loopback-only; `ssh -L` for a headless box)

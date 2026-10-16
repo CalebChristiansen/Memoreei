@@ -10,8 +10,8 @@
 
 Memoreei is an open-source [MCP](https://modelcontextprotocol.io/) server that gives
 your AI assistant a searchable memory of your messages: iMessage, WhatsApp, Signal,
-Discord, Telegram, Slack, Gmail, Instagram and more. It keeps them in one SQLite file on your
-machine and searches them by keyword and by meaning at once.
+Discord, Telegram, Slack, Gmail, Instagram and more. It keeps them in one encrypted SQLite
+file on your machine and searches them by keyword and by meaning at once.
 
 ```
 "What's my friend's favorite restaurant?"
@@ -22,7 +22,7 @@ machine and searches them by keyword and by meaning at once.
 Every assistant starts each conversation knowing nothing about you. With Memoreei, it
 can look.
 
-- **Local-first.** One SQLite file. The default search model runs offline.
+- **Local-first.** One SQLite file, encrypted. The default search model runs offline.
 - **Hybrid search.** BM25 keywords and vector similarity, fused with Reciprocal Rank Fusion.
 - **On your network.** One always-on machine serves every other one, each client with its own key.
 - **Read-only to the network.** A key can search what's stored, never add to it or read a file.
@@ -39,8 +39,9 @@ Pick one. Each is the whole server; they differ in how it's packaged.
 | Linux | [a .deb, .rpm or tarball](#on-linux-a-package) | Python, the search model, a user service |
 | anything else | `pip install memoreei` ([below](#anywhere-else-pip)) | Python 3.10 or newer, which you bring |
 
-Everything Memoreei knows lives in one home directory: `config.env` for settings and
-credentials, `memoreei.db` for the memories. That's `~/Library/Application
+Everything Memoreei knows lives in one home directory: `config.env` for settings,
+`memoreei.db` for the memories and the credentials, encrypted, and usually
+`memoreei.key`, its key ([Privacy](#privacy)). That's `~/Library/Application
 Support/Memoreei` on macOS, `~/.local/share/memoreei` on Linux and `~/.memoreei`
 elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
 
@@ -426,14 +427,17 @@ about 67 MB of ONNX, fully offline. `EMBEDDING_PROVIDER=openai` swaps in OpenAI'
 
 ## Configuration
 
-`memoreei setup` and the dashboard write `config.env`; [`.env.example`](.env.example)
-lists every setting for editing by hand. The environment wins over a `.env` in the
-current directory, which wins over `config.env`.
+`memoreei setup` and the dashboard write settings to `config.env` and tokens and
+passwords into the encrypted database; [`.env.example`](.env.example) lists every setting
+for editing by hand. A secret typed into `config.env` by hand works too: at the next start
+it moves into the database and out of the file. The environment wins over a `.env` in
+the current directory, which wins over `config.env` and the database.
 
 | Variable | Default | |
 |---|---|---|
-| `MEMOREEI_HOME` | per platform, [above](#install) | holds `config.env` and `memoreei.db` |
+| `MEMOREEI_HOME` | per platform, [above](#install) | holds `config.env`, `memoreei.db` and `memoreei.key` |
 | `MEMOREEI_DB_PATH` | `$MEMOREEI_HOME/memoreei.db` | |
+| `MEMOREEI_DB_KEY` | — | the database's key, 64 hex characters, in place of the [usual places](#privacy): for containers |
 | `EMBEDDING_PROVIDER` | `fastembed` | or `openai`, with `OPENAI_API_KEY` |
 | `AUTO_SYNC` | `false` | sync in the background while the server runs |
 | `AUTO_SYNC_INTERVAL` | `300` | seconds |
@@ -457,14 +461,26 @@ Connector settings:
 | WhatsApp | `WHATSAPP_DB_PATH` (default WhatsApp for Mac's, `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite`) |
 | Signal | `SIGNAL_DB_KEY`, written by *Connect*; `SIGNAL_DIR` if Signal Desktop's data isn't in its usual place |
 
-API keys aren't settings. They live in the database, hashed.
+The tokens, passwords and Signal's key in that table (and `OPENAI_API_KEY`) are kept in
+the database, not in `config.env`. API keys aren't settings at all: they live in the
+database, hashed.
 
 ---
 
 ## Privacy
 
-- Everything is stored in one SQLite file on your machine. The home directory is
-  readable only by you, and `config.env` is mode 600.
+- Everything is stored in one database on your machine, **always encrypted**
+  (SQLCipher, AES-256): a copy of `memoreei.db` (a backup, a synced folder, a lost
+  laptop) is unreadable without its key. The sources' tokens and passwords are inside
+  it too. The home directory is readable only by you, and `config.env` is mode 600.
+- The key is 256 random bits, made on first start and kept in GNOME Keyring or KWallet
+  on a Linux desktop, and otherwise in `memoreei.key` beside the database (mode 600):
+  on a Mac (until Memoreei.app has a Developer ID, the Keychain would ask for your
+  password after every update), on a headless Linux box, and elsewhere.
+  `memoreei config` says which; in the keyring it is "Memoreei database key". **Back it
+  up with the database**: without the key, a backup of `memoreei.db` is noise.
+- A database from an earlier memoreei is encrypted on its first start (about 7 seconds
+  for 150,000 messages). The old file's blocks are freed, not overwritten.
 - The default search model runs offline. No telemetry, no analytics, no cloud.
 - Network traffic happens only when you ask for it: live connectors call their own
   services, and `EMBEDDING_PROVIDER=openai` sends message text to OpenAI.

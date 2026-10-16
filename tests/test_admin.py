@@ -15,6 +15,7 @@ from memoreei.cli import app
 from memoreei.config import config_env_path, get_config
 from memoreei.server import build_http_app
 from memoreei.storage.database import Database
+from memoreei.storage.vault import read_secrets
 
 runner = CliRunner()
 LOCAL = ("127.0.0.1", 50000)
@@ -141,10 +142,10 @@ def test_session_cookie_is_not_an_api_key(server):
 
 
 def test_login_tokens_are_stored_hashed(server):
-    import sqlite3
+    from memoreei.storage.key import connect
 
     token = _login_token(server.db_path)
-    rows = sqlite3.connect(server.db_path).execute("SELECT token_hash FROM admin_tokens").fetchall()
+    rows = connect(server.db_path).execute("SELECT token_hash FROM admin_tokens").fetchall()
     assert rows == [(hash_key(token),)]
 
 
@@ -382,11 +383,12 @@ def test_connecting_signal_reads_the_key_then_saves_it(server, monkeypatch):
     assert not asked  # opening the page asks nothing
     r = client.post("/admin/sources/signal", headers=ORIGIN, follow_redirects=False)
     assert r.status_code == 303 and asked == [True] and synced == [True]
-    assert f"SIGNAL_DB_KEY={'ab' * 32}" in config_env_path().read_text()
+    assert read_secrets(get_config().db_path) == {"SIGNAL_DB_KEY": "ab" * 32}
+    assert "SIGNAL_DB_KEY" not in config_env_path().read_text()  # in the database, encrypted
     page = client.get("/admin/sources/signal").text
     assert "Connected" in page and "ab" * 32 not in page
     client.post("/admin/sources/signal/remove", headers=ORIGIN)
-    assert "SIGNAL_DB_KEY=\n" in config_env_path().read_text()
+    assert read_secrets(get_config().db_path) == {}
 
 
 def test_a_refused_signal_connect_says_why(server, monkeypatch):
@@ -483,7 +485,8 @@ def test_secret_fields_are_never_sent_back(server, monkeypatch):
     assert "Saved. Leave blank to keep it." in page
     # Saving again with the secret left blank keeps it.
     client.post("/admin/sources/telegram", data={"TELEGRAM_CHAT_ID": "1"}, headers=ORIGIN)
-    assert "TELEGRAM_BOT_TOKEN=sekrit-123" in config_env_path().read_text()
+    assert read_secrets(get_config().db_path) == {"TELEGRAM_BOT_TOKEN": "sekrit-123"}
+    assert "sekrit-123" not in config_env_path().read_text()
 
 
 # ── Status and sync ──────────────────────────────────────────────────────────

@@ -117,13 +117,15 @@ def load_env() -> None:
     home_env = config_env_path()
     if home_env.is_file():
         load_dotenv(home_env)
+    _load_secrets(replace=False)
 
 
 def reload_config() -> None:
     """Re-read config.env after it has been edited, for a server that's already running.
 
-    Values from config.env replace what was loaded from it before; variables from the
-    real environment still win, as they did at startup.
+    Values from config.env replace what was loaded from it before, and so do the
+    database's secrets; variables from the real environment still win, as they did at
+    startup.
     """
     global _config
     path = config_env_path()
@@ -131,7 +133,71 @@ def reload_config() -> None:
         for key, value in dotenv_values(path).items():
             if key not in _process_env_keys:
                 os.environ[key] = value or ""
+    _load_secrets(replace=True)
     _config = None
+
+
+# Secrets this process took from the database, so a reload can drop one that's gone.
+_from_vault: set[str] = set()
+
+
+def _db_path() -> str:
+    return os.path.expanduser(os.environ.get("MEMOREEI_DB_PATH") or str(memoreei_home() / "memoreei.db"))
+
+
+def _load_secrets(*, replace: bool) -> None:
+    """Move any secrets out of config.env into the database, then into os.environ.
+
+    The real environment always wins; anything else already set (a development
+    ``.env``) wins at startup, and the database wins on a reload, as config.env does.
+    """
+    from memoreei.storage import vault
+
+    db_path = _db_path()
+    if moved := vault.move_out_of_env(db_path, config_env_path()):
+        print(f"[config] Moved {', '.join(moved)} from config.env into the database", file=sys.stderr)
+    stored = vault.read_secrets(db_path)
+    for name in _from_vault - stored.keys():
+        if name not in _process_env_keys:
+            os.environ.pop(name, None)
+    _from_vault.clear()
+    for name, value in stored.items():
+        if name in _process_env_keys or (not replace and name in os.environ):
+            continue
+        os.environ[name] = value
+        _from_vault.add(name)
+
+
+def current_settings() -> dict[str, str]:
+    """What's set up: config.env's settings and the database's secrets, as the dashboard
+    and `memoreei setup` show them."""
+    from memoreei.catalog import parse_env_vars, read_env_lines
+    from memoreei.storage import vault
+
+    load_env()
+    values = parse_env_vars(read_env_lines(config_env_path()))
+    values.update(vault.read_secrets(_db_path()))
+    return values
+
+
+def save_settings(updates: list[tuple[str, str]], env_lines: list[str] | None = None) -> None:
+    """Save settings where each belongs, then reload: secrets into the database, the rest
+    into config.env. An empty value clears one. *env_lines* replaces config.env's current
+    lines as the base the updates are applied to (setup's --reset)."""
+    from memoreei.catalog import read_env_lines, write_env_updates
+    from memoreei.storage import vault
+
+    load_env()
+    path = config_env_path()
+    plain = [(k, v) for k, v in updates if k not in vault.SECRET_VARS]
+    secret = {k: v for k, v in updates if k in vault.SECRET_VARS}
+    if plain or env_lines is not None:
+        ensure_home()
+        write_env_updates(path, read_env_lines(path) if env_lines is None else env_lines, plain)
+    if secret:
+        reload_config()  # a MEMOREEI_DB_PATH just written says where they go
+        vault.write_secrets(_db_path(), secret)
+    reload_config()
 
 
 @dataclass
@@ -232,9 +298,7 @@ def get_config() -> Config:
     if _config is None:
         load_env()
         _config = Config(
-            db_path=os.path.expanduser(
-                os.environ.get("MEMOREEI_DB_PATH") or str(memoreei_home() / "memoreei.db")
-            ),
+            db_path=_db_path(),
             host=os.environ.get("MEMOREEI_HOST") or DEFAULT_HOST,
             port=int(os.environ.get("MEMOREEI_PORT") or DEFAULT_PORT),
             public_url=(os.environ.get("MEMOREEI_PUBLIC_URL") or "").rstrip("/") or None,

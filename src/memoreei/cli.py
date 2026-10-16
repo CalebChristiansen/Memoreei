@@ -11,7 +11,6 @@ from memoreei.catalog import CONNECTORS as _CONNECTORS
 from memoreei.catalog import is_connector_configured as _is_connector_configured
 from memoreei.catalog import parse_env_vars as _parse_env_vars
 from memoreei.catalog import read_env_lines as _read_env_lines
-from memoreei.catalog import write_env_updates as _write_env_updates
 
 if TYPE_CHECKING:
     from memoreei.storage.database import Database
@@ -1063,7 +1062,7 @@ def setup(
     """Interactive setup — configure connectors and write them to config.env in the home directory."""
     import questionary
     from pathlib import Path
-    from memoreei.config import config_env_path, ensure_home, memoreei_home
+    from memoreei.config import config_env_path, current_settings, ensure_home, memoreei_home, save_settings
 
     ensure_home()
     env_path = config_env_path()
@@ -1128,7 +1127,7 @@ def setup(
                 raise typer.Exit(1)
             core_updates.append(("AUTO_SYNC_INTERVAL", interval_str.strip() or "300"))
 
-        _write_env_updates(env_path, env_lines, core_updates)
+        save_settings(core_updates, env_lines)
         env_lines = _read_env_lines(env_path)  # reload after write
         typer.echo(f"\n  ✓ Database: {db_path}\n")
 
@@ -1142,7 +1141,7 @@ def setup(
         selected_keys = [key]
     else:
         # Interactive multi-select with spacebar
-        env_vars = _parse_env_vars(env_lines)
+        env_vars = current_settings()
         choices = [
             questionary.Choice(
                 title=info["name"]
@@ -1192,9 +1191,14 @@ def setup(
         _offer_cloud()
         raise typer.Exit(0)
 
-    _write_env_updates(env_path, env_lines, all_updates)
+    if reset:
+        # Cleared secrets are in the database, not in env_lines: clear them there too.
+        from memoreei.storage.vault import SECRET_VARS
+        entered = {name for name, _ in all_updates}
+        all_updates = [(v, "") for v in sorted((vars_to_clear & SECRET_VARS) - entered)] + all_updates
+    save_settings(all_updates, env_lines)
 
-    typer.echo(f"\n  ✓ Saved to {env_path}\n")
+    typer.echo(f"\n  ✓ Saved: settings to {env_path}, tokens into the encrypted database\n")
     for key in configured:
         sync_name = _CONNECTORS[key].get("sync_name", key)
         typer.echo(f"  Test: memoreei sync {sync_name}")
@@ -1257,6 +1261,8 @@ def config() -> None:
     _show("MEMOREEI_HOME", str(memoreei_home()))
     _show("Config file", str(config_env_path()) + ("" if config_env_path().exists() else " (missing)"))
     _show("MEMOREEI_DB_PATH", cfg.db_path)
+    from memoreei.storage.key import key_source
+    _show("Database key", key_source(cfg.db_path))
     _show("EMBEDDING_PROVIDER", cfg.embedding_provider)
     _show("AUTO_SYNC", cfg.auto_sync)
     _show("SYNC_INTERVAL", cfg.sync_interval)

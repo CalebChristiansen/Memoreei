@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from memoreei.cli import app
+from memoreei.storage.vault import read_secrets
 
 runner = CliRunner()
 
@@ -78,7 +79,8 @@ class TestSetupGmail:
         assert result.exit_code == 0
         env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
-        assert "GMAIL_APP_PASSWORD=secret123" in env_content
+        assert "secret123" not in env_content  # secrets go into the encrypted database
+        assert read_secrets(str(tmp_path / "test.db")) == {"GMAIL_APP_PASSWORD": "secret123"}
 
 
 class TestSetupInteractive:
@@ -100,8 +102,8 @@ class TestSetupInteractive:
         assert result.exit_code == 0
         env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
-        assert "GMAIL_APP_PASSWORD=gmailpass" in env_content
-        assert "DISCORD_BOT_TOKEN=discordtoken" in env_content
+        assert read_secrets(str(tmp_path / "test.db")) == {
+            "GMAIL_APP_PASSWORD": "gmailpass", "DISCORD_BOT_TOKEN": "discordtoken"}
         assert "DISCORD_CHANNEL_ID=chan123" in env_content
 
 
@@ -154,7 +156,7 @@ class TestSetupPreservesExistingEnv:
         monkeypatch.chdir(tmp_path)
         # Pre-populate .env
         env_file = isolated_home / "config.env"
-        env_file.write_text("MEMOREEI_DB_PATH=/some/db\nEMBEDDING_PROVIDER=fastembed\nEXISTING_VAR=keep_me\n")
+        env_file.write_text(f"MEMOREEI_DB_PATH={tmp_path}/some.db\nEMBEDDING_PROVIDER=fastembed\nEXISTING_VAR=keep_me\n")
 
         # Since DB path exists, no DB prompt — just gmail vars
         mock_q = _make_mock_questionary(
@@ -168,9 +170,9 @@ class TestSetupPreservesExistingEnv:
         assert result.exit_code == 0
         env_content = (isolated_home / "config.env").read_text()
         assert "EXISTING_VAR=keep_me" in env_content
-        assert "MEMOREEI_DB_PATH=/some/db" in env_content
+        assert f"MEMOREEI_DB_PATH={tmp_path}/some.db" in env_content
         assert "GMAIL_EMAIL=user@gmail.com" in env_content
-        assert "GMAIL_APP_PASSWORD=pass" in env_content
+        assert read_secrets(f"{tmp_path}/some.db") == {"GMAIL_APP_PASSWORD": "pass"}
 
 
 class TestSetupResetFlag:
@@ -180,7 +182,7 @@ class TestSetupResetFlag:
         monkeypatch.chdir(tmp_path)
         env_file = isolated_home / "config.env"
         env_file.write_text(
-            "MEMOREEI_DB_PATH=/some/db\nEMBEDDING_PROVIDER=fastembed\nGMAIL_EMAIL=old@test.com\nGMAIL_APP_PASSWORD=oldpass\n"
+            f"MEMOREEI_DB_PATH={tmp_path}/some.db\nEMBEDDING_PROVIDER=fastembed\nGMAIL_EMAIL=old@test.com\nGMAIL_APP_PASSWORD=oldpass\n"
         )
 
         mock_q = _make_mock_questionary(
@@ -195,9 +197,9 @@ class TestSetupResetFlag:
         env_content = (isolated_home / "config.env").read_text()
         assert "GMAIL_EMAIL=new@test.com" in env_content
         assert "old@test.com" not in env_content
-        assert "GMAIL_APP_PASSWORD=newpass" in env_content
-        assert "oldpass" not in env_content
-        assert "MEMOREEI_DB_PATH=/some/db" in env_content
+        assert "oldpass" not in env_content and "newpass" not in env_content
+        assert read_secrets(f"{tmp_path}/some.db") == {"GMAIL_APP_PASSWORD": "newpass"}
+        assert f"MEMOREEI_DB_PATH={tmp_path}/some.db" in env_content
 
 
 class TestSetupHomeConfig:

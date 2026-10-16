@@ -78,7 +78,9 @@ def test_setup_gmail_fresh_no_env(tmp_path, monkeypatch, isolated_home):
     # Must contain DB path (first-time prompt) and gmail credentials
     assert f"MEMOREEI_DB_PATH={db_path}" in content
     assert "GMAIL_EMAIL=zezima@gmail.com" in content
-    assert "GMAIL_APP_PASSWORD=s3cret" in content
+    assert "s3cret" not in content
+    from memoreei.storage.vault import read_secrets
+    assert read_secrets(db_path) == {"GMAIL_APP_PASSWORD": "s3cret"}
 
     # Validate every non-blank line is proper KEY=VALUE
     for line in content.splitlines():
