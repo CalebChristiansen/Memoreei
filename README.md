@@ -305,7 +305,8 @@ registered import files that have changed.
 ### The dashboard
 
 `/admin` shows status, sources, client keys and the log, and switches start-at-login.
-It answers only on the server itself, after a one-time sign-in link:
+Unless you give it a password and open it [from anywhere](#from-anywhere), it answers only
+on the server itself, after a one-time sign-in link:
 
 ```bash
 memoreei admin-url     # http://localhost:3679/admin/login?token=…

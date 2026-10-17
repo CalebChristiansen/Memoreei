@@ -121,6 +121,21 @@ On the next sync, the connector fetches only messages newer than its checkpoint.
 setup`, and moved in from `config.env` when found there at startup. They reach the
 connectors as environment variables at load; real environment variables win.
 
+### The dashboard's account
+
+`admin/account.py` keeps one account, with an optional password: `admin_account` (one
+row: the scrypt hash, the authenticator's TOTP secret and the last time step used, and
+the "from anywhere" switch), `admin_recovery_codes` (hashes, each good once),
+`admin_sessions` (`link` sessions from one-time links, valid only on the computer, and
+`password` sessions), `admin_browsers` (browsers that have signed in before, which skip
+the limit on everyone's failed sign-ins) and `admin_signins` (90 days). Sessions from
+before `admin_sessions`, in `admin_tokens`, count as `link`. Who may reach the dashboard
+from where is in `admin/auth.py`: the LAN listener and the public listener each have
+their own guard, and nothing through the public one is ever "on the computer".
+
+memoreei's own OAuth sign-in for chatbots keeps its tables (`oauth_*`) the same way, in
+`oauth/store.py`; both stores share the row helpers in `storage/rows.py`.
+
 ## Connector Architecture
 
 All connectors implement `BaseConnector`:
