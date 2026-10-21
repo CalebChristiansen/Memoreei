@@ -450,7 +450,7 @@ def test_status_page_walks_a_new_install_through_setup(server, monkeypatch):
     assert 'href="/admin/connections">Connect one' in text
 
 
-def test_setup_steps_disappear_once_a_source_and_a_client_exist(server, monkeypatch):
+def test_setup_steps_disappear_once_a_source_and_a_connection_exist(server, monkeypatch):
     from memoreei.admin import app as admin_app
 
     async def no_sync() -> None:
@@ -459,7 +459,7 @@ def test_setup_steps_disappear_once_a_source_and_a_client_exist(server, monkeypa
     monkeypatch.setattr(admin_app, "_start_sync", no_sync)
     client = signed_in(server)
     text = client.get("/admin/").text
-    assert "Welcome to Memoreei" in text and "Done: 1 key" in text  # the fixture's key: step 2 done
+    assert "Welcome to Memoreei" in text and "Done: 1 connection." in text  # the fixture's key: step 2 done
     client.post("/admin/sources/imessage", data={"IMESSAGE_DB_PATH": "/x/chat.db"}, headers=ORIGIN)
     assert "Welcome to Memoreei" not in client.get("/admin/").text
 
@@ -494,7 +494,7 @@ def test_secret_fields_are_never_sent_back(server, monkeypatch):
 
 def test_status_page(server):
     text = signed_in(server).get("/admin/").text
-    assert "Welcome to Memoreei" in text and "Done: 1 key" in text
+    assert "Welcome to Memoreei" in text and "Done: 1 connection." in text
     assert "Add a source" in text  # no sources set up
 
 
