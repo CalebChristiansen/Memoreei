@@ -147,7 +147,7 @@ button, .button { font: inherit; font-size: 15px; font-weight: 600; min-height: 
 button:disabled { opacity: .45; cursor: default; }
 button.quiet, .button.quiet { background: transparent; color: var(--teal); }
 @media (prefers-color-scheme: dark) {
-  button.quiet, .button.quiet, .file { color: var(--amber); border-color: var(--amber); }
+  button.quiet, .button.quiet, label.file { color: var(--amber); border-color: var(--amber); }
   .button.quiet:hover { color: var(--amber); }
 }
 button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
