@@ -62,7 +62,7 @@ elsewhere. Point it somewhere else with `--home <dir>` or `MEMOREEI_HOME`.
 6. **The dashboard** opens in your browser. Set up iMessage under **Sources**, and
    WhatsApp or Signal too if WhatsApp for Mac or Signal Desktop is installed (Signal's
    *Connect* asks macOS once for its key: choose **Allow**). Then create a key under
-   **Clients** for each machine or app that will search.
+   **Connections** for each machine or app that will search.
 
 Memoreei then lives in the menu bar and starts at login. **Open Dashboard** signs you in
 to the dashboard; **Quit** stops the server too.
@@ -91,7 +91,7 @@ Ubuntu 20.04, Debian 11, RHEL and Rocky 8, current Fedora, or newer; x86_64 or A
    tar xzf memoreei-*-linux-*.tar.gz && memoreei-*-linux-*/install.sh   # into ~/.local, no root
    ```
 3. **Open Memoreei** from your applications. It starts the server, sets it to start at
-   login, and opens the dashboard. Create a key under **Clients** for each machine or
+   login, and opens the dashboard. Create a key under **Connections** for each machine or
    app that will search.
 4. **Add sources.** Signal, if Signal Desktop is set up, is under **Sources** in the
    dashboard: *Connect* reads its key from your desktop's keyring. The other live
@@ -208,7 +208,7 @@ second, stricter front door for them, the **public listener**: it answers `/mcp`
 sign-in, and the OAuth metadata that tells a chatbot where to sign in, and nothing else
 (the dashboard only if you [open it from anywhere](#from-anywhere)). Agents that only send a header can use
 your `mem_` keys there too. Failed attempts are rate-limited, and every call is listed on
-the dashboard's Cloud page: when, which chatbot or key, which tool, from where. It's off
+the dashboard's Connections page: when, which chatbot or key, which tool, from where. It's off
 until you choose one of the two ways below.
 
 #### Approving a chatbot
@@ -218,7 +218,7 @@ runs on**. Add memoreei's address as a connector in Claude or ChatGPT (or sign i
 agent) and it opens a page with a short code, like `K7QM`, that waits for you. On the
 computer, approve that code:
 
-- in the dashboard's Cloud page (every page shows a note while one waits), or
+- on the dashboard's Connections page (every page shows a note while one waits), or
 - with `memoreei chatbots approve K7QM`, or
 - from the desktop notification, where there is a desktop, or
 - away from the computer, if you've [opened the dashboard from anywhere](#from-anywhere):
