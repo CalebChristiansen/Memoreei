@@ -275,7 +275,7 @@ def test_create_key_refuses_bad_and_duplicate_names(server):
 def test_revoke_key(server):
     client = signed_in(server)
     r = client.post("/admin/keys/laptop/revoke", headers=ORIGIN)
-    assert r.status_code == 200 and "No keys yet" in r.text
+    assert r.status_code == 200 and "Nothing connected yet" in r.text
     assert asyncio.run(_verify(server.db_path, server.api_key)) is None
 
 
@@ -447,7 +447,7 @@ def test_status_page_walks_a_new_install_through_setup(server, monkeypatch):
     text = client.get("/admin/").text
     assert "Welcome to Memoreei" in text
     assert 'href="/admin/sources">Add a source' in text
-    assert 'href="/admin/keys">Add a client' in text
+    assert 'href="/admin/connections">Connect one' in text
 
 
 def test_setup_steps_disappear_once_a_source_and_a_client_exist(server, monkeypatch):
@@ -638,7 +638,7 @@ def test_a_set_up_install_gets_counts_not_steps(server, monkeypatch):
     text = client.get("/admin/").text
     assert "Welcome to Memoreei" not in text
     assert "All quiet" in text and "Running on port 3679" in text
-    assert "Manage keys →" in text and "iMessage" in text
+    assert "Manage connections →" in text and "iMessage" in text
 
 
 def test_a_finished_sync_reloads_the_page(server):

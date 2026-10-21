@@ -1,4 +1,4 @@
-"""The dashboard's Cloud page, and the offer on the status page."""
+"""The dashboard's Connections page: Memoreei Cloud, chatbots and keys in one place."""
 from __future__ import annotations
 
 import time
@@ -35,13 +35,14 @@ def nobody_called(monkeypatch):
     monkeypatch.setattr("memoreei.cloud.connect.Service", refuse)
 
 
-def test_the_status_page_offers_it_without_calling_anyone(server, nobody_called):
+def test_the_connections_page_offers_it_without_calling_anyone(server, nobody_called):
     client = signed_in(server)
-    r = client.get("/admin/")
-    assert "Connect to Memoreei Cloud" in r.text and 'href="/admin/cloud"' in r.text
-    r = client.get("/admin/cloud")
+    r = client.get("/admin/connections")
     assert r.status_code == 200 and "Connect to Memoreei Cloud" in r.text
-    assert "your-own-tunnel" in r.text
+    assert "keeps memoreei itself free and open source" in r.text
+    assert 'href="https://docs.memoreei.com/self-host"' in r.text
+    # The status page sells nothing once set up; the welcome steps point here instead.
+    assert "Connect to Memoreei Cloud" not in client.get("/admin/").text
 
 
 @pytest.mark.parametrize("setting", [("MEMOREEI_CLOUD_OFFER", "0"), ("MEMOREEI_PUBLIC_PORT", "0")])
@@ -49,7 +50,20 @@ def test_the_offer_can_be_hidden(server, monkeypatch, setting):
     monkeypatch.setenv(*setting)
     monkeypatch.setattr(config_module, "_config", None)
     client = signed_in(server)
-    assert "Connect to Memoreei Cloud" not in client.get("/admin/").text
+    r = client.get("/admin/connections")
+    assert r.status_code == 200 and "Connect to Memoreei Cloud" not in r.text
+
+
+@pytest.mark.parametrize("old", ["/admin/cloud", "/admin/keys"])
+def test_the_old_pages_lead_to_connections(server, old):
+    r = signed_in(server).get(old, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/admin/connections"
+
+
+def test_the_sidebar_has_connections_and_not_the_old_two(server):
+    text = signed_in(server).get("/admin/connections").text
+    assert 'href="/admin/connections" aria-current="page"' in text
+    assert 'href="/admin/keys"' not in text and 'href="/admin/cloud"' not in text
 
 
 
@@ -68,7 +82,7 @@ def test_connect_shows_the_code_then_the_address(server, fake):
     assert r.headers.get("hx-refresh") == "true"
     assert CloudState().ready()
     r = client.get("/admin/cloud")
-    assert f"https://{HOST}/mcp" in r.text and "Chatbots" in r.text
+    assert f"https://{HOST}/mcp" in r.text and "Connected" in r.text
 
 
 def test_disconnect_revokes_and_says_so_once(server, fake):
@@ -79,7 +93,7 @@ def test_disconnect_revokes_and_says_so_once(server, fake):
     asyncio.run(connect(None))
     client = signed_in(server)
     r = client.post("/admin/cloud/disconnect", headers={**ORIGIN, "HX-Request": "true"})
-    assert r.headers["hx-redirect"] == "/admin/cloud"
+    assert r.headers["hx-redirect"] == "/admin/connections"
     assert fake.revoked == ["mdt_secret"] and CloudState().device() is None
     assert "off your Memoreei Cloud account" in client.get("/admin/cloud").text
     assert "off your Memoreei Cloud account" not in client.get("/admin/cloud").text
@@ -163,8 +177,30 @@ def test_removing_a_chatbot(server, monkeypatch):
 
     grant = _store_call(server.db_path, connected)
     client = signed_in(server)
-    r = client.get("/admin/cloud")
+    r = client.get("/admin/connections")
     assert "Claude" in r.text and f"/admin/chatbots/{grant['id']}/remove" in r.text
     r = client.post(f"/admin/chatbots/{grant['id']}/remove", headers=ORIGIN)
-    assert r.status_code == 200 and "No chatbots yet" in r.text
+    assert r.status_code == 200 and 'id="connection-list"' in r.text
+    assert f"/admin/chatbots/{grant['id']}/remove" not in r.text and "laptop" in r.text  # the fixture's key stays
     assert _store_call(server.db_path, lambda s: s.grant(grant["id"]))["revoked_at"]
+
+
+def test_chatbots_and_keys_share_one_table(server, monkeypatch):
+    monkeypatch.setenv("MEMOREEI_PUBLIC_PORT", "0")
+    monkeypatch.setattr(config_module, "_config", None)
+
+    async def connected(store):
+        return await store.add_grant(await _ask(store))
+
+    grant = _store_call(server.db_path, connected)
+    client = signed_in(server)
+    r = client.get("/admin/connections")
+    table = r.text.split('id="connection-list"', 1)[1].split("</section>", 1)[0]
+    assert "Claude" in table and "Signed in" in table
+    assert "laptop" in table and ">Key<" in table
+    assert f"/admin/chatbots/{grant['id']}/remove" in table and "/admin/keys/laptop/revoke" in table
+    # Revoking a key answers with the same table, the chatbot still in it.
+    r = client.post("/admin/keys/laptop/revoke", headers=ORIGIN)
+    assert 'id="connection-list"' in r.text and "Claude" in r.text and "/admin/keys/laptop/revoke" not in r.text
+    # The welcome steps count a chatbot as a connection, without any key.
+    assert "Done: 1 connection." in client.get("/admin/").text

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Cloud · Memoreei{% endblock %}
+{% block title %}Connections · Memoreei{% endblock %}
 {% block main %}
 <header class="page-head">
   <div>
-    <h1>Memoreei Cloud</h1>
-    <p>Use this memoreei from Claude.ai, ChatGPT and agents, wherever you are.</p>
+    <h1>Connections</h1>
+    <p>Everything that can read your messages, and how it reaches this computer.</p>
   </div>
   {% if ready %}
   {% set s = tunnel.state or "connecting" %}
@@ -15,8 +15,6 @@
 </header>
 
 {% if message %}<p role="status">{{ message }}</p>{% endif %}
-
-{% include "_chatbot_requests.html" %}
 
 {% if password_offer and not connecting %}
 <section class="bubble" aria-label="A password">
@@ -38,7 +36,7 @@
 
 {% elif custom %}
 <section class="card">
-  <h2>Public listener</h2>
+  <h2>Your own tunnel or proxy</h2>
   <p>This memoreei is set up for your own tunnel or proxy (<code>MEMOREEI_PUBLIC_PORT</code>), so Memoreei Cloud isn't used.</p>
   <dl class="facts">
     <dt>Listening on</dt><dd class="mono">{{ live.port or "?" }} (loopback unless MEMOREEI_PUBLIC_HOST says otherwise)</dd>
@@ -50,7 +48,10 @@
 
 {% elif device %}
 <section class="card">
-  <h2>This computer</h2>
+  <div class="row" style="float:right">
+    <button class="danger small" hx-post="/admin/cloud/disconnect" hx-confirm="Disconnect this computer? Chatbot connectors using it stop working.">Disconnect</button>
+  </div>
+  <h2>Memoreei Cloud</h2>
   {% if tunnel.message and tunnel.state != "online" %}<p class="{{ 'bad' if tunnel.state in ('blocked', 'revoked') else '' }}" role="status">{{ tunnel.message }}</p>{% endif %}
   {% if not ready %}<p class="bad">It has no certificate yet, so it can't go online.</p>
   <form method="post" action="/admin/cloud/connect"><button>Finish connecting</button></form>{% endif %}
@@ -68,43 +69,50 @@
     {% if certificate %}<dt>Certificate</dt><dd>Valid until {{ certificate.not_after|date }}; renews itself from {{ certificate.renews_at|date }}{% if live.certificate and live.certificate.last_error %}<br><span class="bad">Last renewal failed: {{ live.certificate.last_error }}</span>{% endif %}</dd>{% endif %}
     <dt>Last call</dt><dd>{{ live.last_call_at|ago|capitalize }}</dd>
   </dl>
-  <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.</p>
+  <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.
+  Thanks for supporting memoreei.</p>
 </section>
 
-{% else %}
+{% elif offer %}
 <section class="card">
-  <h2>Connect this computer</h2>
-  <p>Claude.ai and ChatGPT live on the internet, and your memoreei lives here. Memoreei Cloud joins them up,
-  with nothing to open on your router: this computer holds a connection out to our relay, and chatbots reach it through that.</p>
+  <h2>Use memoreei from Claude.ai and ChatGPT</h2>
+  <p>Chatbots on the web can't reach this computer by themselves. Memoreei Cloud gives it an address they can
+  reach, with nothing to set up on your router.</p>
   <ul>
-    <li>Your messages stay on this computer. The relay carries encrypted traffic it can't read: this computer holds the only key.</li>
-    <li>Only memoreei's search reaches the internet. This dashboard never does, unless you give it a password and open it from anywhere.</li>
-    <li>Each chatbot asks this computer to let it in, and you approve it here. Every call is listed here too.</li>
+    <li>Your messages stay on this computer. The relay passes along encrypted traffic it can't read.</li>
+    <li>You approve each chatbot here, and can remove any of them at any time.</li>
+    <li>It works while this computer is awake and online.</li>
   </ul>
   <form method="post" action="/admin/cloud/connect" class="row">
     <button>Connect to Memoreei Cloud</button>
-    <span class="caption">Opens a sign-in page at {{ cloud_url }}</span>
+    <span class="caption">{% if price %}{{ price }} a month after a 14-day free trial. Cancel any time.
+    It also keeps{% else %}Memoreei Cloud also keeps{% endif %} memoreei itself free and open source.</span>
   </form>
-  <p class="caption">Rather use your own tunnel? <a href="{{ advanced_url }}">Here's how</a>: memoreei works with Cloudflare Tunnel, Tailscale Funnel or your own proxy, and signs chatbots in itself either way.</p>
+  <p class="caption">memoreei works without us. If you'd rather run your own tunnel or relay,
+  <a href="{{ self_host_url }}" rel="noreferrer">here's how</a>.</p>
 </section>
 {% endif %}
 
-{% if device or custom %}
+{% include "_chatbot_requests.html" %}
+
 <section class="card">
-  {% if device and not custom %}
-  <div class="row" style="float:right">
-    <button class="danger small" hx-post="/admin/cloud/disconnect" hx-confirm="Disconnect this computer? Chatbot connectors using it stop working.">Disconnect</button>
-  </div>
-  {% endif %}
-  <h2>Chatbots</h2>
-  {% include "_chatbot_list.html" %}
-  {% if key_clients %}
-  <p class="caption">Also through this address, with a key from the Clients page:
-  {% for c in key_clients %}<span class="mono">{{ c.client }}</span> ({{ c.calls }} call{{ "" if c.calls == 1 else "s" }}, last {{ c.last_seen_at|ago }}){{ ", " if not loop.last }}{% endfor %}.</p>
-  {% endif %}
+  <h2>Connected</h2>
+  {% include "_connection_list.html" %}
+  <details{% if not connections %} open{% endif %}>
+    <summary>Add a key, for an app that can't sign in itself</summary>
+    <p class="caption">Claude Code, Claude Desktop's config, a script: one key each. Lose a laptop? Revoke its key; nothing else changes.</p>
+    <form class="new-key" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">
+      <div class="field">
+        <label for="name">New key for</label>
+        <input id="name" name="name" placeholder="e.g. laptop" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off">
+      </div>
+      <button>Create key</button>
+    </form>
+  </details>
+  <div id="created"></div>
   {% if calls %}
   <details>
-    <summary>The last {{ calls|length }} calls</summary>
+    <summary>The last {{ calls|length }} calls from outside this computer</summary>
     <table>
       <thead><tr><th scope="col">When</th><th scope="col">Client</th><th scope="col">What</th><th scope="col">From</th><th scope="col">Answer</th></tr></thead>
       <tbody>
@@ -116,5 +124,4 @@
   </details>
   {% endif %}
 </section>
-{% endif %}
 {% endblock %}

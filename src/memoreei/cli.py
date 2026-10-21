@@ -1455,12 +1455,13 @@ def _offer_first_key() -> None:
 def _offer_cloud() -> None:
     """At the end of setup, say how to reach memoreei from Claude.ai or ChatGPT. Says only."""
     from memoreei.admin.cloud import offer_visible
+    from memoreei.admin.connections import SELF_HOST_URL
 
     if not offer_visible():
         return
     typer.echo("  ☁  Claude.ai and ChatGPT\n")
     typer.echo("  To use memoreei from them, with nothing to open on your router: memoreei cloud connect")
-    typer.echo("  (Or your own tunnel: https://github.com/CalebChristiansen/Memoreei#your-own-tunnel)\n")
+    typer.echo(f"  (Or your own tunnel: {SELF_HOST_URL})\n")
 
 
 @app.command()

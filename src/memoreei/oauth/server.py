@@ -623,8 +623,8 @@ class SignIn:
 
     # GET /device
     async def device_page(self, request: Request) -> Response:
-        here = ("<p>Away from the computer? <a href='/admin/cloud'>Sign in to memoreei's dashboard here</a> "
-                "with its password, and approve it on the Cloud page.</p>") if await self._admin_open() else ""
+        here = ("<p>Away from the computer? <a href='/admin/connections'>Sign in to memoreei's dashboard here</a> "
+                "with its password, and approve it on the Connections page.</p>") if await self._admin_open() else ""
         return page(200, "Approve it on your computer",
                     "<p>An app asked to use memoreei and gave you a code. To let it, approve that code on "
                     "the computer memoreei runs on: in memoreei's dashboard (from the menu bar on a Mac), "

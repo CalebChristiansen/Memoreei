@@ -1,0 +1,23 @@
+<section id="connection-list" {% if oob %}hx-swap-oob="true"{% endif %}>
+{% if connections %}
+<table>
+  <thead><tr><th scope="col">Name</th><th scope="col">How</th><th scope="col">Added</th><th scope="col">Last used</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+  <tbody>
+  {% for c in connections %}
+  <tr>
+    <td>{{ c.name }}{% if c.detail %} <span class="caption">({{ c.detail }})</span>{% endif %}</td>
+    <td>{{ c.how }}</td><td>{{ c.created_at|ago|capitalize }}</td><td>{{ c.last_used_at|ago|capitalize }}</td>
+    <td><button class="danger small" hx-post="{{ c.remove }}" hx-target="#connection-list" hx-swap="outerHTML"
+      hx-confirm="{{ c.confirm }}">Remove<span class="visually-hidden"> {{ c.name }}</span></button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif reachable %}
+<p class="muted">Nothing connected yet. Add this memoreei's address in Claude.ai or ChatGPT and approve it here when it asks,
+or make a key below for an app on this computer.</p>
+{% else %}
+<p class="muted">Nothing connected yet. An app on this computer can use a key, below. For Claude.ai and ChatGPT,
+this computer needs an address they can reach first.</p>
+{% endif %}
+</section>

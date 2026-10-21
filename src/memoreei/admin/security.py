@@ -18,6 +18,7 @@ from starlette.responses import RedirectResponse, Response
 
 from memoreei.admin import auth, credentials
 from memoreei.admin.account import account_store
+from memoreei.admin.connections import PATH
 from memoreei.config import get_config, save_settings
 
 log = logging.getLogger("memoreei.admin")
@@ -186,7 +187,7 @@ async def sign_out_others(request: Request) -> Response:
 async def skip_offer(request: Request) -> Response:
     save_settings([("MEMOREEI_PASSWORD_OFFER", "0")])
     back = request.headers.get("referer", "")
-    return RedirectResponse("/admin/cloud" if back.endswith("/admin/cloud") else "/admin/", status_code=303)
+    return RedirectResponse(PATH if back.endswith((PATH, "/admin/cloud")) else "/admin/", status_code=303)
 
 
 def routes() -> list:

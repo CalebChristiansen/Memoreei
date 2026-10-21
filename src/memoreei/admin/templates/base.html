@@ -25,10 +25,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Status</span></a>
     <a href="/admin/sources" {% if nav == "sources" %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z M4 13h5l1 2h4l1-2h5"/></svg><span>Sources</span></a>
-    <a href="/admin/keys" {% if nav == "keys" %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 13L21 3 M16 8l3 3 M18.5 5.5l2 2 M12 16a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg><span>Clients</span></a>
-    <a href="/admin/cloud" {% if nav == "cloud" %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></svg><span>Cloud</span></a>
+    <a href="/admin/connections" {% if nav == "connections" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H7a5 5 0 0 0 0 10h2 M15 7h2a5 5 0 0 1 0 10h-2 M8 12h8"/></svg><span>Connections</span></a>
     <a href="/admin/security" {% if nav == "security" %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg><span>Security</span></a>
   </nav>
@@ -40,7 +38,7 @@
   </div>
 </aside>
 <main{% block main_class %}{% endblock %}>
-{% if nav != "cloud" %}<div hx-get="/admin/chatbots/waiting?banner=1" hx-trigger="load, every 5s"></div>{% endif %}
+{% if nav != "connections" %}<div hx-get="/admin/chatbots/waiting?banner=1" hx-trigger="load, every 5s"></div>{% endif %}
 {% block main %}{% endblock %}
 </main>
 </div>

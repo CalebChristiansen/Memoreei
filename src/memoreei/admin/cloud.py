@@ -1,15 +1,13 @@
-"""The dashboard's Cloud page: connect to Memoreei Cloud, see it working, disconnect.
+"""Memoreei Cloud and chatbots, for the Connections page (admin/connections.py):
+connect to Memoreei Cloud, disconnect, and approve and remove chatbots.
 
 Connect runs the device-code flow in the server, in the background (it waits for
 the person to approve on the service's page, then for a certificate); the page
 polls for progress. Nothing here contacts Memoreei Cloud until Connect is pressed.
 
-If the public listener is set up by hand instead (MEMOREEI_PUBLIC_PORT, for the
-person's own tunnel), the page shows that, and its access log, instead.
-
-Either way, this is where chatbots are approved and removed (memoreei.oauth): a
-chatbot asking to connect waits, with a code, until the person answers here (or
-with `memoreei chatbots approve`). Every other page shows a note while one waits.
+Chatbots are approved and removed here (memoreei.oauth): a chatbot asking to connect
+waits, with a code, until the person answers on the Connections page (or with
+`memoreei chatbots approve`). Every other page shows a note while one waits.
 """
 from __future__ import annotations
 
@@ -19,10 +17,8 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import Response
 
-from memoreei.admin.account import account_store
+from memoreei.admin.connections import PATH
 from memoreei.config import get_config
-
-ADVANCED_URL = "https://github.com/CalebChristiansen/Memoreei#your-own-tunnel"
 
 # The one enrollment in progress, if any: {"state", "code", "error", "task"}.
 _connecting: dict[str, Any] = {}
@@ -37,51 +33,12 @@ def _runtime() -> Any:
 
 
 def offer_visible() -> bool:
-    """The status page's "Use memoreei from Claude.ai or ChatGPT" card."""
+    """Whether to suggest Memoreei Cloud: at the end of `memoreei setup`, and on the
+    Connections page while this computer isn't reachable any other way."""
     from memoreei.cloud.state import CloudState
 
     cfg = get_config()
     return cfg.cloud_offer and cfg.public_port is None and CloudState().device() is None
-
-
-async def _context() -> dict[str, Any]:
-    from memoreei.cloud import certs
-    from memoreei.cloud.state import CloudState
-    from memoreei.server import _get_db
-
-    state = CloudState()
-    rt = _runtime()
-    live = rt.status() if rt is not None else {"mode": "off"}
-    db = await _get_db()
-    store = await _store()
-    device = state.device()
-    shown = live.get("mode") != "off" or device is not None
-    account = await (await account_store()).account()
-    return {
-        "device": device,
-        "ready": state.ready(),
-        "certificate": certs.describe(state),
-        "live": live,
-        "tunnel": live.get("tunnel") or {},
-        "connecting": _connecting if _connecting.get("state") not in (None, "done") else None,
-        "custom": live.get("mode") == "custom",
-        "waiting": await store.waiting(),
-        "chatbots": await store.grants() if shown else [],
-        "key_clients": [c for c in await db.list_access_clients() if c["kind"] == "key"] if shown else [],
-        "calls": await db.list_access(50) if shown else [],
-        "advanced_url": ADVANCED_URL,
-        "cloud_url": get_config().cloud_url,
-        "account": account,
-        # Connected, and no password yet: suggest one, for the dashboard from anywhere.
-        "password_offer": shown and get_config().password_offer and not account["password_hash"],
-    }
-
-
-async def cloud_page(request: Request) -> Response:
-    from memoreei.admin.app import _page
-
-    message = _said.pop("message", None)  # once, and never from the URL
-    return _page(request, "cloud.html", nav="cloud", message=message, **await _context())
 
 
 async def cloud_progress(request: Request) -> Response:
@@ -129,7 +86,9 @@ async def cloud_connect(request: Request) -> Response:
             await asyncio.wait_for(ready.wait(), 20)
         except asyncio.TimeoutError:
             pass
-    return await cloud_page(request)
+    from memoreei.admin.connections import connections_page
+
+    return await connections_page(request)
 
 
 async def cloud_cancel(request: Request) -> Response:
@@ -139,7 +98,7 @@ async def cloud_cancel(request: Request) -> Response:
     if task is not None and not task.done():
         task.cancel()
     _connecting.clear()
-    return RedirectResponse("/admin/cloud", status_code=303)
+    return RedirectResponse(PATH, status_code=303)
 
 
 async def cloud_disconnect(request: Request) -> Response:
@@ -153,8 +112,8 @@ async def cloud_disconnect(request: Request) -> Response:
         rt.poke()
     _said["message"] = message
     if request.headers.get("hx-request"):
-        return Response(status_code=200, headers={"hx-redirect": "/admin/cloud"})
-    return RedirectResponse("/admin/cloud", status_code=303)
+        return Response(status_code=200, headers={"hx-redirect": PATH})
+    return RedirectResponse(PATH, status_code=303)
 
 
 # ── chatbots: approving them, and removing them ─────────────────────────────
@@ -168,7 +127,7 @@ async def _store() -> Any:
 
 
 async def chatbots_waiting(request: Request) -> Response:
-    """The Cloud page's list of requests (polled), or, with ?banner, every other page's note."""
+    """The Connections page's list of requests (polled), or, with ?banner, every other page's note."""
     from memoreei.admin.app import _page
 
     waiting = await (await _store()).waiting()
@@ -185,7 +144,7 @@ async def chatbot_request(request: Request) -> Response:
     store = await _store()
     row = await store.request(request.path_params["request_id"])
     waiting = row is not None and row["decided_at"] is None and row["expires_at"] >= _now()
-    return _page(request, "chatbot_request.html", nav="cloud", r=row if waiting else None)
+    return _page(request, "chatbot_request.html", nav="connections", r=row if waiting else None)
 
 
 def _now() -> int:
@@ -223,27 +182,26 @@ async def chatbot_decide(request: Request) -> Response:
             from urllib.parse import urlencode
 
             return RedirectResponse(f"/authorize/wait?{urlencode({'request': row['id']})}", status_code=303)
-        return _page(request, "chatbot_request.html", nav="cloud", r=None, said=said)
+        return _page(request, "chatbot_request.html", nav="connections", r=None, said=said)
     return _page(request, "_chatbot_requests.html", waiting=await store.waiting(), said=said)
 
 
 async def chatbot_remove(request: Request) -> Response:
     import logging
 
-    from memoreei.admin.app import _page
+    from memoreei.admin.connections import connections, list_fragment
 
     store = await _store()
     grant = await store.live_grant(request.path_params["grant_id"])
     if grant is not None and await store.revoke_grant(grant["id"], "removed in the dashboard"):
         logging.getLogger("memoreei.oauth").info("the person removed %s (grant %s)", grant["client_name"], grant["id"])
-    return _page(request, "_chatbot_list.html", chatbots=await store.grants())
+    return list_fragment(request, await connections())
 
 
 def routes() -> list:
     from starlette.routing import Route
 
     return [
-        Route("/cloud", cloud_page),
         Route("/cloud/progress", cloud_progress),
         Route("/cloud/connect", cloud_connect, methods=["POST"]),
         Route("/cloud/cancel", cloud_cancel, methods=["POST"]),

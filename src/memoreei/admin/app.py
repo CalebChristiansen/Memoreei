@@ -1,4 +1,4 @@
-"""The dashboard at /admin: status, client keys, and what memoreei reads from.
+"""The dashboard at /admin: status, connections, and what memoreei reads from.
 
 Server-rendered with Jinja; htmx swaps fragments for the buttons. Every route runs
 behind AdminGuard (see admin/auth.py for the rules).
@@ -325,6 +325,7 @@ def _uploads() -> list[dict[str, Any]]:
 
 
 async def _status_context() -> dict[str, Any]:
+    from memoreei.oauth.store import OAuthStore
     from memoreei.server import _get_db, _sync_manager
 
     db = await _get_db()
@@ -352,7 +353,8 @@ async def _status_context() -> dict[str, Any]:
     failed = bool(last_run) and any(
         isinstance(r, dict) for r in last_run["result"].get("connectors", {}).values()
     )
-    keys = len(await db.list_api_keys())
+    # Chatbots and keys alike, as the Connections page lists them.
+    connected = len(await db.list_api_keys()) + len(await OAuthStore(db).grants())
     has_source = any(a["configured"] for a in accounts) or bool(sources)
     return {
         "home": str(memoreei_home()),
@@ -369,11 +371,11 @@ async def _status_context() -> dict[str, Any]:
         "signal_disappearing": signal_disappearing,
         "running": _sync_manager.running,
         "last_run": last_run,
-        "keys": keys,
+        "connected": connected,
         # As the Sources page counts it, so the two never disagree.
         "has_source": has_source,
         # A new install: the two setup steps lead the page until both are done.
-        "welcome": not has_source or not keys,
+        "welcome": not has_source or not connected,
         "problems": failed or fda is False,
         # The welcome's third step, which is optional and leaves with the other two.
         "has_password": await (await account_store()).has_password(),
@@ -381,7 +383,7 @@ async def _status_context() -> dict[str, Any]:
 
 
 def _address() -> str:
-    """Where clients reach this server, as the Clients page tells them."""
+    """Where clients reach this server, as a new key's setup tells them."""
     from memoreei.auth import server_urls
 
     cfg = get_config()
@@ -524,14 +526,8 @@ async def status(request: Request) -> Response:
     return _page(
         request, "status.html", nav="status", **await _status_context(), **_page_notices(),
         service=await _service_context(), linger_failed="linger" in request.query_params,
-        address=_address(), cloud_offer=_cloud_offer(),
+        address=_address(),
     )
-
-
-def _cloud_offer() -> bool:
-    from memoreei.admin.cloud import offer_visible
-
-    return offer_visible()
 
 
 async def status_fragment(request: Request) -> Response:
@@ -620,13 +616,9 @@ async def log_page(request: Request) -> Response:
     return _page(request, "log.html", nav="status", log=text, log_hint=hint)
 
 
-async def keys_page(request: Request) -> Response:
-    from memoreei.server import _get_db
-
-    return _page(request, "keys.html", nav="keys", keys=await (await _get_db()).list_api_keys())
-
-
 async def key_create(request: Request) -> Response:
+    """A new key, shown once, with the Connections table brought up to date beside it."""
+    from memoreei.admin.connections import _reachable, connections
     from memoreei.auth import KEY_NAME_RE, client_config_text, generate_key, hash_key, server_urls
     from memoreei.server import _get_db
 
@@ -639,8 +631,9 @@ async def key_create(request: Request) -> Response:
         key = generate_key()
         if not await db.add_api_key(name, hash_key(key)):
             error = f"There's already a key called “{name}”. Pick another name, or revoke it first."
+    listed = {"connections": await connections(), "reachable": _reachable()}
     if error:
-        return _page(request, "_key_created.html", error=error, keys=await db.list_api_keys())
+        return _page(request, "_key_created.html", error=error, **listed)
     cfg = get_config()
     urls = server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert))
     return _page(
@@ -652,16 +645,16 @@ async def key_create(request: Request) -> Response:
         claude_code=f'claude mcp add --transport http memoreei {urls[0]} \\\n'
         f'  --header "Authorization: Bearer {key}"',
         config=client_config_text(key, urls, from_public_url=bool(cfg.public_url)),
-        keys=await db.list_api_keys(),
+        **listed,
     )
 
 
 async def key_revoke(request: Request) -> Response:
+    from memoreei.admin.connections import connections, list_fragment
     from memoreei.server import _get_db
 
-    db = await _get_db()
-    await db.revoke_api_key(request.path_params["name"])
-    return _page(request, "_key_list.html", keys=await db.list_api_keys())
+    await (await _get_db()).revoke_api_key(request.path_params["name"])
+    return list_fragment(request, await connections())
 
 
 async def sources_page(request: Request) -> Response:
@@ -796,6 +789,7 @@ def build_admin_app(public_origin: str | None = None) -> Any:
     """The dashboard, meant to be mounted at /admin. With ``public_origin``, the public
     listener's copy, answering only to that address (see AdminGuard)."""
     from memoreei.admin.cloud import routes as cloud_routes
+    from memoreei.admin.connections import routes as connections_routes
     from memoreei.admin.security import routes as security_routes
 
     routes = [
@@ -805,7 +799,6 @@ def build_admin_app(public_origin: str | None = None) -> Any:
         Route("/logout", logout, methods=["POST"]),
         Route("/status", status_fragment),
         Route("/sync", sync_now, methods=["POST"]),
-        Route("/keys", keys_page),
         Route("/keys", key_create, methods=["POST"]),
         Route("/keys/{name}/revoke", key_revoke, methods=["POST"]),
         Route("/sources", sources_page),
@@ -817,6 +810,7 @@ def build_admin_app(public_origin: str | None = None) -> Any:
         Route("/service/linger", service_linger, methods=["POST"]),
         Route("/service/stop", service_stop, methods=["POST"]),
         Route("/log", log_page),
+        *connections_routes(),
         *cloud_routes(),
         *security_routes(),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),

@@ -37,16 +37,6 @@
 </section>
 {% endif %}
 
-{% if cloud_offer %}
-<section class="bubble" aria-label="Memoreei Cloud">
-  <div><b>Use memoreei from Claude.ai or ChatGPT.</b> Memoreei Cloud connects this computer to them, with
-  nothing to open on your router; your messages stay here.
-  <span class="caption">Or <a href="https://github.com/CalebChristiansen/Memoreei#your-own-tunnel">use your own tunnel</a>.</span></div>
-  <a class="button" href="/admin/cloud">Connect to Memoreei Cloud</a>
-  <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
-</section>
-{% endif %}
-
 {% if welcome %}
 <ol class="steps">
   <li class="card {{ 'done' if has_source else 'current' }}">
@@ -61,16 +51,16 @@
     <div><a class="button" href="/admin/sources">Add a source</a></div>
     {% endif %}
   </li>
-  <li class="card {{ 'done' if keys else ('current' if has_source else '') }}">
+  <li class="card {{ 'done' if connected else ('current' if has_source else '') }}">
     <div class="step-head">
-      <span class="num" {% if keys %}aria-hidden="true"{% endif %}>{% if keys %}<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>{% else %}2{% endif %}</span>
-      <h2>Connect a client</h2>
+      <span class="num" {% if connected %}aria-hidden="true"{% endif %}>{% if connected %}<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>{% else %}2{% endif %}</span>
+      <h2>Connect a chatbot or app</h2>
     </div>
-    {% if keys %}
-    <p>Done: {{ keys }} key{{ "" if keys == 1 else "s" }}. <a href="/admin/keys">Add another</a></p>
+    {% if connected %}
+    <p>Done: {{ connected }} connection{{ "" if connected == 1 else "s" }}. <a href="/admin/connections">Add another</a></p>
     {% else %}
-    <p>Give each app that searches your memoreeis, like Claude Code, its own key.</p>
-    <div><a class="button" href="/admin/keys">Add a client</a></div>
+    <p>Claude.ai, ChatGPT, Claude Code or an agent: each connects on its own, and you can remove any of them.</p>
+    <div><a class="button" href="/admin/connections">Connect one</a></div>
     {% endif %}
   </li>
   <li class="card {{ 'done' if has_password }}">
@@ -100,10 +90,10 @@
     <div>source{{ "" if source_names|length == 1 else "s" }}</div>
     <div class="caption">{{ source_names|join(", ") if source_names else "None yet" }}</div>
   </a>
-  <a class="card count" href="/admin/keys">
-    <div class="n">{{ keys }}</div>
-    <div>client{{ "" if keys == 1 else "s" }}</div>
-    <div class="more">Manage keys →</div>
+  <a class="card count" href="/admin/connections">
+    <div class="n">{{ connected }}</div>
+    <div>connection{{ "" if connected == 1 else "s" }}</div>
+    <div class="more">Manage connections →</div>
   </a>
 </div>
 
