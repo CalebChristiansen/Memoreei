@@ -38,11 +38,12 @@ def nobody_called(monkeypatch):
 def test_the_connections_page_offers_it_without_calling_anyone(server, nobody_called):
     client = signed_in(server)
     r = client.get("/admin/connections")
-    assert r.status_code == 200 and "Connect to Memoreei Cloud" in r.text
-    assert "keeps memoreei itself free and open source" in r.text
+    # Memoreei Cloud and the person's own address, side by side.
+    assert r.status_code == 200 and "Use Memoreei Cloud" in r.text and "Your own address" in r.text
+    assert "how Memoreei stays free and open source" in r.text
     assert 'href="https://docs.memoreei.com/self-host"' in r.text
     # The status page sells nothing once set up; the welcome steps point here instead.
-    assert "Connect to Memoreei Cloud" not in client.get("/admin/").text
+    assert "Memoreei Cloud" not in client.get("/admin/").text
 
 
 @pytest.mark.parametrize("setting", [("MEMOREEI_CLOUD_OFFER", "0"), ("MEMOREEI_PUBLIC_PORT", "0")])
@@ -51,7 +52,7 @@ def test_the_offer_can_be_hidden(server, monkeypatch, setting):
     monkeypatch.setattr(config_module, "_config", None)
     client = signed_in(server)
     r = client.get("/admin/connections")
-    assert r.status_code == 200 and "Connect to Memoreei Cloud" not in r.text
+    assert r.status_code == 200 and "Use Memoreei Cloud" not in r.text and "Your own address" not in r.text
 
 
 @pytest.mark.parametrize("old", ["/admin/cloud", "/admin/keys"])
@@ -204,3 +205,28 @@ def test_chatbots_and_keys_share_one_table(server, monkeypatch):
     assert 'id="connection-list"' in r.text and "Claude" in r.text and "/admin/keys/laptop/revoke" not in r.text
     # The welcome steps count a chatbot as a connection, without any key.
     assert "Done: 1 connection." in client.get("/admin/").text
+
+
+def test_nothing_connected_is_one_card_and_the_first_key_names_it(server):
+    client = signed_in(server)
+    r = client.post("/admin/keys/laptop/revoke", headers=ORIGIN)  # the fixture's key, the last connection
+    assert r.headers.get("hx-refresh") == "true"  # back to the empty card
+    r = client.get("/admin/connections")
+    assert "Nothing&#39;s connected yet" in r.text or "Nothing's connected yet" in r.text
+    assert 'id="empty-head"' in r.text and "Make a key" in r.text and "Use Memoreei Cloud" in r.text
+    assert "<h2>Connected</h2>" not in r.text
+    # The first key turns the empty card's heading into "Connected", without a reload.
+    r = client.post("/admin/keys", data={"name": "desktop"}, headers=ORIGIN)
+    assert '<h2 id="empty-head" hx-swap-oob="true">Connected</h2>' in r.text
+    assert 'id="connection-list" hx-swap-oob="true"' in r.text and "desktop" in r.text
+    assert "hx-refresh" not in r.headers
+    # The second doesn't: the heading is already there.
+    r = client.post("/admin/keys", data={"name": "phone"}, headers=ORIGIN)
+    assert 'id="empty-head"' not in r.text
+
+
+def test_some_connected_shows_the_ways_in_their_own_card(server):
+    r = signed_in(server).get("/admin/connections")  # the fixture's key
+    assert "<h2>Connected</h2>" in r.text and "Use Memoreei Cloud" in r.text
+    assert 'id="empty-head"' not in r.text
+    assert '<td class="actions">' in r.text and 'class="table-scroll"' in r.text
