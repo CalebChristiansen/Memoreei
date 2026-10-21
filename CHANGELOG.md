@@ -49,7 +49,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   messages in one table, chatbots that signed in and keys alike, each with a Remove
   button, under how this computer is reached. `/admin/keys` still leads there. The
   welcome screen's second step is "Connect a chatbot or app", and the status page counts
-  connections rather than keys.
+  connections rather than keys. Until Claude.ai and ChatGPT can reach the computer, it
+  offers two equal ways for them to: Memoreei Cloud, or your own address (a tunnel, a
+  reverse proxy or a forwarded port). With nothing connected yet, it's one card.
+- **The dashboard, all pages:** focus rings you can see on the light theme (teal; amber
+  in dark mode and on the sidebar), tables that scroll inside their card on a phone,
+  the "Choose file" button readable in dark mode, and Copy buttons that work over plain
+  http from another device on your network.
 - **The database is always encrypted** (SQLCipher, AES-256, with a random 256-bit key).
   The key is kept in GNOME Keyring or KWallet on a Linux desktop, and otherwise in
   `memoreei.key` beside the database, mode 600 (the Mac too, until Memoreei.app has a

@@ -280,6 +280,22 @@ it, the public listener takes `mem_` keys only. To serve TLS from memoreei itsel
 `MEMOREEI_PUBLIC_TLS_CERT` and `MEMOREEI_PUBLIC_TLS_KEY`. The public listener has one
 identity at a time, so it's this or Memoreei Cloud.
 
+**Or forward a port.** With no tunnel at all, forward a port on your router to this
+computer and let memoreei serve TLS itself, with a certificate for a hostname that points
+at your home address:
+
+```bash
+MEMOREEI_PUBLIC_HOST=0.0.0.0                               # listen beyond this computer
+MEMOREEI_PUBLIC_PORT=3680                                  # the port your router forwards here
+MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com:3680/mcp
+MEMOREEI_PUBLIC_TLS_CERT=/path/to/fullchain.pem
+MEMOREEI_PUBLIC_TLS_KEY=/path/to/privkey.pem
+```
+
+Only the public listener is reachable this way: `/mcp`, the sign-in and its metadata,
+and the dashboard only if you've [opened it from anywhere](#from-anywhere). memoreei
+reads the certificate when it starts, so restart it after renewing one.
+
 ---
 
 ## Run it as a network server
