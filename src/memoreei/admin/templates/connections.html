@@ -48,10 +48,10 @@
 
 {% elif device %}
 <section class="card">
-  <div class="row" style="float:right">
+  <div class="row" style="justify-content:space-between">
+    <h2>Memoreei Cloud</h2>
     <button class="danger small" hx-post="/admin/cloud/disconnect" hx-confirm="Disconnect this computer? Chatbot connectors using it stop working.">Disconnect</button>
   </div>
-  <h2>Memoreei Cloud</h2>
   {% if tunnel.message and tunnel.state != "online" %}<p class="{{ 'bad' if tunnel.state in ('blocked', 'revoked') else '' }}" role="status">{{ tunnel.message }}</p>{% endif %}
   {% if not ready %}<p class="bad">It has no certificate yet, so it can't go online.</p>
   <form method="post" action="/admin/cloud/connect"><button>Finish connecting</button></form>{% endif %}
