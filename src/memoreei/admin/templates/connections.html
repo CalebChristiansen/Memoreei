@@ -73,54 +73,63 @@
   Thanks for supporting memoreei.</p>
 </section>
 
-{% elif offer %}
-<section class="card">
-  <h2>Use memoreei from Claude.ai and ChatGPT</h2>
-  <p>Chatbots on the web can't reach this computer by themselves. Memoreei Cloud gives it an address they can
-  reach, with nothing to set up on your router.</p>
-  <ul>
-    <li>Your messages stay on this computer. The relay passes along encrypted traffic it can't read.</li>
-    <li>You approve each chatbot here, and can remove any of them at any time.</li>
-    <li>It works while this computer is awake and online.</li>
-  </ul>
-  <form method="post" action="/admin/cloud/connect" class="row">
-    <button>Connect to Memoreei Cloud</button>
-    <span class="caption">{% if price %}{{ price }} a month after a 14-day free trial. Cancel any time.
-    It also keeps{% else %}Memoreei Cloud also keeps{% endif %} memoreei itself free and open source.</span>
-  </form>
-  <p class="caption">memoreei works without us. If you'd rather run your own tunnel or relay,
-  <a href="{{ self_host_url }}" rel="noreferrer">here's how</a>.</p>
-</section>
 {% endif %}
 
 {% include "_chatbot_requests.html" %}
 
+{#- Neither Cloud nor the person's own address yet: offer both, side by side. -#}
+{% set paths = offer and not (connecting or custom or device) %}
+
+{%- macro key_row() -%}
+<details class="key-row">
+  <summary>
+    <span><b>An app on this computer</b>
+      <span class="caption">Claude Code, Claude Desktop, a script. One key each; no relay needed.</span></span>
+    <span class="button quiet">Make a key</span>
+  </summary>
+  <form class="new-key" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">
+    <div class="field">
+      <label for="name">New key for</label>
+      <input id="name" name="name" placeholder="e.g. laptop" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off">
+    </div>
+    <button>Create key</button>
+  </form>
+  <p class="caption">Lose a laptop? Revoke its key; nothing else changes.</p>
+</details>
+<div id="created"></div>
+{%- endmacro %}
+
+{% if connections %}
+{% if paths %}<section class="card">{% include "_reach.html" %}</section>{% endif %}
 <section class="card">
   <h2>Connected</h2>
   {% include "_connection_list.html" %}
-  <details{% if not connections %} open{% endif %}>
-    <summary>Add a key, for an app that can't sign in itself</summary>
-    <p class="caption">Claude Code, Claude Desktop's config, a script: one key each. Lose a laptop? Revoke its key; nothing else changes.</p>
-    <form class="new-key" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">
-      <div class="field">
-        <label for="name">New key for</label>
-        <input id="name" name="name" placeholder="e.g. laptop" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off">
-      </div>
-      <button>Create key</button>
-    </form>
-  </details>
-  <div id="created"></div>
+  {{ key_row() }}
+{% else %}
+<section class="card empty">
+  <div class="empty-head" id="empty-head">
+    <div class="typing still" aria-hidden="true"><span></span><span></span><span></span>
+      <svg class="tail" width="22" height="14" viewBox="0 0 22 14"><path d="M0 0H22L4 14V0Z"/></svg></div>
+    <div>
+      <h2>Nothing's connected yet</h2>
+      <p class="muted">Your memories are ready. Give a chatbot or an app a way to ask.</p>
+    </div>
+  </div>
+  {% if paths %}{% include "_reach.html" %}{% endif %}
+  {% set in_empty_card = true %}{% include "_connection_list.html" %}
+  {{ key_row() }}
+{% endif %}
   {% if calls %}
   <details>
     <summary>The last {{ calls|length }} calls from outside this computer</summary>
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr><th scope="col">When</th><th scope="col">Client</th><th scope="col">What</th><th scope="col">From</th><th scope="col">Answer</th></tr></thead>
       <tbody>
       {% for c in calls %}
       <tr><td>{{ c.at|ago|capitalize }}</td><td class="mono">{{ c.client }}</td><td>{{ c.tool or c.method or "?" }}</td><td class="mono">{{ c.peer or "?" }}</td><td>{{ c.status }}</td></tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </details>
   {% endif %}
 </section>

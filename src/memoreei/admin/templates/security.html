@@ -95,7 +95,7 @@
 <section class="card">
   <h2>Signed in</h2>
   {% if sessions %}
-  <table>
+  <div class="table-scroll"><table>
     <thead><tr><th scope="col">Browser</th><th scope="col">How</th><th scope="col">From</th><th scope="col">Since</th></tr></thead>
     <tbody>
     {% for s in sessions %}
@@ -104,7 +104,7 @@
       <td class="mono">{{ s.peer or "?" }}</td><td>{{ s.created_at|ago|capitalize }}</td></tr>
     {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% else %}
   <p class="caption">Browsers signed in by an earlier version of memoreei aren't listed here.</p>
   {% endif %}
@@ -115,7 +115,7 @@
 <section class="card">
   <details>
     <summary>The last {{ signins|length }} password sign-ins</summary>
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr><th scope="col">When</th><th scope="col">From</th><th scope="col">Result</th></tr></thead>
       <tbody>
       {% for s in signins %}
@@ -123,7 +123,7 @@
         <td>{% if s.ok %}Signed in{% else %}<span class="bad">Refused</span>{% endif %} <span class="caption">({{ s.why }})</span></td></tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </details>
 </section>
 {% endif %}

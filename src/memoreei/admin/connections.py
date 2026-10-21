@@ -63,7 +63,12 @@ def list_fragment(request: Request, rows: list[dict[str, Any]], oob: bool = Fals
     """The table on its own, for the buttons that change it."""
     from memoreei.admin.app import _page
 
-    return _page(request, "_connection_list.html", connections=rows, reachable=_reachable(), oob=oob)
+    response = _page(request, "_connection_list.html", connections=rows, reachable=_reachable(), oob=oob)
+    if not rows:
+        # The last one went: reload, so the page shows its empty card and the ways to connect
+        # rather than an empty table. Nothing on the page is lost; keys are shown only on creation.
+        response.headers["HX-Refresh"] = "true"
+    return response
 
 
 def _reachable() -> bool:

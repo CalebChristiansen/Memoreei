@@ -24,5 +24,9 @@
     </div>
   </details>
 </section>
+{% if connections|length == 1 %}
+{#- The first connection: the empty card's "Nothing's connected yet" becomes its heading. -#}
+<h2 id="empty-head" hx-swap-oob="true">Connected</h2>
+{% endif %}
 {% endif %}
 {% with oob = true %}{% include "_connection_list.html" %}{% endwith %}

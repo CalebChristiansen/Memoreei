@@ -1,0 +1,28 @@
+{#- How Claude.ai and ChatGPT reach this computer: Memoreei Cloud or the person's own address,
+    side by side. Shown on Connections while neither is set up and the offer is on. -#}
+<div class="reach">
+  <div class="reach-head">
+    <h3>Claude.ai and ChatGPT</h3>
+    <span class="caption">Web chatbots need an address for this computer. Two ways to give it one; they work the same.</span>
+  </div>
+  <div class="paths">
+    <div class="path">
+      <div class="path-head">
+        <b>Memoreei Cloud</b>
+        <span class="tag">Supports Memoreei</span>
+      </div>
+      <p>One click, nothing to configure. We run an encrypted relay so chatbots can reach this computer, and we can't read a word.</p>
+      <span class="caption">{% if price %}{{ price }} a month after a 14-day free trial. {% endif %}It's how Memoreei stays free and open source.</span>
+      <form method="post" action="/admin/cloud/connect"><button>Use Memoreei Cloud</button></form>
+    </div>
+    <div class="path">
+      <div class="path-head">
+        <b>Your own address</b>
+        <span class="tag soft">Can be free</span>
+      </div>
+      <p>Use a tunnel you already have (Cloudflare, Tailscale, ngrok), a reverse proxy, or a forwarded port. Same features, nothing held back.</p>
+      <span class="caption">Needs a terminal, and a domain or tunnel you control.</span>
+      <div><a class="button quiet" href="{{ self_host_url }}" rel="noreferrer">Set up your own</a></div>
+    </div>
+  </div>
+</div>
