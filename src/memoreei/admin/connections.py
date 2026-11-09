@@ -26,7 +26,8 @@ PATH = "/admin/connections"
 # with, so it's ours to point wherever the docs live (a forward to the README for now).
 SELF_HOST_URL = "https://docs.memoreei.com/self-host"
 
-# Memoreei Cloud's price, shown beside Connect, once there's billing to charge it.
+# Memoreei Cloud's price beside Connect. Unset by decision: a price in a release stays
+# in every install that never updates, so prices are shown only at checkout.
 CLOUD_PRICE: str | None = None
 
 
@@ -82,7 +83,7 @@ def _reachable() -> bool:
 
 async def _context() -> dict[str, Any]:
     from memoreei.admin.cloud import _connecting, _runtime, _store
-    from memoreei.cloud import certs
+    from memoreei.cloud import certs, standing
     from memoreei.cloud.state import CloudState
     from memoreei.server import _get_db
 
@@ -99,6 +100,10 @@ async def _context() -> dict[str, Any]:
         "certificate": certs.describe(state),
         "live": live,
         "tunnel": live.get("tunnel") or {},
+        # The account's standing, as the service last said (never asked for by this page).
+        "billing": standing.describe(state.billing(), (live.get("tunnel") or {}).get("state"))
+        if device else None,
+        "manage_url": standing.manage_url(device.auth_url) if device else None,
         "connecting": _connecting if _connecting.get("state") not in (None, "done") else None,
         "custom": live.get("mode") == "custom",
         "offer": cfg.cloud_offer,

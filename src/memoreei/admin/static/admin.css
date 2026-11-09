@@ -151,7 +151,16 @@ button.quiet, .button.quiet { background: transparent; color: var(--teal); }
   .button.quiet:hover { color: var(--amber); }
 }
 button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
-button.small { min-height: 36px; padding: 0 14px; font-size: 13px; }
+button.small, .button.small { min-height: 36px; padding: 0 14px; font-size: 13px; }
+
+/* The account's standing on the Memoreei Cloud card (memoreei.cloud.standing). */
+.billing { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
+           padding: 12px 14px; margin: 12px 0; border-radius: var(--radius-sm); background: var(--ok-tint); color: var(--ok-text); }
+.billing > div { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; }
+.billing .caption { color: inherit; opacity: .85; }
+.billing.warn { background: var(--result); color: var(--ink); }
+.billing.bad { background: transparent; border: 1px solid var(--danger); color: var(--ink); }
+.billing.bad b { color: var(--danger); }
 .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
 .switch { width: 44px; height: 26px; min-height: 0; border-radius: 999px; padding: 3px; border: none;

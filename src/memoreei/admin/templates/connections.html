@@ -8,7 +8,7 @@
   </div>
   {% if ready %}
   {% set s = tunnel.state or "connecting" %}
-  <span class="pill big {{ '' if s == 'online' else ('off' if s in ('revoked', 'replaced') else 'warn') }}"><span class="dot"></span>{{ {"online": "Online", "connecting": "Connecting", "offline": "Offline", "blocked": "Blocked", "relay": "Retrying", "revoked": "Removed", "replaced": "Stepped aside"}.get(s, s|capitalize) }}</span>
+  <span class="pill big {{ '' if s == 'online' else ('off' if s in ('revoked', 'replaced') else 'warn') }}"><span class="dot"></span>{{ {"online": "Online", "connecting": "Connecting", "offline": "Offline", "blocked": "Blocked", "relay": "Retrying", "revoked": "Removed", "replaced": "Stepped aside", "unpaid": "Disconnected"}.get(s, s|capitalize) }}</span>
   {% elif custom %}
   <span class="pill big"><span class="dot"></span>Your own setup</span>
   {% endif %}
@@ -52,7 +52,13 @@
     <h2>Memoreei Cloud</h2>
     <button class="danger small" hx-post="/admin/cloud/disconnect" hx-confirm="Disconnect this computer? Chatbot connectors using it stop working.">Disconnect</button>
   </div>
-  {% if tunnel.message and tunnel.state != "online" %}<p class="{{ 'bad' if tunnel.state in ('blocked', 'revoked') else '' }}" role="status">{{ tunnel.message }}</p>{% endif %}
+  {% if billing %}
+  <div class="billing {{ billing.tone }}" role="status">
+    <div><b>{{ billing.title }}</b>{% if billing.caption %}<span class="caption">{{ billing.caption }}</span>{% endif %}</div>
+    <a class="button {{ '' if billing.tone else 'quiet' }} small" href="{{ manage_url }}" rel="noreferrer">Manage billing</a>
+  </div>
+  {% endif %}
+  {% if tunnel.message and tunnel.state not in ("online", "unpaid") %}<p class="{{ 'bad' if tunnel.state in ('blocked', 'revoked') else '' }}" role="status">{{ tunnel.message }}</p>{% endif %}
   {% if not ready %}<p class="bad">It has no certificate yet, so it can't go online.</p>
   <form method="post" action="/admin/cloud/connect"><button>Finish connecting</button></form>{% endif %}
   {% if live.error %}<p class="bad" role="alert">{{ live.error }}</p>{% endif %}
@@ -70,7 +76,7 @@
     <dt>Last call</dt><dd>{{ live.last_call_at|ago|capitalize }}</dd>
   </dl>
   <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.
-  Thanks for supporting memoreei.</p>
+  Thanks for supporting memoreei.{% if not billing %} <a href="{{ manage_url }}" rel="noreferrer">Manage billing</a>{% endif %}</p>
 </section>
 
 {% endif %}

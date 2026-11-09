@@ -230,3 +230,41 @@ def test_some_connected_shows_the_ways_in_their_own_card(server):
     assert "<h2>Connected</h2>" in r.text and "Use Memoreei Cloud" in r.text
     assert 'id="empty-head"' not in r.text
     assert '<td class="actions">' in r.text and 'class="table-scroll"' in r.text
+
+
+# ── how the account stands ───────────────────────────────────────────────────
+
+
+def test_the_offer_names_the_trial_and_no_price(server, nobody_called):
+    text = signed_in(server).get("/admin/connections").text
+    assert "14-day free trial." in text and "$" not in text.split("Use Memoreei Cloud")[0].rsplit("<b>Memoreei Cloud", 1)[-1]
+
+
+@pytest.mark.parametrize("billing,says,cls", [
+    ({"standing": "trialing", "until": int(time.time()) + 9 * 86400 - 60}, "Trial: 9 days left", "billing "),
+    ({"standing": "past_due", "until": int(time.time()) + 3 * 86400}, "Payment failed: update your card", "billing warn"),
+    ({"standing": "disconnected", "until": int(time.time()) + 9 * 86400}, "Disconnected: payment overdue", "billing bad"),
+])
+def test_the_card_shows_the_standing_with_manage_billing(server, fake, billing, says, cls):
+    import asyncio
+
+    from memoreei.cloud.connect import connect
+
+    fake.billing = {**billing, "paywall": True}
+    asyncio.run(connect(None))
+    asked = fake.asked
+    text = signed_in(server).get("/admin/connections").text
+    assert says in text and f'class="{cls}' in text
+    assert 'href="https://account.example.test/billing"' in text and "Manage billing" in text
+    assert fake.asked == asked                    # the page reads what was kept; it asks nobody
+
+
+def test_a_paid_up_card_just_links_to_billing(server, fake):
+    import asyncio
+
+    from memoreei.cloud.connect import connect
+
+    asyncio.run(connect(None))
+    text = signed_in(server).get("/admin/connections").text
+    assert "Thanks for supporting memoreei." in text and 'class="billing' not in text
+    assert 'href="https://account.example.test/billing"' in text
