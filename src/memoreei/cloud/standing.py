@@ -82,7 +82,7 @@ def describe(billing: dict[str, Any] | None, tunnel_state: str | None = None,
                     + (f", until {_date(until)}." if until else "."), "warn")
     if standing == "ending" and until:
         return Line(f"Cancelled: works until {_date(until)}",
-                    "Chatbots can reach this computer until then. You can resume it before that.")
+                    "Chatbots can reach this computer until then.")
     if not _cut_off({**b, "standing": standing}, tunnel_state):
         return None
     if standing == "disconnected":
