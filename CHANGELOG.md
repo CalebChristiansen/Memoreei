@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0rc1] - 2026-11-09
+
 ### Added
 - **Stay awake while plugged in**, so Claude.ai and ChatGPT can reach this computer.
   A switch on the Connections page (or `memoreei stay-awake on`), off by default, and
@@ -96,7 +98,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   An existing database is encrypted on its first start, about 7 seconds for 150,000
   messages, and opening one afterwards costs milliseconds. A wrong or missing key stops
   memoreei with a message saying where it looked, rather than "file is not a database".
-  `memoreei config` shows where the key is. Back up the key with the database.
+  `memoreei config` shows where the key is. Back up the key with the database. **Back
+  up the database before upgrading:** 0.4.x can't open it once it's encrypted, so going
+  back means restoring that copy.
 - **Sources' tokens and passwords live in the encrypted database**, not in
   `config.env`: Gmail's app password, the Discord, Telegram and Slack bot tokens, the
   Matrix and Mastodon access tokens, Signal's key and `OPENAI_API_KEY`. The dashboard
@@ -509,7 +513,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...HEAD
+[0.5.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...v0.5.0rc1
 [0.4.7]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7
 [0.4.7rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...v0.4.7rc2
 [0.4.7rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7rc1
