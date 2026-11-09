@@ -1,0 +1,10 @@
+{#- Stay awake while plugged in: shown wherever this computer is reachable from outside. -#}
+<div class="switch-row" id="awake">
+  <form method="post" action="/admin/stay-awake">
+    <input type="hidden" name="on" value="{{ 0 if awake.on else 1 }}">
+    <button class="switch" aria-pressed="{{ 'true' if awake.on else 'false' }}" aria-label="Stay awake while plugged in"><span></span></button>
+  </form>
+  <div><b>Stay awake while plugged in</b>
+    <span class="caption">{% if awake.state in ("off", "unknown") %}So chatbots can reach it. On battery it sleeps as usual, and closing the lid still sleeps it.{% else %}<span class="{{ 'bad' if awake.state in ('failed', 'unsupported') else '' }}">{{ awake.message }}</span>{% endif %}</span>
+  </div>
+</div>

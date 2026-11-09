@@ -749,6 +749,7 @@ def build_http_app(verify: "Verifier") -> Any:
     """
     from memoreei.admin.app import build_admin_app
     from memoreei.auth import BearerAuthMiddleware
+    from memoreei.awake import stay_awake
     from memoreei.public.runtime import public_runtime
     from memoreei.service._systemd import bundle_root
     from memoreei.updates import update_checks
@@ -761,7 +762,7 @@ def build_http_app(verify: "Verifier") -> Any:
         # Only the Linux packages look for updates here; Memoreei.app does its own.
         # The public listener (and Memoreei Cloud) runs only when set up: see memoreei.public.
         async with inner_lifespan(a), _auto_sync(), _warm_search(), _push_to_peers(), \
-                update_checks(enabled=bundle_root() is not None), public_runtime(verify):
+                update_checks(enabled=bundle_root() is not None), public_runtime(verify), stay_awake():
             yield
 
     app.router.lifespan_context = lifespan

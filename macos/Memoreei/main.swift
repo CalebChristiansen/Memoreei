@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let accessNote = NSMenuItem(title: "Can't read Messages yet", action: nil, keyEquivalent: "")
     private let accessItem = NSMenuItem(title: "Allow Access to Messages…", action: #selector(showOnboarding), keyEquivalent: "")
     private let openItem = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard), keyEquivalent: "o")
+    private let connectionsItem = NSMenuItem(title: "Connections…", action: #selector(openConnections), keyEquivalent: "")
     private let retryItem = NSMenuItem(title: "Start Server", action: #selector(retry), keyEquivalent: "")
     private let loginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleLogin), keyEquivalent: "")
     private let logItem = NSMenuItem(title: "Show Log", action: #selector(showLog), keyEquivalent: "")
@@ -118,10 +119,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ])
         accessItem.image = Brand.dot(Brand.amber)
         updateItem.image = Brand.dot(Brand.amber)
-        for item in [accessItem, openItem, retryItem, loginItem, logItem, updateItem, aboutItem, quitItem] {
+        for item in [accessItem, openItem, connectionsItem, retryItem, loginItem, logItem, updateItem, aboutItem, quitItem] {
             item.target = self
         }
-        for item in [statusLine, accessNote, retryItem, .separator(), accessItem, openItem, updateItem,
+        for item in [statusLine, accessNote, retryItem, .separator(), accessItem, openItem, connectionsItem, updateItem,
                      .separator(), loginItem, logItem, .separator(), aboutItem, quitItem] {
             menu.addItem(item)
         }
@@ -140,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         statusLine.image = Brand.dot(server.state == .running ? Brand.teal : NSColor.tertiaryLabelColor)
         openItem.isEnabled = server.state == .running
+        connectionsItem.isEnabled = server.state == .running
         retryItem.isHidden = server.state == .running || server.state == .starting
         let needsAccess = DiskAccess.check() == .missing
         accessItem.isHidden = !needsAccess
@@ -173,12 +175,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Actions
 
-    @objc private func openDashboard() {
+    @objc private func openDashboard() { openPage(nil) }
+
+    /// Claude.ai, ChatGPT and agents: Memoreei Cloud, your own address, every chatbot and key.
+    @objc private func openConnections() { openPage("connections") }
+
+    private func openPage(_ page: String?) {
         guard server.state == .running else {
             openWhenReady = true
             return
         }
-        Server.runCLI(["admin-url"]) { [weak self] url in
+        Server.runCLI(["admin-url"] + (page.map { ["--page", $0] } ?? [])) { [weak self] url in
             guard let link = url.flatMap(URL.init(string:)) else {
                 self?.alert("Couldn't open the dashboard", "See the log for what went wrong.")
                 return

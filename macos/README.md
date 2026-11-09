@@ -31,7 +31,7 @@ the GitHub Release; run it by hand for test builds. Only arm64 is smoke-tested t
 | `Contents/Resources/site-packages` | memoreei and `requirements.lock`, installed with `uv pip install --target`. |
 | `Contents/Resources/models` | The fastembed model, so search works offline. The app sets `HF_HUB_OFFLINE`. |
 | LaunchAgent `<bundle id>.plist` | "Start at login". Its program is the Swift executable itself, never a script (a script would become the responsible process). `KeepAlive` on crash only. |
-| `/admin` in the Python package | All setup screens. The app only logs you in (`memoreei admin-url`) and opens the browser. |
+| `/admin` in the Python package | All setup screens. The app only logs you in (`memoreei admin-url`, `--page connections` for its Connections… item) and opens the browser. |
 
 Nothing writes into the bundle at runtime, or the signature breaks: bytecode goes to
 `~/Library/Caches/Memoreei/pycache` (`PYTHONPYCACHEPREFIX`).

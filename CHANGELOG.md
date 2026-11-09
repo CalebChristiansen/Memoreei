@@ -8,6 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Stay awake while plugged in**, so Claude.ai and ChatGPT can reach this computer.
+  A switch on the Connections page (or `memoreei stay-awake on`), off by default, and
+  only in effect while something outside the computer can reach memoreei: Memoreei
+  Cloud, or your own address. On a Mac it's `caffeinate -s`, which macOS honours only on
+  AC power; on Linux, `systemd-inhibit` while on mains power (a computer with no battery
+  always is). Either way it ends with memoreei. On battery the computer sleeps as usual,
+  and closing a laptop's lid still sleeps it. `memoreei cloud status` says whether it's
+  holding.
+- **Connections… in Memoreei.app's menu** opens the dashboard's Connections page:
+  Memoreei Cloud, your own address, and every chatbot and key. `memoreei admin-url
+  --page connections` gives the same link.
 - **Another memoreei as a source.** One memoreei sends its messages, with their
   embeddings, to another: a laptop to a home server, say, or to Memoreei Cloud. Pair them
   with *Add another memoreei* / *Send to another memoreei* under Sources, or `memoreei

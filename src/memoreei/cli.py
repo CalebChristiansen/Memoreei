@@ -830,6 +830,8 @@ def cloud_status() -> None:
         typer.echo(f"Problem: {status['error']}")
     if status.get("last_call_at"):
         typer.echo(f"Last call: {_fmt_time(status['last_call_at'])}")
+    if (status.get("awake") or {}).get("on"):
+        typer.echo(f"Stay awake: {status['awake']['message']}")
 
 
 @cloud_app.command(name="disconnect")
@@ -988,8 +990,9 @@ def _connect_signal() -> list[tuple[str, str]]:
     return [("SIGNAL_DB_KEY", key)]
 
 
-def _login_link() -> str:
-    """A fresh one-time dashboard link, for this home's server."""
+def _login_link(page: str | None = None) -> str:
+    """A fresh one-time dashboard link, for this home's server, opening *page* (a path
+    under /admin, like "connections") or the front page."""
     from memoreei.admin.auth import create_login_token, login_url
     from memoreei.config import get_config
 
@@ -998,7 +1001,8 @@ def _login_link() -> str:
             return await create_login_token(db)
 
     cfg = get_config()
-    return login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert))
+    next_path = "/admin/" + page.strip("/") if page else None
+    return login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert), next_path=next_path)
 
 
 def _has_display() -> bool:
@@ -1023,7 +1027,9 @@ def _tunnel_hint(port: int) -> str:
 
 
 @app.command(name="admin-url")
-def admin_url() -> None:
+def admin_url(
+    page: str = typer.Option("", "--page", help="Open this page rather than the front one, e.g. connections"),
+) -> None:
     """Print a one-time link that signs a browser in to the dashboard.
 
     The link works once, within five minutes, on the computer the server runs on. With no
@@ -1033,11 +1039,44 @@ def admin_url() -> None:
     from memoreei.admin.auth import LOGIN_TTL
     from memoreei.config import get_config
 
-    link = _login_link()
+    link = _login_link(page or None)
     if not _has_display():
         typer.echo(_tunnel_hint(get_config().port), err=True)
     typer.echo(link)
     typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
+
+
+@app.command(name="stay-awake")
+def stay_awake_cmd(
+    switch: str = typer.Argument("", help="on or off; leave out to see how it is"),
+) -> None:
+    """Keep this computer awake while it's plugged in, so chatbots can reach it.
+
+    Only while something outside this computer can reach memoreei (Memoreei Cloud, or
+    your own address). On battery it sleeps as usual, and closing a laptop's lid still
+    sleeps it. A running server picks the change up within half a minute.
+    """
+    from memoreei import awake
+    from memoreei.config import save_settings
+
+    if switch.lower() not in ("", "on", "off"):
+        typer.echo("  ✗ Say on or off.", err=True)
+        raise typer.Exit(2)
+    if switch:
+        save_settings([(awake.SETTING, "1" if switch.lower() == "on" else "")])
+    on = awake.setting_on()
+    if switch and on != (switch.lower() == "on"):
+        typer.echo(f"  ✗ {awake.SETTING} is set in this shell's environment, which wins over config.env.", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  {'✓' if on else '·'} Stay awake while plugged in: {'on' if on else 'off'}.")
+    from memoreei.cloud.state import CloudState
+
+    import time
+
+    saved = CloudState().status() or {}
+    held = (saved.get("awake") or {}).get("message")
+    if held and not switch and time.time() - saved.get("written_at", 0) < 180:
+        typer.echo(f"  The server says: {held}")
 
 
 # ── Other memoreeis as sources (memoreei.peers) ──────────────────────────────

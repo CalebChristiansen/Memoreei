@@ -30,6 +30,7 @@ src/memoreei/
 ├── server.py              # MCP servers: local (stdio, every tool), network (HTTP, 4 tools)
 ├── auth.py                # API keys, bearer-auth middleware, client config printout
 ├── imports.py             # registered import files, re-read by `sync`
+├── awake.py               # stay awake while plugged in (caffeinate -s / systemd-inhibit), while reachable
 ├── catalog.py             # what can be set up (setup wizard and dashboard share it)
 ├── admin/                 # the /admin dashboard and its login rules
 ├── public/                # the public listener: /mcp for the internet, the gate, access log

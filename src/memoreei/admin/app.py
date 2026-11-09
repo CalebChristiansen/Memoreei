@@ -448,7 +448,8 @@ async def login(request: Request) -> Response:
             )
         )
     await auth.end_session(db, request.cookies.get(auth.COOKIE))  # whatever this browser had, it's done
-    response = RedirectResponse("/admin/", status_code=303)
+    # The Mac app's Connections item asks for that page; anything not ours is the front page.
+    response = RedirectResponse(auth.safe_next(request.query_params.get("next")), status_code=303)
     _set_cookie(request, response, auth.COOKIE, session, auth.SESSION_TTL)
     return _secure(response)
 

@@ -44,6 +44,7 @@
     <dt>Sign-in</dt><dd>{% if live.issuer %}Chatbots sign in at <span class="mono">{{ live.issuer }}</span> and you approve them here{% else %}<span class="mono">mem_</span> keys only: set MEMOREEI_PUBLIC_MCP_URL for chatbots to sign in{% endif %}</dd>
   </dl>
   {% if live.error %}<p class="bad" role="alert">{{ live.error }}</p>{% endif %}
+  {% include "_awake.html" %}
 </section>
 
 {% elif device %}
@@ -75,6 +76,7 @@
     {% if certificate %}<dt>Certificate</dt><dd>Valid until {{ certificate.not_after|date }}; renews itself from {{ certificate.renews_at|date }}{% if live.certificate and live.certificate.last_error %}<br><span class="bad">Last renewal failed: {{ live.certificate.last_error }}</span>{% endif %}</dd>{% endif %}
     <dt>Last call</dt><dd>{{ live.last_call_at|ago|capitalize }}</dd>
   </dl>
+  {% include "_awake.html" %}
   <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.
   Thanks for supporting memoreei.{% if not billing %} <a href="{{ manage_url }}" rel="noreferrer">Manage billing</a>{% endif %}</p>
 </section>

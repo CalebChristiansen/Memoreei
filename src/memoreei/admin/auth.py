@@ -147,6 +147,11 @@ async def end_session(db: "Database", session: str | None) -> None:
     await AccountStore(db).end_session(session)
 
 
-def login_url(token: str, port: int, tls: bool = False) -> str:
+def login_url(token: str, port: int, tls: bool = False, next_path: str | None = None) -> str:
+    from urllib.parse import quote
+
     scheme = "https" if tls else "http"
-    return f"{scheme}://localhost:{port}/admin/login?token={token}"
+    url = f"{scheme}://localhost:{port}/admin/login?token={token}"
+    if next_path and safe_next(next_path) == next_path and next_path != "/admin/":
+        url += "&next=" + quote(next_path, safe="/")
+    return url

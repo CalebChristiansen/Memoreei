@@ -11,6 +11,7 @@ admin/cloud.py. Each of them answers with the table, or comes back to this page.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import quote
 
@@ -82,6 +83,7 @@ def _reachable() -> bool:
 
 
 async def _context() -> dict[str, Any]:
+    from memoreei import awake
     from memoreei.admin.cloud import _connecting, _runtime, _store
     from memoreei.cloud import certs, standing
     from memoreei.cloud.state import CloudState
@@ -112,6 +114,7 @@ async def _context() -> dict[str, Any]:
         "reachable": shown,
         "calls": await (await _get_db()).list_access(50) if shown else [],
         "self_host_url": SELF_HOST_URL,
+        "awake": awake.status(),
         "price": CLOUD_PRICE,
         "account": account,
         # Connected, and no password yet: suggest one, for the dashboard from anywhere.
@@ -132,11 +135,25 @@ async def moved(request: Request) -> Response:
     return RedirectResponse(PATH, status_code=303)
 
 
+async def stay_awake(request: Request) -> Response:
+    """The switch: stay awake while plugged in, so chatbots can reach this computer."""
+    from memoreei import awake
+    from memoreei.config import save_settings
+
+    on = str((await request.form()).get("on", "")) == "1"
+    await asyncio.to_thread(save_settings, [(awake.SETTING, "1" if on else "")])
+    awake.poke()
+    if awake.AWAKE is not None:
+        await awake.AWAKE.reconcile()  # so the page that follows says how it went
+    return RedirectResponse(PATH + "#awake", status_code=303)
+
+
 def routes() -> list:
     from starlette.routing import Route
 
     return [
         Route("/connections", connections_page),
+        Route("/stay-awake", stay_awake, methods=["POST"]),
         Route("/keys", moved),
         Route("/cloud", moved),
     ]

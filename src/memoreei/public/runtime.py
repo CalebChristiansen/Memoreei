@@ -122,6 +122,9 @@ class PublicRuntime:
                                "last_call_at": self.last_call_at}
         if p:
             out.update(url=p.resource, issuer=p.issuer, port=self.listener.port if self.listener else None)
+        from memoreei import awake
+
+        out["awake"] = awake.status() if awake.AWAKE is not None else None
         if p and p.mode == "cloud":
             out["tunnel"] = self.tunnel.summary() if self.tunnel else None
             out["certificate"] = {**certs.describe(self.state), **self.renewal}
@@ -136,7 +139,12 @@ class PublicRuntime:
     async def run(self) -> None:
         try:
             while True:
+                before = self.current
                 await self.reconcile()
+                if self.current is not before:  # reachable now, or not: stay awake (or don't) at once
+                    from memoreei import awake
+
+                    awake.poke()
                 self._poke.clear()
                 with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(self._poke.wait(), TICK)

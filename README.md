@@ -254,7 +254,11 @@ relay carries TLS it can't open: the certificate's key is made on your computer 
 leaves it. Your Memoreei Cloud account is for the address; chatbots sign in to memoreei
 itself, as above. `memoreei cloud status` says whether it's online; `memoreei cloud
 disconnect` takes the computer off your account. While the computer sleeps, chatbots
-can't reach it, and memoreei tells them to say so.
+can't reach it, and memoreei tells them to say so. **Stay awake while plugged in**, on
+the Connections page or `memoreei stay-awake on`, holds off sleep on AC power while
+chatbots can reach memoreei (this way or your own): `caffeinate -s` on a Mac,
+`systemd-inhibit` on Linux. On battery the computer sleeps as usual, and closing a
+laptop's lid still sleeps it. Memoreei.app's menu has **Connections…** for all of this.
 
 Nothing contacts Memoreei Cloud until you connect. To hide the offer, set
 `MEMOREEI_CLOUD_OFFER=0`. Once connected, memoreei suggests a dashboard password, so you
@@ -491,7 +495,8 @@ memoreei setup [connector]          # configure connectors; offers the first API
 memoreei serve                      # stdio, for a local client
 memoreei serve --http [--port 3679] [--tls-cert … --tls-key …]
 memoreei open                       # the dashboard, starting Memoreei if needed
-memoreei admin-url                  # a one-time dashboard sign-in link
+memoreei admin-url [--page connections]   # a one-time dashboard sign-in link
+memoreei stay-awake on|off          # hold off sleep on AC power while chatbots can reach it
 memoreei admin password | remote on|off | status | reset   # the dashboard from anywhere
 memoreei key create | list | revoke <name>
 memoreei service install | status | logs | uninstall | grant-access
