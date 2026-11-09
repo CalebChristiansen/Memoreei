@@ -8,6 +8,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The Memoreei Cloud card shows how your account stands**: "Trial: 9 days left",
+  "Payment failed: update your card", "Disconnected: payment overdue" and the like, with
+  **Manage billing**, which opens your account's billing page (after you sign in there).
+  memoreei asks Memoreei Cloud only when it already talks to it: on connecting, when the
+  tunnel starts and once a day while it runs, after renewing its certificate, and when the
+  relay cuts it off for an unpaid account or lets it back; never because a page is open.
+  `memoreei cloud status` says it too. While the account is cut off, chatbots on this
+  computer are told why in memoreei's instructions, and the tunnel keeps trying, so paying
+  reconnects it within a minute. The offer says "14-day free trial"; prices are shown only
+  at checkout.
 - **Use memoreei from Claude.ai, ChatGPT and agents.** A second front door for the
   internet, the public listener: `/mcp`, its OAuth metadata and memoreei's own sign-in
   only, sign-in tokens or `mem_` keys, rate limits on failed attempts, and an access log
