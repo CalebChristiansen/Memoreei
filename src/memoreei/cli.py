@@ -22,6 +22,7 @@ service_app = typer.Typer(help="Manage the Memoreei background service (macOS la
 key_app = typer.Typer(help="Manage API keys for the network server")
 cloud_app = typer.Typer(help="Memoreei Cloud: use this memoreei from Claude.ai, ChatGPT and agents")
 chatbots_app = typer.Typer(help="Chatbots and agents signed in to this memoreei: approve, list, remove")
+sources_app = typer.Typer(help="Other memoreeis as sources: one sends its messages to another")
 admin_app = typer.Typer(help="The dashboard's password, and whether it answers away from this computer")
 app.add_typer(import_app, name="import")
 app.add_typer(admin_app, name="admin")
@@ -29,6 +30,7 @@ app.add_typer(service_app, name="service")
 app.add_typer(key_app, name="key")
 app.add_typer(cloud_app, name="cloud")
 app.add_typer(chatbots_app, name="chatbots")
+app.add_typer(sources_app, name="sources")
 
 
 @app.callback(invoke_without_command=True)
@@ -1036,6 +1038,217 @@ def admin_url() -> None:
         typer.echo(_tunnel_hint(get_config().port), err=True)
     typer.echo(link)
     typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
+
+
+# ── Other memoreeis as sources (memoreei.peers) ──────────────────────────────
+
+
+def _link_line(r: dict) -> str:
+    if r["direction"] == "to":
+        what = f"sends to {r['name']}"
+        detail = f"{r['sent']} sent, last {_fmt_time(r['last_ok_at'])}"
+        if r["excluded"]:
+            detail += f", keeping back {', '.join(r['excluded'])}"
+    else:
+        what = f"receives from {r['name']}"
+        detail = f"{r.get('held', 0)} held, last push {_fmt_time(r['last_ok_at'])}"
+    state = "" if r["active"] else f"  (ended {_fmt_time(r['ended_at'])}: {r['ended_why']})"
+    error = f"\n      last error: {r['last_error']}" if r["active"] and r.get("last_error") else ""
+    return f"  {r['id'][-8:].lower():8}  {what:40}  {detail}{state}{error}"
+
+
+@sources_app.command(name="list")
+def sources_list() -> None:
+    """Other memoreeis this one sends to, and those that send to it."""
+    from memoreei.peers import store
+
+    async def _run() -> list[dict]:
+        async with _open_db() as db:
+            held = await store.copies_by_link(db)
+            return [{**r, "held": held.get(r["id"], 0)} for r in await store.links(db)]
+
+    rows = asyncio.run(_run())
+    if not rows:
+        typer.echo("No other memoreeis. To add one: memoreei sources invite (on the one to send to),\n"
+                   "then memoreei sources add-to <address> on the one with the messages.")
+        return
+    for r in rows:
+        typer.echo(_link_line(r))
+
+
+@sources_app.command(name="invite")
+def sources_invite(
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait here until the other memoreei has paired"),
+) -> None:
+    """Add another memoreei as a source: an address for it to send to, good for ten minutes."""
+    import time as _time
+
+    from memoreei.peers import store
+
+    async def _make() -> tuple[str, str]:
+        async with _open_db() as db:
+            return await store.create_invite(db)
+
+    token, code = asyncio.run(_make())
+    typer.echo("On the memoreei with the messages, run (or paste the address into its dashboard,\n"
+               "under Sources → Send to another memoreei):\n")
+    for label, address in store.invite_addresses(token):
+        typer.echo(f"  memoreei sources add-to {address}    ({label})")
+    typer.echo(f"\nIt will show the code {typer.style(code, bold=True)}. Approve it there only if it matches.")
+    if not wait:
+        return
+
+    async def _state() -> dict | None:
+        async with _open_db() as db:
+            return await store.invite(db, token)
+
+    told = False
+    deadline = _time.time() + store.INVITE_TTL
+    while _time.time() < deadline:
+        row = asyncio.run(_state())
+        if row and row["link_id"]:
+            typer.echo(f"\n  ✓ {row['claimed_by_name']} now sends its messages here.")
+            return
+        if row and row["claimed_by_name"] and not told:
+            typer.echo(f"\n  {row['claimed_by_name']} asked; waiting for it to be approved there…")
+            told = True
+        _time.sleep(2)
+    typer.echo("\nThe invitation expired. Run memoreei sources invite again.")
+    raise typer.Exit(1)
+
+
+@sources_app.command(name="add-to")
+def sources_add_to(
+    address: str = typer.Argument(..., help="The address from the other memoreei's invitation"),
+    code: Optional[str] = typer.Option(None, help="The code it shows, to approve without being asked"),
+) -> None:
+    """Send this memoreei's messages to another one, from now on."""
+    from memoreei.peers import client
+
+    async def _claim() -> dict:
+        async with _open_db() as db:
+            return await client.claim(db, address)
+
+    try:
+        claimed = asyncio.run(_claim())
+    except client.PairingError as e:
+        typer.echo(f"  ✗ {e}")
+        raise typer.Exit(1)
+    typer.echo(f"\n  {claimed['name']} shows the code {typer.style(claimed['code'], bold=True)}.\n")
+    if code is not None:
+        if code.strip().upper() != claimed["code"]:
+            typer.echo("  ✗ That isn't the code it shows. Nothing was sent.")
+            raise typer.Exit(1)
+    elif not typer.confirm(f"  Is it the same code there? Send every message here to {claimed['name']}?"):
+        typer.echo("  Nothing was sent.")
+        raise typer.Exit(1)
+
+    async def _confirm() -> str:
+        async with _open_db() as db:
+            return await client.confirm(db, claimed)
+
+    try:
+        asyncio.run(_confirm())
+    except client.PairingError as e:
+        typer.echo(f"  ✗ {e}")
+        raise typer.Exit(1)
+    typer.echo(f"  ✓ This memoreei now sends its messages to {claimed['name']}, everything to start with.\n"
+               "    While it runs, it sends whatever is new after each sync, and catches up after sleep.\n"
+               "    To keep a source back: memoreei sources exclude ID signal (IDs in memoreei sources list).")
+
+
+def _one_link(prefix: str):
+    from memoreei.peers import store
+
+    async def _run() -> list[dict]:
+        async with _open_db() as db:
+            return [r for r in await store.find_link(db, prefix) if r["active"]]
+
+    found = asyncio.run(_run())
+    if len(found) != 1:
+        typer.echo(f"No single live pairing matches {prefix}. See: memoreei sources list")
+        raise typer.Exit(1)
+    return found[0]
+
+
+@sources_app.command(name="end")
+def sources_end(
+    pairing: str = typer.Argument(..., help="Its ID or name from memoreei sources list"),
+    keep: bool = typer.Option(False, "--keep", help="On the receiving side: keep the messages it sent"),
+) -> None:
+    """Stop sending to another memoreei, or stop taking what one sends (deleting what it sent, unless --keep)."""
+    from memoreei.peers import client, store
+
+    link = _one_link(pairing)
+
+    async def _run() -> int:
+        async with _open_db() as db:
+            if link["direction"] == "to":
+                await client.end(db, link, "ended here")
+                return 0
+            return await store.remove_source(db, link["id"], keep_messages=keep)
+
+    deleted = asyncio.run(_run())
+    if link["direction"] == "to":
+        typer.echo(f"  ✓ No longer sending to {link['name']}. What it has stays there.")
+    else:
+        typer.echo(f"  ✓ No longer taking messages from {link['name']}"
+                   + ("." if keep else f"; deleted the {deleted} it sent."))
+
+
+def _set_excluded(pairing: str, items: list[str], exclude: bool) -> None:
+    from memoreei.peers import push
+
+    link = _one_link(pairing)
+    if link["direction"] != "to":
+        typer.echo("What goes is chosen on the memoreei that sends.")
+        raise typer.Exit(1)
+    now = set(link["excluded"])
+    now = now | set(items) if exclude else now - set(items)
+
+    async def _run() -> None:
+        async with _open_db() as db:
+            await push.set_excluded(db, link["id"], sorted(now))
+
+    asyncio.run(_run())
+    typer.echo(f"  ✓ Sending everything to {link['name']}" + (f" but {', '.join(sorted(now))}." if now else "."))
+
+
+@sources_app.command(name="exclude")
+def sources_exclude(
+    pairing: str = typer.Argument(..., help="Its ID or name from memoreei sources list"),
+    items: list[str] = typer.Argument(..., help="Platforms to keep back (signal, slack, …), or via:ID for "
+                                                "what another memoreei sent here"),
+) -> None:
+    """Keep sources back from another memoreei. What it already has of them is deleted there."""
+    _set_excluded(pairing, items, True)
+
+
+@sources_app.command(name="include")
+def sources_include(
+    pairing: str = typer.Argument(..., help="Its ID or name from memoreei sources list"),
+    items: list[str] = typer.Argument(..., help="Platforms to send again"),
+) -> None:
+    """Send sources again that were kept back, from the start."""
+    _set_excluded(pairing, items, False)
+
+
+@sources_app.command(name="push")
+def sources_push() -> None:
+    """Send what's waiting to the memoreeis this one sends to, now."""
+    from memoreei.peers import push
+    from memoreei.search.embeddings import get_provider
+
+    async def _run() -> dict:
+        async with _open_db() as db:
+            return await push.push_all(db, get_provider(), force=True)
+
+    out = asyncio.run(_run())
+    if not out:
+        typer.echo("This memoreei doesn't send to any other.")
+    for link_id, r in out.items():
+        typer.echo(f"  {link_id[-8:].lower()}: " + (f"✗ {r['error']}" if "error" in r else
+                                                    f"✓ {r['sent']} sent, {r['deleted']} deletes"))
 
 
 # ── The dashboard's password, 2FA and access from anywhere (memoreei.admin.account) ──

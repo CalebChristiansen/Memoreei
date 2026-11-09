@@ -290,6 +290,67 @@ CREATE TABLE IF NOT EXISTS import_sources (
     UNIQUE(kind, path)
 );
 
+-- Facts about this memoreei itself. 'memoreei_id' is made once, at random, and is what
+-- every message it reads first is stamped with (memories.origin): see memoreei.peers.
+CREATE TABLE IF NOT EXISTS memoreei_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Pairings with other memoreeis (memoreei.peers). direction 'to': this memoreei pushes
+-- its messages to that one, with push_key. 'from': that one pushes to this one, and only
+-- push_key_hash is kept. A pairing that ended keeps its row, with ended_at and why.
+CREATE TABLE IF NOT EXISTS peer_links (
+    id TEXT PRIMARY KEY,
+    direction TEXT NOT NULL CHECK (direction IN ('to', 'from')),
+    peer_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT,
+    push_key TEXT,
+    push_key_hash TEXT UNIQUE,
+    created_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    ended_why TEXT,
+    excluded TEXT NOT NULL DEFAULT '[]',
+    refill TEXT NOT NULL DEFAULT '{}',
+    last_rowid INTEGER NOT NULL DEFAULT 0,
+    last_change INTEGER NOT NULL DEFAULT 0,
+    last_try_at INTEGER,
+    last_ok_at INTEGER,
+    last_error TEXT,
+    failures INTEGER NOT NULL DEFAULT 0,
+    next_try_at INTEGER NOT NULL DEFAULT 0,
+    sent INTEGER NOT NULL DEFAULT 0,
+    received INTEGER NOT NULL DEFAULT 0
+);
+
+-- "Add another memoreei" on a receiver: an invitation in its address (token_hash), and the
+-- code shown on both sides. A source claims it once (claim_hash binds the confirm to that
+-- source), and confirming makes the pairing.
+CREATE TABLE IF NOT EXISTS peer_invites (
+    token_hash TEXT PRIMARY KEY,
+    user_code TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    claim_hash TEXT,
+    claimed_by_id TEXT,
+    claimed_by_name TEXT,
+    claimed_at INTEGER,
+    link_id TEXT
+);
+
+-- Deletes and edits to memories, for pushing on to paired memoreeis. Written by trigger only
+-- while this memoreei sends to one, and trimmed once every receiver has them.
+CREATE TABLE IF NOT EXISTS memory_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL CHECK (kind IN ('delete', 'update')),
+    origin TEXT NOT NULL,
+    origin_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    via TEXT,
+    at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS contacts (
     identifier TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -310,12 +371,47 @@ CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories BEGIN
 END;
 """
 
+# Only when the words change: stamping origins on an old database (and a copy's metadata
+# changing) shouldn't rewrite the keyword index. Older databases had it on every update,
+# so init_db drops and recreates it.
 FTS_TRIGGER_UPDATE = """
-CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE ON memories BEGIN
+CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE OF content, summary ON memories BEGIN
     INSERT INTO memories_fts(memories_fts, rowid, content, summary) VALUES ('delete', old.rowid, old.content, COALESCE(old.summary, ''));
     INSERT INTO memories_fts(rowid, content, summary) VALUES (new.rowid, new.content, COALESCE(new.summary, ''));
 END;
 """
+
+
+# What memoreei.peers pushes on: deletes and edits, logged only while a receiver exists.
+_SENDING = "EXISTS (SELECT 1 FROM peer_links WHERE direction = 'to' AND ended_at IS NULL)"
+CHANGE_TRIGGER_DELETE = f"""
+CREATE TRIGGER IF NOT EXISTS memories_change_delete AFTER DELETE ON memories
+WHEN old.origin IS NOT NULL AND {_SENDING} BEGIN
+    INSERT INTO memory_changes(kind, origin, origin_id, source, via, at)
+    VALUES ('delete', old.origin, old.origin_id, old.source, old.via, unixepoch());
+END;
+"""
+
+CHANGE_TRIGGER_UPDATE = f"""
+CREATE TRIGGER IF NOT EXISTS memories_change_update
+AFTER UPDATE OF content, summary, participants, metadata, ts ON memories
+WHEN new.origin IS NOT NULL AND {_SENDING} BEGIN
+    INSERT INTO memory_changes(kind, origin, origin_id, source, via, at)
+    VALUES ('update', new.origin, new.origin_id, new.source, new.via, unixepoch());
+END;
+"""
+
+# Columns added to memories after its first release, oldest first. Each is added by
+# init_db when missing: (name, declaration).
+ADDED_COLUMNS = (
+    # The memoreei that first read the message, and its source and memory id there
+    # (memoreei.peers). This memoreei's own messages carry its own id.
+    ("origin", "TEXT"),
+    ("origin_source", "TEXT"),
+    ("origin_id", "TEXT"),
+    # For a copy pushed here by another memoreei: the peer_links id it came through.
+    ("via", "TEXT"),
+)
 
 
 # Words too common to narrow a keyword search on their own (Database.search_fts).
@@ -584,6 +680,7 @@ class Database:
         self._vectors: _VectorIndex | None = None
         self._vector_build: asyncio.Task[_VectorIndex] | None = None
         self._vector_epoch = 0  # bumped by this connection's deletes
+        self.memoreei_id = ""  # this memoreei's own id, set by init_db
 
     async def connect(self) -> None:
         parent = Path(self.db_path).parent
@@ -615,20 +712,72 @@ class Database:
             s = statement.strip()
             if s:
                 await self._db.execute(s)
-        for trigger in (FTS_TRIGGER_INSERT, FTS_TRIGGER_DELETE, FTS_TRIGGER_UPDATE):
+        # Every write here happens only when something needs it: the server opens several
+        # connections at once at startup, and writes that collide fail with "locked".
+        async with self._db.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'memories_fts_update'"
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row and "UPDATE OF" not in row[0]:
+            await self._db.execute("DROP TRIGGER memories_fts_update")
+        for trigger in (FTS_TRIGGER_INSERT, FTS_TRIGGER_DELETE, FTS_TRIGGER_UPDATE,
+                        CHANGE_TRIGGER_DELETE, CHANGE_TRIGGER_UPDATE):
             await self._db.execute(trigger)
+        async with self._db.execute("PRAGMA table_info(memories)") as cursor:
+            have = {row[1] for row in await cursor.fetchall()}
+        for name, declaration in ADDED_COLUMNS:
+            if name not in have:
+                await self._db.execute(f"ALTER TABLE memories ADD COLUMN {name} {declaration}")
+        self.memoreei_id = await self._own_id()
+        # Stamp rows from before origins (and any written by an older memoreei since) as
+        # this memoreei's own.
+        # Once, not every start: looking for unstamped rows reads the whole table.
+        async with self._db.execute("SELECT 1 FROM memoreei_meta WHERE key = 'origins_stamped'") as cursor:
+            stamped = await cursor.fetchone()
+        if not stamped:
+            await self._db.execute(
+                "UPDATE memories SET origin = ?, origin_source = source, origin_id = id WHERE origin IS NULL",
+                (self.memoreei_id,),
+            )
+            await self._db.execute("INSERT OR IGNORE INTO memoreei_meta(key, value) VALUES ('origins_stamped', '1')")
+        await self._db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_origin ON memories(origin, origin_id)")
+        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_via ON memories(via) WHERE via IS NOT NULL")
         await self._db.commit()
 
+    async def _own_id(self) -> str:
+        """This memoreei's id, made the first time it is asked for."""
+        assert self._db is not None
+        async with self._db.execute("SELECT value FROM memoreei_meta WHERE key = 'memoreei_id'") as cursor:
+            row = await cursor.fetchone()
+        if row:
+            return row[0]
+        import secrets
+
+        alphabet = "abcdefghijkmnpqrstuvwxyz23456789"
+        made = "".join(secrets.choice(alphabet) for _ in range(16))
+        await self._db.execute(
+            "INSERT OR IGNORE INTO memoreei_meta(key, value) VALUES ('memoreei_id', ?)", (made,))
+        async with self._db.execute("SELECT value FROM memoreei_meta WHERE key = 'memoreei_id'") as cursor:
+            return (await cursor.fetchone())[0]
+
     async def insert_memory(self, memory: MemoryItem) -> str:
+        await self.insert_new(memory)
+        return memory.id
+
+    async def insert_new(self, memory: MemoryItem, commit: bool = True) -> bool:
+        """Store *memory* unless it's held already (by source and source_id, or by origin).
+        Whether it was stored."""
         assert self._db is not None
         embedding_blob = _embedding_to_blob(memory.embedding) if memory.embedding else None
         try:
-            await self._db.execute(
+            cursor = await self._db.execute(
                 """
                 INSERT INTO memories
-                    (id, source, source_id, content, summary, participants, ts, ingested_at, metadata, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(source, source_id) WHERE source_id IS NOT NULL DO NOTHING
+                    (id, source, source_id, content, summary, participants, ts, ingested_at, metadata, embedding,
+                     origin, origin_source, origin_id, via)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT DO NOTHING
                 """,
                 (
                     memory.id,
@@ -641,12 +790,17 @@ class Database:
                     memory.ingested_at,
                     json.dumps(memory.metadata),
                     embedding_blob,
+                    memory.origin or self.memoreei_id,
+                    memory.origin_source or memory.source,
+                    memory.origin_id or memory.id,
+                    memory.via,
                 ),
             )
-            await self._db.commit()
+            if commit:
+                await self._db.commit()
         except sqlcipher3.IntegrityError:
-            pass
-        return memory.id
+            return False
+        return cursor.rowcount == 1
 
     async def bulk_insert(self, memories: list[MemoryItem]) -> int:
         inserted = 0

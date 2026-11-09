@@ -105,6 +105,22 @@ async def _warm_search() -> AsyncIterator[None]:
 
 
 @asynccontextmanager
+async def _push_to_peers() -> AsyncIterator[None]:
+    """Push to paired memoreeis in the background (memoreei.peers), when there are any."""
+    from memoreei.peers.push import pusher
+
+    task = asyncio.create_task(pusher.run(_get_tools))
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+@asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:  # type: ignore[type-arg]
     async with _auto_sync(), _warm_search():
         yield
@@ -744,23 +760,36 @@ def build_http_app(verify: "Verifier") -> Any:
     async def lifespan(a: Any) -> AsyncIterator[None]:
         # Only the Linux packages look for updates here; Memoreei.app does its own.
         # The public listener (and Memoreei Cloud) runs only when set up: see memoreei.public.
-        async with inner_lifespan(a), _auto_sync(), _warm_search(), \
+        async with inner_lifespan(a), _auto_sync(), _warm_search(), _push_to_peers(), \
                 update_checks(enabled=bundle_root() is not None), public_runtime(verify):
             yield
 
     app.router.lifespan_context = lifespan
-    return _AdminDispatch(build_admin_app(), BearerAuthMiddleware(app, verify))
+    return _AdminDispatch(build_admin_app(), BearerAuthMiddleware(app, verify), peer_app())
+
+
+def peer_app() -> Any:
+    """/peer/*: other memoreeis pairing with this one and pushing to it (memoreei.peers)."""
+    from memoreei.peers.http import PeerApp
+    from memoreei.peers.push import pusher
+
+    return PeerApp(_get_tools, on_push=pusher.kick)
 
 
 class _AdminDispatch:
-    """Send /admin to the dashboard and everything else (lifespan included) to MCP."""
+    """Send /admin to the dashboard, /peer to pairing and pushes, and everything else
+    (lifespan included) to MCP."""
 
-    def __init__(self, admin: Any, mcp_app: Any) -> None:
+    def __init__(self, admin: Any, mcp_app: Any, peer: Any = None) -> None:
         self.admin = admin
         self.mcp_app = mcp_app
+        self.peer = peer
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         path = scope.get("path", "")
+        if scope["type"] == "http" and self.peer is not None and (path == "/peer" or path.startswith("/peer/")):
+            await self.peer(scope, receive, send)
+            return
         if scope["type"] == "http" and (path == "/admin" or path.startswith("/admin/")):
             if path == "/admin":
                 from starlette.responses import RedirectResponse

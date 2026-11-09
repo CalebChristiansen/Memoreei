@@ -160,6 +160,9 @@ class SyncManager:
             total += sum(i.get("new", 0) for i in imports)
             result = {"connectors": connectors, "imports": imports, "new_messages": total}
             self.last_run = {"finished_at": time.time(), "result": result}
+            from memoreei.peers.push import pusher
+
+            pusher.kick()  # whatever is new goes on to paired memoreeis
         return result
 
     async def auto_sync_loop(

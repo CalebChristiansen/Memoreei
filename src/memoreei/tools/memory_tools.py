@@ -57,8 +57,10 @@ def _local_date(ts: int) -> str:
     return datetime.fromtimestamp(ts).astimezone().strftime("%Y-%m-%d %H:%M")
 
 
-def present(item: MemoryItem, contacts: dict[str, str]) -> dict[str, Any]:
-    """A memory as the tools return it: who, where and when, in plain words."""
+def present(item: MemoryItem, contacts: dict[str, str],
+            peers: dict[str, str] | None = None) -> dict[str, Any]:
+    """A memory as the tools return it: who, where and when, in plain words. *peers* names
+    the paired memoreeis (memoreei.peers) a copy can have come through."""
     meta = item.metadata
     sender = sender_of(item)
     if sender != "me":
@@ -82,7 +84,21 @@ def present(item: MemoryItem, contacts: dict[str, str]) -> dict[str, Any]:
     }
     if meta.get("deleted"):
         row["deleted"] = True
+    if item.via:
+        row["via"] = (peers or {}).get(item.via) or "another memoreei"
     return row
+
+
+async def peer_names(db: Database) -> dict[str, str]:
+    from memoreei.peers.store import names
+
+    return await names(db)
+
+
+async def copies_by_link(db: Database) -> dict[str, int]:
+    from memoreei.peers.store import copies_by_link as held
+
+    return await held(db)
 
 
 class MemoryTools:
@@ -190,7 +206,8 @@ class MemoryTools:
 
         stats: dict[str, int] = {}
         scored = await self.search.search_items(query, limit, filt, stats, any_words=any_words)
-        out["results"] = [present(item, contacts) for _, item in scored]
+        peers = await peer_names(self.db)
+        out["results"] = [present(item, contacts, peers) for _, item in scored]
         if weak_match_note and out["results"] and not stats.get("keyword_hits"):
             weak = ("No message contains all of these words; these are only the nearest by "
                     "meaning. If none of them answers the question, try other words, and if "
@@ -237,7 +254,8 @@ class MemoryTools:
                 "search_memoreei; pass one exactly as given."
             )
         contacts = await self.db.get_contacts()
-        messages = [present(item, contacts) for item in items]
+        peers = await peer_names(self.db)
+        messages = [present(item, contacts, peers) for item in items]
         for message in messages:
             if message["id"] == memory_id:
                 message["hit"] = True
@@ -300,6 +318,11 @@ class MemoryTools:
             "people": ranked[:limit],
             "groups": groups[:limit],
         }
+        held = await copies_by_link(self.db)
+        if held:
+            names = await peer_names(self.db)
+            out["memoreeis"] = [{"name": names.get(via) or "another memoreei", "messages": n}
+                                for via, n in sorted(held.items(), key=lambda kv: -kv[1])]
         left = {"people": len(ranked) - len(out["people"]), "groups": len(groups) - len(out["groups"])}
         if not name:
             left["unnamed chats"] = unnamed

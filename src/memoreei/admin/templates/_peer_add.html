@@ -1,0 +1,9 @@
+{% if error %}<p class="bad" role="alert">{{ error }}</p>
+{% elif claimed %}
+<p>{{ claimed.name }} shows the code <b class="mono">{{ claimed.code }}</b>.</p>
+<p>Is it the same code there? Approving sends every message here to {{ claimed.name }}, and whatever's new from now on.</p>
+<button class="small" hx-post="/admin/memoreeis/add/{{ pid }}/approve" hx-target="#peer-add" hx-swap="innerHTML">It matches: send</button>
+<button class="quiet small" hx-post="/admin/memoreeis/add/{{ pid }}/cancel" hx-target="#peer-add" hx-swap="innerHTML">Cancel</button>
+{% elif done %}<p class="ok" role="status">✓ Sending to {{ done }}, everything to start with.</p>
+<span hx-get="/admin/memoreeis" hx-trigger="load" hx-target="#peers" hx-swap="outerHTML"></span>
+{% elif cancelled %}<p class="caption" role="status">Nothing was sent to {{ cancelled }}.</p>{% endif %}

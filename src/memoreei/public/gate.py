@@ -9,6 +9,9 @@ paths answer and nothing else does:
   /.well-known/oauth-protected-resource/mcp    memoreei as its own issuer
   /authorize, /token, ... (memoreei.oauth)     the sign-in itself
 
+  /peer/...                                    other memoreeis pairing with this one and
+                                               pushing to it (memoreei.peers)
+
   /admin/...                                   the dashboard, only once the person has
                                                set a password and switched on "from
                                                anywhere" (memoreei.admin.account)
@@ -129,6 +132,7 @@ class PublicGate:
         resource_name: str = "memoreei",
         admin: Any = None,
         admin_open: Callable[[], Awaitable[bool]] | None = None,
+        peer: Any = None,
     ) -> None:
         self.mcp_app = mcp_app
         self.resource = resource
@@ -140,6 +144,7 @@ class PublicGate:
         self.peer_of = peer_of or (lambda scope: (scope.get("client") or ("?", 0))[0])
         self.resource_name = resource_name
         self.admin, self.admin_open = admin, admin_open  # the dashboard's public copy, and whether it's open
+        self.peer = peer  # /peer/*: other memoreeis pairing and pushing (memoreei.peers)
 
     async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
         if scope["type"] == "lifespan":  # the runtime runs the MCP app's lifespan itself
@@ -176,6 +181,8 @@ class PublicGate:
         if (path == "/admin" or path.startswith("/admin/")) and self.admin is not None \
                 and self.admin_open is not None and await self.admin_open():
             return await self._dashboard(scope, receive, send, peer)
+        if self.peer is not None and (path == "/peer" or path.startswith("/peer/")):
+            return await self._peer(scope, receive, send, peer)
         if path != "/mcp":
             self.limiter.fail(peer)
             log.info("%s %s from %s: 404", method, path[:120], peer)
@@ -236,6 +243,24 @@ class PublicGate:
                 except Exception as e:  # the access log never takes a call down with it
                     log.warning("access log: %r", e)
 
+
+    async def _peer(self, scope: dict, receive: Callable, send: Callable, peer: str) -> None:
+        """Pairing and pushes. Refusals count as failures, as a bad bearer does on /mcp,
+        so an invitation's token or a push key can't be guessed at speed."""
+        status = 0
+
+        async def watch(message: dict) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.peer(scope, receive, watch)
+        finally:
+            if status in (401, 403, 404, 405, 409, 410):
+                self.limiter.fail(peer)
+            log.info("%s %s %d from %s (peer)", scope.get("method", "?"), scope["path"][:40], status, peer)
 
     async def _dashboard(self, scope: dict, receive: Callable, send: Callable, peer: str) -> None:
         """The dashboard, mounted at /admin as on the LAN listener. Its guard asks for

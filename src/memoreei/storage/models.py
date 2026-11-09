@@ -16,6 +16,12 @@ class MemoryItem:
     ingested_at: int
     metadata: dict
     embedding: list[float] | None = None
+    # Where the message was first read (memoreei.peers): that memoreei's id, and the
+    # message's source and id there. None on a new message means "here".
+    origin: str | None = None
+    origin_source: str | None = None
+    origin_id: str | None = None
+    via: str | None = None  # the pairing a pushed copy came through
 
     def to_dict(self) -> dict:
         return {
@@ -58,4 +64,8 @@ class MemoryItem:
             ingested_at=row["ingested_at"],
             metadata=metadata or {},
             embedding=embedding,
+            origin=row.get("origin"),
+            origin_source=row.get("origin_source"),
+            origin_id=row.get("origin_id"),
+            via=row.get("via"),
         )

@@ -1,0 +1,10 @@
+<p>On the memoreei with the messages, paste one of these under Sources → Send to another memoreei, or run the command:</p>
+{% for label, address in addresses %}
+<div class="copyable">
+  <pre id="peer-address-{{ loop.index }}" class="soft">memoreei sources add-to {{ address }}</pre>
+  <button type="button" class="quiet" data-copy="peer-address-{{ loop.index }}">Copy</button>
+</div>
+<p class="caption">{{ label|capitalize }}</p>
+{% endfor %}
+<p>It will show the code <b class="mono">{{ code }}</b>. Approve it there only if it matches.</p>
+{% include "_peer_invite_state.html" %}

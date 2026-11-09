@@ -1,0 +1,70 @@
+{#- Other memoreeis (memoreei.peers), on the Sources page; swapped whole after each change. -#}
+<section class="card list-card" id="peers">
+  <h2>Other memoreeis</h2>
+  <p class="caption sub">Your other computers' memoreeis can send their messages here, and this one can send to another.
+    Only the memoreei with the messages decides what goes.</p>
+  {% if error %}<p class="bad" role="alert">{{ error }}</p>{% endif %}
+  <ul class="rows">
+    {% for r in receives_from %}
+    <li>
+      <span class="tile on" aria-hidden="true">⇢</span>
+      <div class="what">
+        <span class="name">From {{ r.name }}</span>
+        <span class="caption">{{ r.held }} messages · last push {{ r.last_ok_at|ago }}</span>
+      </div>
+      <button class="quiet small" hx-post="/admin/memoreeis/{{ r.id }}/end/keep" hx-target="#peers" hx-swap="outerHTML"
+        hx-confirm="Stop taking messages from {{ r.name }}? What it has sent stays here.">Stop<span class="visually-hidden"> {{ r.name }}</span></button>
+      <button class="danger small" hx-post="/admin/memoreeis/{{ r.id }}/end" hx-target="#peers" hx-swap="outerHTML"
+        hx-confirm="Remove {{ r.name }}, and delete the {{ r.held }} messages it sent here (and from any memoreei this one sends to)?">Remove<span class="visually-hidden"> {{ r.name }}</span></button>
+    </li>
+    {% endfor %}
+    {% for r in sends_to %}
+    <li>
+      <span class="tile on" aria-hidden="true">⇠</span>
+      <div class="what">
+        <span class="name">Sending to {{ r.name }}</span>
+        <span class="caption">{{ r.sent }} sent · last {{ r.last_ok_at|ago }}{% if r.catching_up %} · catching up{% endif %}</span>
+        {% if r.last_error %}<span class="bad">Can't reach it: {{ r.last_error }}. Trying again by itself.</span>{% endif %}
+        <details>
+          <summary>What goes</summary>
+          <form hx-post="/admin/memoreeis/{{ r.id }}/what" hx-target="#peers" hx-swap="outerHTML">
+            {% for i in r['items'] %}
+            <input type="hidden" name="offered" value="{{ i.key }}">
+            <label><input type="checkbox" name="send" value="{{ i.key }}" {% if i.on %}checked{% endif %}> {{ i.label }}</label>
+            {% endfor %}
+            <p class="caption">New sources go too, unless you untick them. Unticking one deletes it from {{ r.name }}.</p>
+            <button class="small">Save</button>
+          </form>
+        </details>
+      </div>
+      <button class="danger small" hx-post="/admin/memoreeis/{{ r.id }}/end" hx-target="#peers" hx-swap="outerHTML"
+        hx-confirm="Stop sending to {{ r.name }}? What it has stays there.">Stop<span class="visually-hidden"> sending to {{ r.name }}</span></button>
+    </li>
+    {% endfor %}
+    {% if not receives_from and not sends_to %}
+    <li><div class="what"><span class="muted">None yet.</span></div></li>
+    {% endif %}
+  </ul>
+
+  <details>
+    <summary>Add another memoreei</summary>
+    <p class="caption">Its messages will come here. You'll get an address to give it, good for ten minutes.</p>
+    <button class="small" hx-post="/admin/memoreeis/invite" hx-target="#peer-invite" hx-swap="innerHTML">Make an address</button>
+    <div id="peer-invite"></div>
+  </details>
+  <details>
+    <summary>Send to another memoreei</summary>
+    <form hx-post="/admin/memoreeis/add" hx-target="#peer-add" hx-swap="innerHTML">
+      <div class="field">
+        <label for="peer-address">Its address, from “Add another memoreei” there</label>
+        <input id="peer-address" name="address" required autocomplete="off" placeholder="https://…/peer/pair/…">
+      </div>
+      <button class="small">Ask it</button>
+    </form>
+    <div id="peer-add"></div>
+  </details>
+
+  {% if ended %}
+  <p class="caption">Ended: {% for r in ended %}{{ r.name }} ({{ r.ended_why }}, {{ r.ended_at|ago }}){% if not loop.last %}; {% endif %}{% endfor %}</p>
+  {% endif %}
+</section>

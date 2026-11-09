@@ -186,9 +186,11 @@ class PublicRuntime:
             from memoreei.admin.app import build_admin_app
 
             admin = build_admin_app(public_origin=p.issuer)
+        from memoreei.server import peer_app
+
         gate = PublicGate(self.mcp_app, resource=p.resource, keys=self.keys, signin=signin,
                           limiter=self.limiter, record=self.record, peer_of=self.peer_of,
-                          admin=admin, admin_open=self.admin_open)
+                          admin=admin, admin_open=self.admin_open, peer=peer_app())
         self.listener = Listener(gate, p.host, p.port, p.cert, p.key)
         await self.listener.start()
         scheme = "https" if p.cert else "http"

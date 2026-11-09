@@ -658,7 +658,10 @@ async def key_revoke(request: Request) -> Response:
 
 
 async def sources_page(request: Request) -> Response:
-    return _page(request, "sources.html", nav="sources", accounts=_accounts(), uploads=_uploads())
+    from memoreei.admin.peers import peers_context
+
+    return _page(request, "sources.html", nav="sources", accounts=_accounts(), uploads=_uploads(),
+                 **await peers_context())
 
 
 def _enabled_connector(request: Request) -> dict[str, Any] | None:
@@ -790,6 +793,7 @@ def build_admin_app(public_origin: str | None = None) -> Any:
     listener's copy, answering only to that address (see AdminGuard)."""
     from memoreei.admin.cloud import routes as cloud_routes
     from memoreei.admin.connections import routes as connections_routes
+    from memoreei.admin.peers import routes as peers_routes
     from memoreei.admin.security import routes as security_routes
 
     routes = [
@@ -813,6 +817,7 @@ def build_admin_app(public_origin: str | None = None) -> Any:
         *connections_routes(),
         *cloud_routes(),
         *security_routes(),
+        *peers_routes(),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),
     ]
     return AdminGuard(Starlette(routes=routes), public_origin=public_origin)

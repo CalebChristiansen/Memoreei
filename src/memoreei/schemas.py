@@ -6,6 +6,8 @@ annotations as written, and a string annotation hides it, making every key requi
 Optional keys at the top level also allow null: the SDK fills an absent one with None
 in the structured result, then checks that result against this schema.
 """
+from typing import Any
+
 from pydantic import Field
 from typing_extensions import Annotated, NotRequired, TypedDict
 
@@ -21,6 +23,8 @@ class Message(TypedDict):
     source: Annotated[str, Field(description="The chat's id, for the source filter")]
     deleted: NotRequired[Annotated[bool, Field(description="Deleted for everyone after it was read")]]
     hit: NotRequired[Annotated[bool, Field(description="The message get_context was asked about")]]
+    via: NotRequired[Annotated[str, Field(
+        description="The other memoreei (a computer of the owner's) this copy came from")]]
 
 
 class PersonMatch(TypedDict):
@@ -58,6 +62,8 @@ class Sources(TypedDict):
     platforms: Annotated[list[str], Field(description="Values the source filter takes")]
     people: Annotated[list[PersonSources], Field(description="Most messages first")]
     groups: Annotated[list[GroupSource], Field(description="Most messages first")]
+    memoreeis: NotRequired[Annotated[list[dict[str, Any]] | None, Field(
+        description="Other memoreeis (the owner's computers) that send their messages here, and how many")]]
     not_shown: NotRequired[Annotated[dict[str, int] | None, Field(
         description="How many people, groups and unnamed chats were left out")]]
     note: NotRequired[Annotated[str | None, Field(description="How to see the rest")]]

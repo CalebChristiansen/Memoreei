@@ -1,0 +1,8 @@
+<p class="caption" role="status" {% if state in ("waiting", "claimed") %}hx-get="/admin/memoreeis/invite/{{ watch }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+{% if state == "waiting" %}Waiting for it to ask…
+{% elif state == "claimed" %}{{ row.claimed_by_name }} asked. Approve it there.
+{% elif state == "paired" %}<span class="ok">✓ {{ row.claimed_by_name }} now sends its messages here.</span>
+  <span hx-get="/admin/memoreeis" hx-trigger="load" hx-target="#peers" hx-swap="outerHTML"></span>
+{% elif state == "expired" %}<span class="bad">The address expired. Make another.</span>
+{% else %}<span class="bad">That invitation is gone.</span>{% endif %}
+</p>
