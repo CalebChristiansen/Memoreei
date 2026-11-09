@@ -317,9 +317,10 @@ def invite_addresses(token: str) -> list[tuple[str, str]]:
 
     from memoreei.auth import local_ipv4_addresses
     from memoreei.cloud.state import CloudState
-    from memoreei.config import get_config
+    from memoreei.config import get_config, listening
 
     cfg = get_config()
+    host, port, tls = listening()
     path = f"/peer/pair/{token}"
     out: list[tuple[str, str]] = []
     device = CloudState().device()
@@ -327,8 +328,8 @@ def invite_addresses(token: str) -> list[tuple[str, str]]:
         out.append(("from anywhere (Memoreei Cloud)", f"https://{device.hostname}{path}"))
     elif cfg.public_mcp_url and cfg.public_port:
         out.append(("from anywhere", f"https://{urlsplit(cfg.public_mcp_url).netloc}{path}"))
-    scheme = "https" if cfg.tls_cert else "http"
-    if cfg.host not in ("127.0.0.1", "::1", "localhost"):
-        out += [("on your network", f"{scheme}://{ip}:{cfg.port}{path}") for ip in local_ipv4_addresses()]
-    out.append(("on this computer", f"{scheme}://localhost:{cfg.port}{path}"))
+    scheme = "https" if tls else "http"
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        out += [("on your network", f"{scheme}://{ip}:{port}{path}") for ip in local_ipv4_addresses()]
+    out.append(("on this computer", f"{scheme}://localhost:{port}{path}"))
     return out

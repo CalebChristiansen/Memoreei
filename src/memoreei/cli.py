@@ -192,6 +192,12 @@ def serve(
         err=True,
     )
     _exit_with_parent()
+    # This process's own links (the dashboard's invitations, its addresses) and other
+    # processes' (admin-url, sources invite) then name the port it really listens on.
+    from memoreei.config import record_serving
+
+    cfg.host, cfg.port, cfg.tls_cert, cfg.tls_key = host, port, tls_cert, tls_key
+    record_serving(host, port, bool(tls_cert))
     uvicorn.run(
         build_http_app(verify),
         host=host,
@@ -994,15 +1000,15 @@ def _login_link(page: str | None = None) -> str:
     """A fresh one-time dashboard link, for this home's server, opening *page* (a path
     under /admin, like "connections") or the front page."""
     from memoreei.admin.auth import create_login_token, login_url
-    from memoreei.config import get_config
+    from memoreei.config import listening
 
     async def _run() -> str:
         async with _open_db() as db:
             return await create_login_token(db)
 
-    cfg = get_config()
+    _, port, tls = listening()
     next_path = "/admin/" + page.strip("/") if page else None
-    return login_url(asyncio.run(_run()), cfg.port, tls=bool(cfg.tls_cert), next_path=next_path)
+    return login_url(asyncio.run(_run()), port, tls=tls, next_path=next_path)
 
 
 def _has_display() -> bool:
@@ -1037,11 +1043,11 @@ def admin_url(
     your own computer.
     """
     from memoreei.admin.auth import LOGIN_TTL
-    from memoreei.config import get_config
+    from memoreei.config import listening
 
     link = _login_link(page or None)
     if not _has_display():
-        typer.echo(_tunnel_hint(get_config().port), err=True)
+        typer.echo(_tunnel_hint(listening()[1]), err=True)
     typer.echo(link)
     typer.echo(f"Opens the dashboard once, within {LOGIN_TTL // 60} minutes.", err=True)
 

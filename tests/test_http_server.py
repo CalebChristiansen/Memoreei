@@ -384,3 +384,35 @@ def test_container_bridges_are_not_offered_as_server_addresses(monkeypatch):
         lambda cmd, **kw: type("R", (), {"stdout": ip_output})(),
     )
     assert auth_module.local_ipv4_addresses() == ["192.0.2.10", "203.0.113.5"]
+
+
+def test_links_and_invitations_name_the_port_serve_was_given(monkeypatch):
+    # Backlog 40: `serve --port 3779` while MEMOREEI_PORT says 3679 handed out addresses
+    # on 3679. The CLI runs in another process, so the server says where it listens.
+    import json
+
+    from memoreei.config import get_config, serving_path
+    from memoreei.peers import store
+
+    monkeypatch.setattr("memoreei.auth.local_ipv4_addresses", lambda: ["192.0.2.7"])
+    runner.invoke(app, ["key", "create", "laptop"])
+    with patch("uvicorn.run"):
+        assert runner.invoke(app, ["serve", "--http", "--port", "4123"]).exit_code == 0
+    assert json.loads(serving_path().read_text())["port"] == 4123
+
+    monkeypatch.setattr("memoreei.config._config", None)  # as a new CLI process sees it
+    assert get_config().port == 3679
+    addresses = dict(store.invite_addresses("tok"))
+    assert addresses["on your network"] == "http://192.0.2.7:4123/peer/pair/tok"
+    assert addresses["on this computer"] == "http://localhost:4123/peer/pair/tok"
+    link = runner.invoke(app, ["admin-url"]).output
+    assert "localhost:4123/" in link and ":3679" not in link
+
+
+def test_a_stale_serving_record_is_ignored():
+    import json
+
+    from memoreei.config import listening, serving_path
+
+    serving_path().write_text(json.dumps({"pid": 2**22 + 12345, "host": "0.0.0.0", "port": 4999, "tls": False}))
+    assert listening()[1] == 3679

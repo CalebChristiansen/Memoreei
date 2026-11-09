@@ -96,6 +96,60 @@ def config_env_path() -> Path:
     return memoreei_home() / "config.env"
 
 
+def serving_path() -> Path:
+    return memoreei_home() / "serving.json"
+
+
+def record_serving(host: str, port: int, tls: bool) -> None:
+    """Say where this server really listens, for the CLI's links and invitations to read.
+
+    ``serve --port`` can differ from MEMOREEI_PORT; another process can't know that
+    otherwise. Removed when the server stops; a stale one is ignored by its pid.
+    """
+    import atexit
+    import json
+
+    path = serving_path()
+    try:
+        path.write_text(json.dumps({"pid": os.getpid(), "host": host, "port": port, "tls": tls}))
+    except OSError:
+        return
+    pid = os.getpid()
+
+    def _remove() -> None:
+        try:
+            if json.loads(path.read_text()).get("pid") == pid:
+                path.unlink()
+        except (OSError, ValueError):
+            pass
+
+    atexit.register(_remove)
+
+
+def listening() -> tuple[str, int, bool]:
+    """(host, port, tls) of the server running from this home, or the configured ones.
+
+    From serving.json while the process that wrote it is alive, so a server started with
+    ``--port`` gets links and invitations that lead to it.
+    """
+    import json
+
+    cfg = get_config()
+    configured = (cfg.host, cfg.port, bool(cfg.tls_cert))
+    try:
+        rec = json.loads(serving_path().read_text())
+        pid, port = int(rec["pid"]), int(rec["port"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return configured
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        pass  # alive, someone else's
+    except OSError:
+        return configured
+    return str(rec.get("host") or cfg.host), port, bool(rec.get("tls"))
+
+
 def load_env() -> None:
     """Load settings into os.environ, once.
 
