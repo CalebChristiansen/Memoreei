@@ -169,6 +169,8 @@ button.small, .button.small { min-height: 36px; padding: 0 14px; font-size: 13px
 .switch[aria-pressed="false"] { background: transparent; border: 1px solid var(--muted); justify-content: flex-start; }
 .switch[aria-pressed="false"] span { width: 18px; height: 18px; background: var(--muted); }
 .switch-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.awake { margin: 4px 0 12px; flex-wrap: nowrap; }
+.awake > div { display: flex; flex-direction: column; gap: 2px; }
 
 label { font-weight: 600; }
 .field { display: flex; flex-direction: column; gap: 8px; }
