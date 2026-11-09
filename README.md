@@ -406,6 +406,7 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 | Android SMS Backup & Restore (XML) | import | ✅ |
 | Any JSON, JSON-lines, CSV or TSV | import | ✅ |
 | Contacts (vCard, or macOS Contacts) | names for phone numbers | ✅ |
+| Another memoreei (your other computers) | it pushes to this one | 🧪 Beta |
 
 **WhatsApp** is read from where WhatsApp for Mac keeps the chats it has synced from your
 phone: texts, photo and video captions, shared links and document names. Stickers, voice
@@ -421,6 +422,25 @@ asks first. Texts, captions, links, group changes and calls are kept. Reactions 
 follow the message they belong to, with both wordings of an edit searchable, and a
 message deleted for everyone is marked rather than forgotten. Photos and files become
 labels, never copies. Disappearing messages are never stored.
+
+**Another memoreei** can send its messages here, so a server (or Memoreei Cloud) can hold
+everything your laptops and desktops read, and answer while they're shut. On this one,
+choose *Add another memoreei* under Sources (or run `memoreei sources invite`): you get
+an address, good for ten minutes, and a code. On the one with the messages, paste the
+address under *Send to another memoreei* (or run `memoreei sources add-to <address>`),
+check that it shows the same code, and approve it there. From then on it sends whatever
+is new after each sync, with the embeddings, and catches up after sleep. It only ever
+sends: it needs no open port or public address of its own, just a way to reach this one
+(the LAN, or this one's Memoreei Cloud or HTTPS address). The key it's given can push
+here and do nothing else.
+
+Everything goes by default, sources added later included; *What goes* on the sending
+side keeps one back (work Slack, say), and unticking it deletes it here. Every message
+remembers which memoreei first read it, so memoreeis can send in a chain or both ways
+(A to B to C, or A and B to each other) and each still holds every message once. A message
+deleted in memoreei is deleted from every memoreei it went to. Either side can end it:
+*Stop* on the sending side, or *Remove* here, which also deletes what it sent (or
+`memoreei sources end <id> [--keep]`). Search results say which memoreei a copy came through.
 
 **Live** sources sync incrementally, fetching only what's new. **Imports** are
 remembered: `memoreei sync` re-reads a file when it changes.
@@ -484,6 +504,9 @@ memoreei search "printer issue" --limit 5 --person "Jane" --after 2026-01-01
 memoreei import sms backup.xml      # also discord-package, messenger, instagram,
                                     #   json, csv, contacts
 memoreei import list | forget <id>  # the files `sync` re-reads
+memoreei sources invite             # let another memoreei send its messages here
+memoreei sources add-to <address>   # send this one's messages to another
+memoreei sources list | push | end <id> | exclude <id> <platform> | include <id> <platform>
 ```
 
 Every command takes `--home <dir>`, and `--help`.

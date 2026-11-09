@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Another memoreei as a source.** One memoreei sends its messages, with their
+  embeddings, to another: a laptop to a home server, say, or to Memoreei Cloud. Pair them
+  with *Add another memoreei* / *Send to another memoreei* under Sources, or `memoreei
+  sources invite` on the receiver and `memoreei sources add-to <address>` on the sender,
+  comparing a code shown on both and approving on the sender. It sends after every sync
+  and once a minute, catches up after sleep and backs off while the other is away. Its key
+  can push and nothing else. Everything goes unless unticked; unticking deletes it there.
+  Each message now carries an origin (the memoreei that first read it, and its id there),
+  so chains and two-way pairs hold each message once, and deletes made in memoreei
+  follow every copy. Search results and `list_sources` say which memoreei a copy came
+  through. The database gains the origin columns on its first start (a quick, one-time
+  update).
 - **The Memoreei Cloud card shows how your account stands**: "Trial: 9 days left",
   "Payment failed: update your card", "Disconnected: payment overdue" and the like, with
   **Manage billing**, which opens your account's billing page (after you sign in there).

@@ -35,6 +35,7 @@ src/memoreei/
 ├── public/                # the public listener: /mcp for the internet, the gate, access log
 ├── oauth/                 # memoreei's own OAuth sign-in: approve chatbots on the computer
 ├── cloud/                 # Memoreei Cloud (optional): enroll, certificate, tunnel to the relay
+├── peers/                 # another memoreei as a source: pairing, pushes, origin stamps (/peer/*)
 ├── storage/database.py    # SQLite (SQLCipher-encrypted) + FTS5 + vector search
 ├── storage/key.py         # the database key, and every connection to memoreei.db
 ├── storage/vault.py       # sources' secrets, in the database's secrets table
