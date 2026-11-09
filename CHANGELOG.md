@@ -7,7 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.5.0rc1] - 2026-11-09
+## [0.5.0rc2] - 2026-11-09
+
+### Fixed
+- The stay-awake switch's caption sits under its title.
+- The macOS app builds on GitHub's `macos-15` runners; `macos-14` is gone, which stopped
+  0.5.0rc1 before anything was published.
+
+## [0.5.0rc1] - 2026-11-09 [YANKED]
+
+Never published: the macOS build couldn't start. Everything below is in 0.5.0rc2.
 
 ### Added
 - **Stay awake while plugged in**, so Claude.ai and ChatGPT can reach this computer.
@@ -513,7 +522,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc2...HEAD
+[0.5.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...v0.5.0rc2
 [0.5.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...v0.5.0rc1
 [0.4.7]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7
 [0.4.7rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7rc1...v0.4.7rc2

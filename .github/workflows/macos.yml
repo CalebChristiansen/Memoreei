@@ -17,7 +17,7 @@ jobs:
     # GitHub has no Intel macOS runners left: both architectures are assembled on Apple
     # Silicon. Nothing in the bundle runs during the build, so that's fine; only arm64
     # can be smoke-tested here.
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         arch: [arm64, x86_64]
