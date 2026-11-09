@@ -116,10 +116,11 @@ class SyncManager:
                     print(f"[sync_manager] Signal sync error: {result['error']}", file=sys.stderr)
                     raise RuntimeError(result["error"])
                 count = result.get("synced", 0)
-                if result.get("updated") or result.get("skipped_disappearing"):
+                if result.get("updated") or result.get("marked") or result.get("removed"):
                     # Counts only: which messages changed is nobody's business but theirs.
                     print(f"[sync_manager] Signal: {result.get('updated', 0)} updated, "
-                          f"{result.get('skipped_disappearing', 0)} disappearing skipped", file=sys.stderr)
+                          f"{result.get('marked', 0)} marked gone from Signal, "
+                          f"{result.get('removed', 0)} removed (mirrored)", file=sys.stderr)
             else:
                 print(f"[sync_manager] Unknown source: {source_name}", file=sys.stderr)
                 return 0

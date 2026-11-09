@@ -357,6 +357,32 @@ def test_status_shows_the_newest_whatsapp_message(server, monkeypatch):
     assert "Newest message 3 hours ago" in client.get("/admin/").text
 
 
+def test_status_counts_what_apps_took_back_and_says_what_is_mirrored(server, monkeypatch):
+    import time as _time
+
+    from memoreei.storage.models import MemoryItem
+
+    client = signed_in(server)
+    assert "Kept</dt>" not in client.get("/admin/").text
+
+    async def seed() -> None:
+        db = await server_module._get_db()
+        for n, meta in enumerate([{"gone": {"how": "expired", "at": 1}}, {"deleted": True}, {}]):
+            await db.insert_memory(MemoryItem(
+                id=f"s{n}", source="signal:c-link", source_id=f"signal:c-link:{n}",
+                content=f"Link: message {n}", summary=None, participants=["Link"],
+                ts=int(_time.time()), ingested_at=int(_time.time()), metadata=meta, embedding=None,
+            ))
+
+    client.portal.call(seed)
+    text = client.get("/admin/").text
+    assert "2 messages since deleted, unsent or expired in Signal, marked so in results" in text
+    assert "MEMOREEI_MIRROR_DELETIONS" not in text
+    monkeypatch.setenv("MEMOREEI_MIRROR_DELETIONS", "signal")
+    monkeypatch.setattr("memoreei.config._process_env_keys", frozenset({"MEMOREEI_MIRROR_DELETIONS"}))
+    assert "Followed for Signal" in client.get("/admin/").text
+
+
 def test_signal_is_offered_only_where_signal_desktop_is(server, monkeypatch):
     client = signed_in(server)
     assert client.get("/admin/sources/signal").status_code == 404

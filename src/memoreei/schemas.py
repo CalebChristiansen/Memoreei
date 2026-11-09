@@ -21,7 +21,11 @@ class Message(TypedDict):
     sender: Annotated[str, Field(description="Who wrote it; 'me' is the owner")]
     content: Annotated[str, Field(description="The message, as stored: usually 'sender: text'")]
     source: Annotated[str, Field(description="The chat's id, for the source filter")]
-    deleted: NotRequired[Annotated[bool, Field(description="Deleted for everyone after it was read")]]
+    deleted: NotRequired[Annotated[bool, Field(
+        description="Deleted or unsent in its app after memoreei kept it; mark says when")]]
+    mark: NotRequired[Annotated[str, Field(
+        description="What its app did to it since, e.g. 'deleted in Signal on 2026-11-09' or "
+                    "'expired in Signal'. memoreei kept it; say so if it matters")]]
     hit: NotRequired[Annotated[bool, Field(description="The message get_context was asked about")]]
     via: NotRequired[Annotated[str, Field(
         description="The other memoreei (a computer of the owner's) this copy came from")]]

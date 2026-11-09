@@ -96,6 +96,20 @@ def config_env_path() -> Path:
     return memoreei_home() / "config.env"
 
 
+def live_setting(name: str) -> str:
+    """A setting as it is now: from the real environment if it was set there when this
+    process started, else from config.env as the file stands. For settings a running
+    server should follow without a restart (stay-awake, mirroring deletions)."""
+    if name in _process_env_keys:
+        return os.environ.get(name, "")
+    path = config_env_path()
+    if not path.is_file():
+        return ""
+    from dotenv import dotenv_values
+
+    return dotenv_values(path).get(name) or ""
+
+
 def serving_path() -> Path:
     return memoreei_home() / "serving.json"
 

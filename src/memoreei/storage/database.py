@@ -1259,24 +1259,94 @@ class Database:
         )
         await self._db.commit()
 
-    async def mark_deleted(self, source_prefix: str, message_ids: list[str]) -> int:
-        """Set metadata.deleted on the memories whose source_id ends in these message ids.
+    # This memoreei's own messages from an app: never a copy a pairing sent, whose marks
+    # and deletes come from the memoreei that read it.
+    _OWN = "(origin IS NULL OR origin = ?)"
 
-        For messages that left their app altogether, whose chat is no longer known.
-        Returns how many memories were marked.
+    async def own_message_ids(self, source_prefix: str) -> dict[str, bool]:
+        """Every message this memoreei read itself from one app, by the app's own id (the
+        source_id after its source), and whether it is already marked gone."""
+        assert self._db is not None
+        found: dict[str, bool] = {}
+        async with self._db.execute(
+            f"SELECT source, source_id, json_extract(metadata, '$.gone.how') IS NOT NULL "
+            f"OR coalesce(json_extract(metadata, '$.deleted'), 0) != 0 FROM memories "
+            f"WHERE source LIKE ? AND source_id IS NOT NULL AND {self._OWN}",
+            (f"{source_prefix}:%", self.memoreei_id),
+        ) as cursor:
+            for source, source_id, is_gone in await cursor.fetchall():
+                if source_id.startswith(source + ":"):
+                    found[source_id[len(source) + 1:]] = bool(is_gone)
+        return found
+
+    async def mark_gone(self, source_prefix: str, message_ids: list[str], how: str | None = None,
+                        at: int | None = None) -> int:
+        """Mark this memoreei's own copies of these messages as gone from their app
+        (memoreei.marks), by the app's message id. With *how* None, a message that had a
+        disappearing timer (metadata expires_in) expired, and any other was deleted. A
+        message already marked keeps its mark. Returns how many were marked.
         """
         assert self._db is not None
+        at = int(time.time()) if at is None else at
+        how_sql = "?" if how else ("CASE WHEN json_extract(metadata, '$.expires_in') IS NOT NULL "
+                                   "THEN 'expired' ELSE 'deleted' END")
         marked = 0
         for message_id in message_ids:
             cursor = await self._db.execute(
-                "UPDATE memories SET metadata = json_set(coalesce(metadata, '{}'), '$.deleted', json('true')) "
-                "WHERE source LIKE ? AND source_id = source || ':' || ? "
+                f"UPDATE memories SET metadata = json_set(json_remove(coalesce(metadata, '{{}}'), '$.deleted'), "
+                f"'$.gone', json_object('how', {how_sql}, 'at', ?)) "
+                f"WHERE source LIKE ? AND source_id = source || ':' || ? AND {self._OWN} "
+                "AND json_extract(metadata, '$.gone.how') IS NULL "
                 "AND coalesce(json_extract(metadata, '$.deleted'), 0) = 0",
-                (f"{source_prefix}:%", message_id),
+                (*((how,) if how else ()), at, f"{source_prefix}:%", message_id, self.memoreei_id),
             )
             marked += cursor.rowcount
         await self._db.commit()
         return marked
+
+    async def delete_own(self, source_prefix: str, message_ids: list[str]) -> int:
+        """Delete this memoreei's own copies of these messages, by the app's message id:
+        an app's deletion, mirrored. Any memoreei this one sends to deletes them too."""
+        assert self._db is not None
+        deleted = 0
+        for message_id in message_ids:
+            cursor = await self._db.execute(
+                f"DELETE FROM memories WHERE source LIKE ? AND source_id = source || ':' || ? AND {self._OWN}",
+                (f"{source_prefix}:%", message_id, self.memoreei_id),
+            )
+            deleted += cursor.rowcount
+        await self._db.commit()
+        if deleted:
+            self.invalidate_vectors()
+        return deleted
+
+    async def delete_marked(self, source_prefix: str) -> int:
+        """Delete this memoreei's own messages from an app that are marked gone: what
+        turning on mirroring means for what was already kept."""
+        assert self._db is not None
+        cursor = await self._db.execute(
+            f"DELETE FROM memories WHERE source LIKE ? AND {self._OWN} "
+            "AND (json_extract(metadata, '$.gone.how') IS NOT NULL "
+            "OR coalesce(json_extract(metadata, '$.deleted'), 0) != 0)",
+            (f"{source_prefix}:%", self.memoreei_id),
+        )
+        await self._db.commit()
+        if cursor.rowcount:
+            self.invalidate_vectors()
+        return cursor.rowcount
+
+    async def count_gone(self) -> dict[str, int]:
+        """How many messages each app took back that memoreei kept, by source prefix."""
+        assert self._db is not None
+        out: dict[str, int] = {}
+        async with self._db.execute(
+            "SELECT substr(source, 1, instr(source || ':', ':') - 1), count(*) FROM memories "
+            "WHERE json_extract(metadata, '$.gone.how') IS NOT NULL "
+            "OR coalesce(json_extract(metadata, '$.deleted'), 0) != 0 GROUP BY 1"
+        ) as cursor:
+            for prefix, n in await cursor.fetchall():
+                out[prefix] = n
+        return out
 
     async def get_by_source_ids(self, source: str, source_ids: list[str]) -> dict[str, MemoryItem]:
         """The memories with these source_ids in one source, by source_id."""

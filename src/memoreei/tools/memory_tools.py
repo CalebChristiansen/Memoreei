@@ -8,6 +8,7 @@ from typing import Any
 
 from ulid import ULID
 
+from memoreei import marks
 from memoreei.connectors.contacts_connector import import_vcf, normalize_identifier, sync_contacts
 from memoreei.connectors.discord_connector import sync_discord
 from memoreei.connectors.generic_connector import import_json, import_csv
@@ -82,8 +83,11 @@ def present(item: MemoryItem, contacts: dict[str, str],
         "content": item.content,
         "source": item.source,
     }
-    if meta.get("deleted"):
-        row["deleted"] = True
+    mark = marks.gone(meta)
+    if mark:
+        row["mark"] = marks.describe(item.source, meta)
+        if mark["how"] in ("deleted", "unsent"):
+            row["deleted"] = True
     if item.via:
         row["via"] = (peers or {}).get(item.via) or "another memoreei"
     return row

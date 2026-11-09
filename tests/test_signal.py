@@ -18,7 +18,7 @@ from memoreei.connectors.signal import KeyUnavailable, connect, sync_signal
 from memoreei.connectors.signal import keys as keys_module
 from memoreei.connectors.signal.keys import read_db_key, unseal
 from memoreei.connectors.signal.reader import SignalReader, attachment_label
-from memoreei.connectors.signal.sync import CHECKPOINT, DISAPPEARING_SKIPPED
+from memoreei.connectors.signal.sync import CHECKPOINT
 from memoreei.tools.memory_tools import MemoryTools
 
 sqlcipher3 = pytest.importorskip("sqlcipher3")
@@ -326,14 +326,27 @@ async def test_reactions_live_on_the_message(tools, fake):
         {"emoji": "🎉", "from": "me"}, {"emoji": "❤️", "from": "Hans"}]
 
 
-async def test_disappearing_messages_are_never_kept(tools, fake):
-    gone = fake.message("c-zez", body="my bank pin is", sender=ZEZIMA, expire=3600)
-    kept = fake.message("c-zez", body="ordinary", sender=ZEZIMA)
-    result = await _sync(tools)
-    assert result["synced"] == 1 and result["skipped_disappearing"] == 1
+async def test_disappearing_messages_are_kept(tools, fake):
+    timed = fake.message("c-zez", body="the rune shop restocks at noon", sender=ZEZIMA, expire=3600)
+    plain = fake.message("c-zez", body="ordinary", sender=ZEZIMA)
+    assert (await _sync(tools))["synced"] == 2
     got = await _contents(tools)
-    assert gone not in got and kept in got
-    assert await tools.db.get_signal_checkpoint(DISAPPEARING_SKIPPED) == 1
+    assert timed in got and plain in got
+    assert (await _meta(tools, timed))["expires_in"] == 3600
+    assert "expires_in" not in await _meta(tools, plain)
+
+
+async def test_an_expired_message_is_kept_and_marked_expired(tools, fake):
+    timed = fake.message("c-zez", body="the rune shop restocks at noon", sender=ZEZIMA, expire=3600)
+    await _sync(tools)
+    fake.conn.execute("DELETE FROM messages WHERE id = ?", (timed,))  # its hour is up
+    fake.conn.commit()
+    assert (await _sync(tools))["marked"] == 1
+    assert (await _contents(tools))[timed] == "Zezima: the rune shop restocks at noon"
+    assert (await _meta(tools, timed))["gone"]["how"] == "expired"
+    hit = (await tools.search_memoreei("rune shop restocks"))["results"][0]
+    assert hit["mark"].startswith("expired in Signal on ")
+    assert "deleted" not in hit
 
 
 async def test_system_noise_is_skipped(tools, fake):
@@ -352,7 +365,7 @@ async def test_second_sync_reads_only_whats_new(tools, fake):
     fake.message("c-zez", body="two", sender=ZEZIMA)
     result = await _sync(tools)
     assert result["synced"] == 1 and result["updated"] == 0
-    assert (await _sync(tools)) == {"synced": 0, "updated": 0, "skipped_disappearing": 0}
+    assert (await _sync(tools)) == {"synced": 0, "updated": 0, "marked": 0, "removed": 0}
 
 
 async def test_a_later_reaction_updates_the_memoreei(tools, fake):
@@ -360,7 +373,7 @@ async def test_a_later_reaction_updates_the_memoreei(tools, fake):
     await _sync(tools)
     fake.update(mid, reactions=[{"emoji": "👍", "fromId": "c-gert", "targetTimestamp": 1, "timestamp": 2}])
     result = await _sync(tools)
-    assert result == {"synced": 0, "updated": 1, "skipped_disappearing": 0}
+    assert result == {"synced": 0, "updated": 1, "marked": 0, "removed": 0}
     assert (await _meta(tools, mid))["reactions"] == [{"emoji": "👍", "from": "Gertrude"}]
     assert (await _contents(tools))[mid] == "Zezima: Gz on 99"
 
@@ -377,25 +390,73 @@ async def test_an_edit_keeps_both_wordings_searchable(tools, fake):
     assert [h.source_id.rsplit(":", 1)[1] for h in hits] == [mid]
 
 
-async def test_delete_for_everyone_is_flagged_not_forgotten(tools, fake):
+async def test_delete_for_everyone_is_marked_not_forgotten(tools, fake):
     mid = fake.message("c-zez", body="wrong chat, sorry", sender=ZEZIMA)
     await _sync(tools)
     fake.update(mid, body="", deletedForEveryone=True)
-    assert (await _sync(tools))["updated"] == 1
+    result = await _sync(tools)
+    assert result["updated"] == 1 and result["marked"] == 1
     assert (await _contents(tools))[mid] == "Zezima: wrong chat, sorry"
-    assert (await _meta(tools, mid))["deleted"] is True
+    mark = (await _meta(tools, mid))["gone"]
+    assert mark["how"] == "deleted" and mark["at"]
+    fake.update(mid, reactions=[{"emoji": "👍", "fromId": "c-gert", "targetTimestamp": 1, "timestamp": 2}])
+    await _sync(tools)
+    assert (await _meta(tools, mid))["gone"] == mark  # later syncs never move the date
+    hit = (await tools.search_memoreei("wrong chat sorry"))["results"][0]
+    assert hit["deleted"] is True and hit["mark"].startswith("deleted in Signal on ")
 
 
-async def test_a_message_gone_from_signal_is_flagged(tools, fake):
+async def test_a_message_gone_from_signal_is_marked(tools, fake):
     mid = fake.message("c-me", "outgoing", body="note to self")
     keep = fake.message("c-me", "outgoing", body="still here")
     await _sync(tools)
     fake.conn.execute("DELETE FROM messages WHERE id = ?", (mid,))
     fake.conn.commit()
-    assert (await _sync(tools))["updated"] == 1
-    assert (await _meta(tools, mid))["deleted"] is True
-    assert "deleted" not in await _meta(tools, keep)
-    assert (await _sync(tools))["updated"] == 0  # flagged once, then forgotten
+    assert (await _sync(tools))["marked"] == 1
+    assert (await _meta(tools, mid))["gone"]["how"] == "deleted"
+    assert "gone" not in await _meta(tools, keep)
+    assert (await _sync(tools))["marked"] == 0  # marked once, then forgotten
+
+
+async def test_marked_before_0_5_reads_as_deleted(tools, fake):
+    mid = fake.message("c-zez", body="wrong chat, sorry", sender=ZEZIMA)
+    await _sync(tools)
+    await tools.db._db.execute("UPDATE memories SET metadata = json_set(metadata, '$.deleted', json('true'))")
+    await tools.db._db.commit()
+    hit = (await tools.search_memoreei("wrong chat sorry"))["results"][0]
+    assert hit["deleted"] is True and hit["mark"] == "deleted in Signal"
+    fake.update(mid, body="", deletedForEveryone=True)
+    assert (await _sync(tools))["marked"] == 0  # already was
+    assert (await _meta(tools, mid))["gone"] == {"how": "deleted", "at": None}
+
+
+async def test_mirroring_signal_deletes_instead(tools, fake, monkeypatch):
+    gone_mid = fake.message("c-zez", body="wrong chat, sorry", sender=ZEZIMA)
+    timed = fake.message("c-zez", body="brb", sender=ZEZIMA, expire=60)
+    keep = fake.message("c-zez", body="still here", sender=ZEZIMA)
+    await _sync(tools)
+    fake.update(gone_mid, body="", deletedForEveryone=True)
+    await _sync(tools)  # not mirroring yet: kept and marked
+    assert gone_mid in await _contents(tools)
+
+    monkeypatch.setenv("MEMOREEI_MIRROR_DELETIONS", "signal")
+    monkeypatch.setattr("memoreei.config._process_env_keys", frozenset({"MEMOREEI_MIRROR_DELETIONS"}))
+    result = await _sync(tools)
+    assert result["removed"] == 1  # what was kept before goes when it's turned on
+    fake.conn.execute("DELETE FROM messages WHERE id = ?", (timed,))
+    fake.conn.commit()
+    assert (await _sync(tools))["removed"] == 1
+    assert set(await _contents(tools)) == {keep}
+
+
+async def test_signal_emptied_at_once_marks_nothing(tools, fake):
+    mids = [fake.message("c-zez", body=f"message {n}", sender=ZEZIMA) for n in range(30)]
+    await _sync(tools)
+    fake.conn.execute("DELETE FROM messages")
+    fake.conn.commit()
+    assert (await _sync(tools))["marked"] == 0
+    for mid in mids[:3]:
+        assert "gone" not in await _meta(tools, mid)
 
 
 async def test_a_caption_sent_as_the_body_joins_its_label(tools, fake):

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from memoreei.connectors.whatsapp.chatstorage import ChatStorageReader
-from memoreei.connectors.whatsapp.sync import SOURCE_PREFIX, sync_reader
+from memoreei.connectors.whatsapp.sync import SOURCE_PREFIX, settle_gone, sync_reader
 from memoreei.storage.database import Database
 
 __all__ = ["DEFAULT_MAC_PATH", "SOURCE_PREFIX", "ChatStorageReader", "get_db_path", "sync_whatsapp"]
@@ -57,7 +57,7 @@ async def sync_whatsapp(db: Database, embedder: Any, db_path: str | None = None)
         return {"error": _cant_read(db_path, exc), "synced": 0, "db_path": db_path}
     try:
         count = await sync_reader(db, embedder, reader)
-        return {"synced": count, "db_path": db_path}
+        return {"synced": count, **await settle_gone(db, reader), "db_path": db_path}
     except Exception as exc:
         return {"error": str(exc), "synced": 0, "db_path": db_path}
     finally:

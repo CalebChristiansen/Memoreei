@@ -46,7 +46,6 @@ from memoreei.config import (
     memoreei_home,
     save_settings,
 )
-from memoreei.connectors.signal.sync import DISAPPEARING_SKIPPED
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -348,7 +347,12 @@ async def _status_context() -> dict[str, Any]:
     # Signal Desktop expires its own builds, and an old Mac can be left on the last one
     # that runs there; its messages stopping is the only sign.
     signal_newest = await db.newest_ts("signal") if "signal" in connectors else None
-    signal_disappearing = await db.get_signal_checkpoint(DISAPPEARING_SKIPPED) if signal_newest else None
+    # Messages an app deleted, unsent or expired that memoreei kept (memoreei.marks).
+    from memoreei import marks
+
+    gone = await db.count_gone()
+    kept_gone = [(kind_name(k), n) for k, n in sorted(gone.items(), key=lambda kv: -kv[1])]
+    mirrored = [kind_name(k) for k in marks.APPS if marks.mirrors(k)]
     last_run = _sync_manager.last_run
     failed = bool(last_run) and any(
         isinstance(r, dict) for r in last_run["result"].get("connectors", {}).values()
@@ -368,7 +372,8 @@ async def _status_context() -> dict[str, Any]:
         "fda": fda,
         "whatsapp_newest": whatsapp_newest,
         "signal_newest": signal_newest,
-        "signal_disappearing": signal_disappearing,
+        "kept_gone": kept_gone,
+        "mirrored": mirrored,
         "running": _sync_manager.running,
         "last_run": last_run,
         "connected": connected,

@@ -59,7 +59,7 @@ class SignalMessage:
     edits: list[str] = field(default_factory=list)   # later versions, oldest first
     deleted: bool = False        # deleted for everyone
     reactions: list[dict[str, str]] = field(default_factory=list)
-    disappearing: bool = False   # had a disappearing-message timer: never stored
+    expires_in: int | None = None  # a disappearing message's timer, in seconds
     size: int = 0                # length of its json and body, which change when it does
     sender_phone: str | None = None  # the sender's number, when Signal knows it
 
@@ -338,7 +338,7 @@ class SignalReader:
                 for r in data.get("reactions") or []
                 if r.get("emoji")
             ],
-            disappearing=bool(data.get("expireTimer")) and kind in CHAT_TYPES,
+            expires_in=int(data["expireTimer"]) if data.get("expireTimer") and kind in CHAT_TYPES else None,
             size=size,
             sender_phone=None if from_me else self.phone_of(data.get("sourceServiceId"), data.get("source")),
         )

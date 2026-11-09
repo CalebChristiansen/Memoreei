@@ -13,7 +13,14 @@
 <dt>WhatsApp</dt><dd>Newest message {{ whatsapp_newest|ago }}</dd>
 {% endif %}
 {% if "signal" in connectors and signal_newest %}
-<dt>Signal</dt><dd>Newest message {{ signal_newest|ago }}{% if signal_disappearing %} · {{ "{:,}".format(signal_disappearing) }} disappearing message{{ "" if signal_disappearing == 1 else "s" }} not kept{% endif %}</dd>
+<dt>Signal</dt><dd>Newest message {{ signal_newest|ago }}</dd>
+{% endif %}
+{% if kept_gone %}
+{% set n = kept_gone|sum(attribute=1) %}
+<dt>Kept</dt><dd>{{ "{:,}".format(n) }} message{{ "" if n == 1 else "s" }} since deleted, unsent or expired in {% if kept_gone|length == 1 %}{{ kept_gone[0][0] }}{% else %}their apps ({% for name, c in kept_gone %}{{ name }} {{ "{:,}".format(c) }}{{ ", " if not loop.last }}{% endfor %}){% endif %}, marked so in results</dd>
+{% endif %}
+{% if mirrored %}
+<dt>Deletions</dt><dd>Followed for {{ mirrored|join(", ") }}: what's deleted there is deleted here (MEMOREEI_MIRROR_DELETIONS).</dd>
 {% endif %}
 {%- endmacro -%}
 {%- macro auto_row(label) -%}

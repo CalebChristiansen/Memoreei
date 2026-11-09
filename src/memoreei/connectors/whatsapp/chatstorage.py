@@ -7,6 +7,12 @@ iPhone backup. Two neighbours fill in names when they're beside it: ContactsV2.s
 anonymous ``…@lid`` ID). Without them, people are named by what the messages say.
 
 Opened read-only; WhatsApp can keep writing while this reads.
+
+What WhatsApp takes back shows here too (memoreei.marks): "delete for everyone" keeps the
+row and turns it into a revoked message (type 14, its words gone); a message deleted for
+me, a whole chat cleared, or a disappearing message whose time is up loses its row. A
+disappearing message's timer is read from ZEPHEMERALDURATION where the schema has it, so
+its going reads "expired" rather than "deleted".
 """
 from __future__ import annotations
 
@@ -21,6 +27,7 @@ APPLE_EPOCH_OFFSET = 978307200  # seconds from 1970-01-01 to 2001-01-01
 # ZMESSAGETYPE values worth keeping, and which column holds their words. Everything
 # else (stickers, voice notes, reactions, calls, group events…) has none to search.
 _KINDS: dict[int, Kind] = {0: "text", 1: "photo", 2: "video", 7: "link", 8: "document", 11: "gif"}
+REVOKED = 14  # ZMESSAGETYPE of a message deleted for everyone: "This message was deleted"
 
 # ZSESSIONTYPE: 0 a person, 1 a group. Status updates (2), channels and broadcast lists
 # aren't conversations.
@@ -202,10 +209,31 @@ class ChatStorageReader:
         row = self._conn.execute("SELECT MAX(Z_PK) FROM ZWAMESSAGE").fetchone()
         return int(row[0] or 0)
 
+    def present_ids(self) -> set[str]:
+        """Every message WhatsApp still has a row for, by its own id."""
+        assert self._conn is not None
+        return {str(r[0]) for r in self._conn.execute(
+            "SELECT ZSTANZAID FROM ZWAMESSAGE WHERE ZSTANZAID IS NOT NULL")}
+
+    def revoked_ids(self) -> set[str]:
+        """Messages deleted for everyone: still there, as "This message was deleted"."""
+        assert self._conn is not None
+        return {str(r[0]) for r in self._conn.execute(
+            "SELECT ZSTANZAID FROM ZWAMESSAGE WHERE ZMESSAGETYPE = ? AND ZSTANZAID IS NOT NULL",
+            (REVOKED,))}
+
+    def _timer_column(self) -> str | None:
+        assert self._conn is not None
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(ZWAMESSAGE)")}
+        return "ZEPHEMERALDURATION" if "ZEPHEMERALDURATION" in cols else None
+
     def messages(self, after: int, upto: int) -> Iterator[WhatsAppMessage]:
         assert self._conn is not None
         chats = {chat.jid: chat for chat in self.chats()}
-        for row in self._conn.execute(_MESSAGES_QUERY, (after, upto)):
+        timer = self._timer_column()
+        query = _MESSAGES_QUERY.replace(
+            "i.ZTITLE AS title", f"i.ZTITLE AS title, {'m.' + timer if timer else 'NULL'} AS timer")
+        for row in self._conn.execute(query, (after, upto)):
             chat = chats.get(row["chat_jid"])
             if chat is None:
                 continue
@@ -240,4 +268,5 @@ class ChatStorageReader:
             text=text or "",
             caption=title if kind == "document" else None,
             link_title=title if kind == "link" else None,
+            expires_in=int(row["timer"]) if row["timer"] else None,
         )

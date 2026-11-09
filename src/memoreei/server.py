@@ -145,7 +145,9 @@ was said around it (a reply, what "it" means), call get_context with its id.
 3. If results is empty, read note: it says why. Try other words, a shorter name or fewer \
 filters before deciding the messages don't say.
 4. Answer from what the messages say, with who said it and when. If nothing was found, \
-say so; don't guess.
+say so; don't guess. A result with a mark ("deleted in Signal on …", "expired in \
+Signal") was taken back or disappeared in its app after memoreei kept it: say so when \
+you quote it.
 """
 
 
@@ -415,7 +417,9 @@ async def sync_signal() -> dict:
     Needs Signal connected first (the dashboard's Sources page, or `memoreei setup
     signal`), which reads Signal's database key from the system keyring once. Texts,
     captions, links, group changes and calls are kept, reactions and edits follow
-    the message they belong to, and disappearing messages are never stored.
+    the message they belong to. Disappearing messages are kept, and a message deleted
+    or expired in Signal is kept and marked so, unless MEMOREEI_MIRROR_DELETIONS says
+    to follow Signal instead.
     """
     tools = await _get_tools()
     return await tools.sync_signal_tool()

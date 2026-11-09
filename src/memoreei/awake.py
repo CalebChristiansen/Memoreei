@@ -38,16 +38,9 @@ WHY = "Memoreei: chatbots can reach this computer while it's awake"
 
 def setting_on() -> bool:
     """MEMOREEI_STAY_AWAKE, from the real environment if set there, else config.env as it is now."""
-    from memoreei import config
+    from memoreei.config import live_setting
 
-    if SETTING in config._process_env_keys:
-        value = os.environ.get(SETTING, "")
-    else:
-        from dotenv import dotenv_values
-
-        path = config.config_env_path()
-        value = (dotenv_values(path).get(SETTING) or "") if path.is_file() else ""
-    return value.strip().lower() in ("1", "true", "yes", "on")
+    return live_setting(SETTING).strip().lower() in ("1", "true", "yes", "on")
 
 
 def on_mains(root: Path = POWER_SUPPLIES) -> bool:

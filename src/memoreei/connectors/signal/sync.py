@@ -8,11 +8,14 @@ means a change, and that message's memoreei is rewritten:
     reactions  metadata only ({"emoji", "from"} each)
     an edit    the original stays, each later version follows on its own line as
                "[edited] …", so either wording finds it; re-embedded
-    a delete   the memoreei stays as it was, with metadata "deleted": true. Deleted for
-               everyone, the message stays in Signal marked so; deleted any other way
-               (for me, on another device, the whole chat), it simply isn't there
+    a delete   the memoreei stays as it was, marked "deleted in Signal" (memoreei.marks).
+               Deleted for everyone, the message stays in Signal marked so; deleted any
+               other way (for me, on another device, the whole chat), it simply isn't there
+    an expiry  a disappearing message (stored with metadata "expires_in", its timer in
+               seconds) leaves Signal when its time is up: marked "expired in Signal"
 
-Disappearing messages are never stored: whoever sent one chose that it shouldn't last.
+memoreei keeps disappearing messages unless told not to: with MEMOREEI_MIRROR_DELETIONS
+naming signal, a deletion or expiry deletes memoreei's copy instead.
 """
 from __future__ import annotations
 
@@ -22,13 +25,13 @@ from typing import Any
 
 from ulid import ULID
 
+from memoreei import marks
 from memoreei.connectors.signal.reader import CHAT_TYPES, SignalMessage, SignalReader
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
 SOURCE_PREFIX = "signal"
 CHECKPOINT = "signal-desktop"  # the one reader so far, as signal_checkpoint names it
-DISAPPEARING_SKIPPED = "disappearing-skipped"  # a running count, kept beside it for Status
 BATCH_SIZE = 100
 # Set once every stored message carries its sender's number (0.4.7 began storing it).
 SENDER_PHONES = "sender-phones"
@@ -65,8 +68,10 @@ def metadata(msg: SignalMessage) -> dict[str, Any]:
         meta["sender_phone"] = msg.sender_phone
     if msg.edits:
         meta["edits"] = len(msg.edits)
+    if msg.expires_in:
+        meta["expires_in"] = msg.expires_in
     if msg.deleted:
-        meta["deleted"] = True
+        meta = marks.marked(meta, "deleted")
     if msg.reactions:
         meta["reactions"] = msg.reactions
     return meta
@@ -95,11 +100,14 @@ async def sync_reader(db: Database, embedder: Any, reader: SignalReader) -> dict
     )
     after = await db.get_signal_checkpoint(CHECKPOINT) or 0
     upto = reader.end()
-    counts = {"synced": 0, "updated": 0, "skipped_disappearing": 0}
+    counts = {"synced": 0, "updated": 0, "marked": 0, "removed": 0}
+    mirror = marks.mirrors(SOURCE_PREFIX)
+    if mirror:  # turned on since the last sync: what was kept goes now
+        counts["removed"] += await db.delete_marked(SOURCE_PREFIX)
 
     phones_done = bool(await db.get_signal_checkpoint(SENDER_PHONES))
     if after:
-        await _bring_up_to_date(db, embedder, reader, after, counts)
+        await _bring_up_to_date(db, embedder, reader, after, counts, mirror)
         if not phones_done:
             counts["updated"] += await _add_sender_phones(db, reader, after)
     if upto > after:
@@ -108,9 +116,6 @@ async def sync_reader(db: Database, embedder: Any, reader: SignalReader) -> dict
     await db.set_signal_checkpoint(CHECKPOINT, upto)
     if not phones_done:
         await db.set_signal_checkpoint(SENDER_PHONES, 1)
-    if counts["skipped_disappearing"]:
-        total = await db.get_signal_checkpoint(DISAPPEARING_SKIPPED) or 0
-        await db.set_signal_checkpoint(DISAPPEARING_SKIPPED, total + counts["skipped_disappearing"])
     return counts
 
 
@@ -136,10 +141,6 @@ async def _store_new(db: Database, embedder: Any, reader: SignalReader,
     # No chat names in the progress bar: they are personal data, and stderr is the log.
     with tqdm(desc="  Signal", unit="msg", file=sys.stderr, disable=None) as progress:
         for msg in reader.messages(after, upto):
-            if msg.disappearing:
-                counts["skipped_disappearing"] += 1
-                await db.set_signal_seen({msg.message_id: msg.size})
-                continue
             if msg.deleted and not msg.text:
                 continue  # deleted before it was ever read: nothing left to keep
             batch.append(msg)
@@ -172,12 +173,19 @@ async def _add_sender_phones(db: Database, reader: SignalReader, upto: int) -> i
 
 
 async def _bring_up_to_date(db: Database, embedder: Any, reader: SignalReader,
-                            after: int, counts: dict[str, int]) -> None:
+                            after: int, counts: dict[str, int], mirror: bool) -> None:
     seen = await db.get_signal_seen()
     sizes = reader.sizes(after)
     gone = [mid for mid in seen if mid not in sizes]
+    if gone and marks.too_many(len(gone), len(seen)):
+        print(f"memoreei: Signal: {len(gone)} of {len(seen)} messages are missing at once; "
+              "not marking them (a different or emptied Signal?)", file=sys.stderr)
+        gone = []
     if gone:
-        counts["updated"] += await db.mark_deleted(SOURCE_PREFIX, gone)
+        if mirror:
+            counts["removed"] += await db.delete_own(SOURCE_PREFIX, gone)
+        else:
+            counts["marked"] += await db.mark_gone(SOURCE_PREFIX, gone)
         await db.forget_signal_seen(gone)
     changed = [mid for mid, size in sizes.items() if mid in seen and seen[mid] != size]
     if not changed:
@@ -190,8 +198,6 @@ async def _bring_up_to_date(db: Database, embedder: Any, reader: SignalReader,
     for source, msgs in by_source.items():
         stored = await db.get_by_source_ids(source, [f"{source}:{m.message_id}" for m in msgs])
         for msg in msgs:
-            if msg.disappearing:
-                continue
             item = to_memory_item(msg)
             old = stored.get(item.source_id or "")
             if old is None:
@@ -201,7 +207,16 @@ async def _bring_up_to_date(db: Database, embedder: Any, reader: SignalReader,
                     counts["synced"] += 1
                 continue
             if msg.deleted:
+                if mirror:
+                    counts["removed"] += await db.delete_own(SOURCE_PREFIX, [msg.message_id])
+                    continue
                 item.content = old.content  # what it said, before it was taken back
+                if not marks.gone(old.metadata):
+                    counts["marked"] += 1
+                item.metadata = marks.marked(item.metadata, "deleted", before=old.metadata)
+            elif marks.gone(old.metadata):
+                # Marked when it vanished, and back (a restored Signal): keep the mark.
+                item.metadata = marks.marked(item.metadata, "deleted", before=old.metadata)
             reembed = item.content != old.content
             if not reembed and item.metadata == old.metadata:
                 continue

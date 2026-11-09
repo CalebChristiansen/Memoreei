@@ -7,6 +7,7 @@ from typing import Any
 
 from ulid import ULID
 
+from memoreei import marks
 from memoreei.connectors.whatsapp.messages import Reader, WhatsAppMessage
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
@@ -53,6 +54,7 @@ def to_memory_item(msg: WhatsAppMessage) -> MemoryItem:
             "sender_jid": msg.sender_jid,
             "sender_phone": msg.sender_phone,
             "kind": msg.kind,
+            **({"expires_in": msg.expires_in} if msg.expires_in else {}),
         },
         embedding=None,
     )
@@ -103,3 +105,31 @@ async def sync_reader(db: Database, embedder: Any, reader: Reader) -> int:
     # Past the skipped ones too (stickers, reactions…), so they aren't re-read every round.
     await db.set_whatsapp_checkpoint(reader.name, upto)
     return stored
+
+
+async def settle_gone(db: Database, reader: Any) -> dict[str, int]:
+    """Mark what WhatsApp has deleted or let expire since memoreei kept it (or, mirroring,
+    delete it here too). Readers without present_ids() can't tell, and are skipped."""
+    counts = {"marked": 0, "removed": 0}
+    if not hasattr(reader, "present_ids"):
+        return counts
+    mirror = marks.mirrors(SOURCE_PREFIX)
+    if mirror:
+        counts["removed"] += await db.delete_marked(SOURCE_PREFIX)
+    held = await db.own_message_ids(SOURCE_PREFIX)
+    live = [mid for mid, is_gone in held.items() if not is_gone]
+    if not live:
+        return counts
+    present, revoked = reader.present_ids(), reader.revoked_ids()
+    took_back = [mid for mid in live if mid in revoked]
+    vanished = [mid for mid in live if mid not in present]
+    if marks.too_many(len(took_back) + len(vanished), len(held)):
+        print(f"memoreei: WhatsApp: {len(took_back) + len(vanished)} of {len(held)} messages are "
+              "missing at once; not marking them (a different or emptied WhatsApp?)", file=sys.stderr)
+        return counts
+    if mirror:
+        counts["removed"] += await db.delete_own(SOURCE_PREFIX, took_back + vanished)
+    else:
+        counts["marked"] += await db.mark_gone(SOURCE_PREFIX, took_back, how="deleted")
+        counts["marked"] += await db.mark_gone(SOURCE_PREFIX, vanished)  # expired, if it had a timer
+    return counts

@@ -2,6 +2,13 @@
 
 Only works on macOS. On Linux/Windows the top-level sync function returns a
 clear error dict rather than raising, so the MCP server degrades gracefully.
+
+What Messages takes back, memoreei keeps and marks (memoreei.marks): a message unsent
+(macOS 13+ keeps the row, with its text gone and date_retracted or date_edited set) is
+"unsent in iMessage", and one no longer in any chat (deleted on this Mac or, through
+Messages in iCloud, on another device; macOS 14's Recently Deleted counts) is "deleted in
+iMessage". With MEMOREEI_MIRROR_DELETIONS naming imessage, both delete memoreei's copy.
+Only looked for on a full sync, never one narrowed to a chat.
 """
 from __future__ import annotations
 
@@ -14,6 +21,7 @@ from typing import Any
 
 from ulid import ULID
 
+from memoreei import marks
 from memoreei.storage.database import Database
 from memoreei.storage.models import MemoryItem
 
@@ -80,6 +88,8 @@ class IMessageConnector:
         self.db = db
         self.embedder = embedder
         self.db_path = db_path or _get_db_path()
+        self.marked = 0   # after a sync: messages marked gone from Messages
+        self.removed = 0  # … or deleted here, mirroring it
 
     def _open_chat_db(self) -> sqlite3.Connection:
         """Open chat.db in read-only mode (raises if not accessible)."""
@@ -123,6 +133,8 @@ class IMessageConnector:
     ) -> int:
         from tqdm import tqdm
         chats = self._list_chats(conn, chat_filter)
+        if not chat_filter:
+            await self._settle_gone(conn)
         if not chats:
             return 0
         total = 0
@@ -132,6 +144,37 @@ class IMessageConnector:
             for chat_rowid, chat_identifier, chat_name in progress:
                 total += await self._sync_chat(conn, chat_rowid, chat_identifier, chat_name)
         return total
+
+    async def _settle_gone(self, conn: sqlite3.Connection) -> None:
+        """Mark (or, mirroring, delete) what Messages has unsent or deleted since it was read."""
+        mirror = marks.mirrors(SOURCE_PREFIX)
+        if mirror:
+            self.removed += await self.db.delete_marked(SOURCE_PREFIX)
+        held = await self.db.own_message_ids(SOURCE_PREFIX)
+        live = [guid for guid, is_gone in held.items() if not is_gone]
+        if not live:
+            return
+        present = {str(r[0]) for r in conn.execute(
+            "SELECT m.guid FROM message m JOIN chat_message_join cmj ON cmj.message_id = m.rowid")}
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(message)")}
+        took_back: list[str] = []
+        if "date_retracted" in cols or "date_edited" in cols:
+            retracted = "coalesce(date_retracted, 0) > 0" if "date_retracted" in cols else "0"
+            edited_empty = ("(coalesce(date_edited, 0) > 0 AND trim(coalesce(text, '')) = '')"
+                            if "date_edited" in cols else "0")
+            unsent = {str(r[0]) for r in conn.execute(
+                f"SELECT guid FROM message WHERE {retracted} OR {edited_empty}")}
+            took_back = [g for g in live if g in unsent]
+        deleted = [g for g in live if g not in present]
+        if marks.too_many(len(deleted) + len(took_back), len(held)):
+            print(f"memoreei: iMessage: {len(deleted) + len(took_back)} of {len(held)} messages are "
+                  "missing at once; not marking them (a different or emptied Messages?)", file=sys.stderr)
+            return
+        if mirror:
+            self.removed += await self.db.delete_own(SOURCE_PREFIX, deleted + took_back)
+        else:
+            self.marked += await self.db.mark_gone(SOURCE_PREFIX, took_back, how="unsent")
+            self.marked += await self.db.mark_gone(SOURCE_PREFIX, deleted, how="deleted")
 
     def _list_chats(
         self, conn: sqlite3.Connection, chat_filter: str | None
@@ -262,6 +305,7 @@ async def sync_imessage(
     connector = IMessageConnector(db=db, embedder=embedder, db_path=db_path)
     try:
         count = await connector.sync(chat_name=chat_name)
-        return {"synced": count, "db_path": db_path}
+        return {"synced": count, "marked": connector.marked, "removed": connector.removed,
+                "db_path": db_path}
     except Exception as exc:
         return {"error": str(exc), "synced": 0, "db_path": db_path}

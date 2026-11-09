@@ -149,7 +149,7 @@ def _id(chat: str, stanza: str) -> str:
 
 async def test_keeps_words_and_skips_the_rest(tools, chatstorage):
     result = await _sync(tools, chatstorage)
-    assert result == {"synced": 9, "db_path": str(chatstorage)}
+    assert result == {"synced": 9, "marked": 0, "removed": 0, "db_path": str(chatstorage)}
     stored = await _stored(tools)
     stanzas = sorted(i.split(":")[-1] for i in stored)
     # No uncaptioned photo, sticker, status update, channel post or blank message.

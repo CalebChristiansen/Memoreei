@@ -33,6 +33,7 @@ class WhatsAppMessage:
     text: str            # the words: message text, caption, or a document's file name
     caption: str | None = None     # a document's caption; text holds its file name
     link_title: str | None = None  # a shared link's page title
+    expires_in: int | None = None  # a disappearing message's timer, in seconds
 
 
 class Reader(Protocol):
@@ -51,4 +52,16 @@ class Reader(Protocol):
 
     def messages(self, after: int, upto: int) -> Iterator[WhatsAppMessage]:
         """Messages worth keeping with after < position <= upto, oldest first."""
+        ...
+
+
+class SeesDeletions(Protocol):
+    """A reader that can also say what WhatsApp has since taken back (optional)."""
+
+    def present_ids(self) -> set[str]:
+        """Every message WhatsApp still holds, by its own id."""
+        ...
+
+    def revoked_ids(self) -> set[str]:
+        """Messages deleted for everyone, still shown as deleted."""
         ...

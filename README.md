@@ -393,24 +393,37 @@ and `MEMOREEI_PUBLIC_URL=https://memories.example.com` in `config.env` makes
 
 ## Sources
 
-| Source | How | Status |
-|---|---|---|
-| iMessage (macOS) | live, from `chat.db` | 🧪 Beta |
-| WhatsApp (WhatsApp for Mac, or an iPhone backup) | live, from `ChatStorage.sqlite` | 🧪 Beta |
-| Signal (Signal Desktop, macOS and Linux) | live, from Signal Desktop's database | 🧪 Beta |
-| Gmail (IMAP) | live | ✅ |
-| Discord (bot) | live | ✅ |
-| Telegram (bot) | live | ✅ |
-| Slack (bot) | live | ✅ |
-| Matrix | live | ✅ |
-| Mastodon | live | ✅ |
-| Discord Data Package | import | ✅ |
-| Facebook Messenger (data download) | import | ✅ |
-| Instagram DMs (data download) | import | ✅ |
-| Android SMS Backup & Restore (XML) | import | ✅ |
-| Any JSON, JSON-lines, CSV or TSV | import | ✅ |
-| Contacts (vCard, or macOS Contacts) | names for phone numbers | ✅ |
-| Another memoreei (your other computers) | it pushes to this one | 🧪 Beta |
+| Source | How | Sees what the app deletes | Status |
+|---|---|---|---|
+| iMessage (macOS) | live, from `chat.db` | unsends; deletions (on any of your devices) | 🧪 Beta |
+| WhatsApp (WhatsApp for Mac, or an iPhone backup) | live, from `ChatStorage.sqlite` | delete for everyone, delete for me, expiry | 🧪 Beta |
+| Signal (Signal Desktop, macOS and Linux) | live, from Signal Desktop's database | delete for everyone, delete for me, expiry | 🧪 Beta |
+| Gmail (IMAP) | live | no | ✅ |
+| Discord (bot) | live | no: only a live gateway hears deletions | ✅ |
+| Telegram (bot) | live | no: the Bot API never says | ✅ |
+| Slack (bot) | live | no: only the Events API says | ✅ |
+| Matrix | live | redactions | ✅ |
+| Mastodon | live | no | ✅ |
+| Discord Data Package | import | — | ✅ |
+| Facebook Messenger (data download) | import | — | ✅ |
+| Instagram DMs (data download) | import | — | ✅ |
+| Android SMS Backup & Restore (XML) | import | — | ✅ |
+| Any JSON, JSON-lines, CSV or TSV | import | — | ✅ |
+| Contacts (vCard, or macOS Contacts) | names for phone numbers | — | ✅ |
+| Another memoreei (your other computers) | it pushes to this one | passes on its marks and deletes | 🧪 Beta |
+
+**memoreei keeps disappearing messages, and what the app deletes, unless you tell it
+not to.** A message that's unsent, deleted (for everyone or just for you, on any of your
+devices) or reaches the end of its disappearing timer stays in memoreei, **marked**:
+results say "deleted in Signal on 2026-11-09", "unsent in iMessage", "expired in
+WhatsApp", and the Status page counts them. The mark goes with every copy sent to
+another memoreei. memoreei can only keep what it read before it went: a message unsent
+or expired between two syncs was never kept. To follow an app instead, so that what's
+deleted there is deleted here (and from every memoreei this one sends to), name it in
+`MEMOREEI_MIRROR_DELETIONS` in `config.env`: `signal,whatsapp`, or `all`. Turning it
+on also deletes what was already kept and marked from those apps, at their next sync.
+A memoreei only marks or mirrors the apps it reads itself; copies from another memoreei
+follow that one.
 
 **WhatsApp** is read from where WhatsApp for Mac keeps the chats it has synced from your
 phone: texts, photo and video captions, shared links and document names. Stickers, voice
@@ -424,8 +437,8 @@ by the system keyring (the Keychain on a Mac, GNOME Keyring or KWallet on Linux)
 connecting reads it once, when you choose *Connect* under Sources, and saves it; a Mac
 asks first. Texts, captions, links, group changes and calls are kept. Reactions and edits
 follow the message they belong to, with both wordings of an edit searchable, and a
-message deleted for everyone is marked rather than forgotten. Photos and files become
-labels, never copies. Disappearing messages are never stored.
+message deleted or expired is kept and marked (above). Photos and files become labels,
+never copies.
 
 **Another memoreei** can send its messages here, so a server (or Memoreei Cloud) can hold
 everything your laptops and desktops read, and answer while they're shut. On this one,
@@ -560,6 +573,7 @@ the current directory, which wins over `config.env` and the database.
 | `MEMOREEI_PUBLIC_URL` | — | the URL `key create` prints, e.g. behind a proxy |
 | `MEMOREEI_TLS_CERT`, `MEMOREEI_TLS_KEY` | — | serve HTTPS directly |
 | `MEMOREEI_ME` | your account's full name | names, numbers or addresses that mean you, comma-separated |
+| `MEMOREEI_MIRROR_DELETIONS` | — | apps whose deletions memoreei follows rather than keeping and marking: `signal`, `imessage`, `whatsapp`, `matrix`, comma-separated, or `all` ([why](#sources)) |
 
 Connector settings:
 

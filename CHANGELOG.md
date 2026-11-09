@@ -7,6 +7,28 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Disappearing messages are kept, and so is what the app deletes, marked.** Signal's
+  disappearing messages were never stored; now they are, and a message unsent, deleted
+  or expired in Signal, iMessage, WhatsApp or Matrix stays in memoreei with a mark that
+  results show ("deleted in Signal on 2026-11-09", "unsent in iMessage", "expired in
+  WhatsApp") and that goes with every copy sent to another memoreei. The Status page
+  counts them. A message marked by an earlier version (Signal's "deleted": true) reads as
+  deleted.
+
+### Added
+- `MEMOREEI_MIRROR_DELETIONS` (`signal,whatsapp`, or `all`) follows an app's deletions
+  instead: memoreei deletes its copy, and every memoreei it sends to does too. Off by
+  default; read at each sync, no restart needed.
+- iMessage: unsends (macOS 13+) and messages deleted on any of your devices. WhatsApp:
+  "delete for everyone", "delete for me", and expiry where the database records the timer.
+  Matrix: redactions.
+
+### Fixed
+- `memoreei sources invite`, the dashboard's invitations and `memoreei admin-url` name
+  the port the server really listens on, not `MEMOREEI_PORT`, when it was started with
+  `serve --port`.
+
 ## [0.5.0rc2] - 2026-11-09
 
 ### Fixed

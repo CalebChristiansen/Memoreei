@@ -54,6 +54,14 @@ class MatrixConnector:
         if not events:
             return {"synced": 0, "room_id": room_id}
 
+        # A redaction is Matrix's delete: memoreei keeps what it had and marks it, or
+        # deletes it too with MEMOREEI_MIRROR_DELETIONS naming matrix (memoreei.marks).
+        redacted = [str(e.get("redacts") or (e.get("content") or {}).get("redacts") or "")
+                    for e in events if e.get("type") == "m.room.redaction"]
+        redacted = [r for r in redacted if r]
+        events = [e for e in events if e.get("type") == "m.room.message"]
+        marked = removed = 0
+
         items = [self._to_memory_item(event, room_id) for event in events]
         # Filter out events with empty content (e.g. redacted)
         items = [item for item in items if item.content.strip()]
@@ -65,10 +73,20 @@ class MatrixConnector:
                 item.embedding = emb
             await self.db.bulk_insert(items)
 
+        if redacted:
+            from memoreei import marks
+
+            # Redacted before it was stored: its emptied event was skipped above.
+            ids = redacted  # the event ids; mark_gone finds them under any room
+            if marks.mirrors(SOURCE_PREFIX):
+                removed = await self.db.delete_own(SOURCE_PREFIX, ids)
+            else:
+                marked = await self.db.mark_gone(SOURCE_PREFIX, ids, how="deleted")
+
         if next_token:
             await self.db.set_matrix_checkpoint(room_id, next_token)
 
-        return {"synced": len(items), "room_id": room_id}
+        return {"synced": len(items), "marked": marked, "removed": removed, "room_id": room_id}
 
     async def _fetch_messages(
         self, room_id: str, from_token: str | None = None
@@ -92,7 +110,7 @@ class MatrixConnector:
                     events = [
                         e
                         for e in data.get("chunk", [])
-                        if e.get("type") == "m.room.message"
+                        if e.get("type") in ("m.room.message", "m.room.redaction")
                     ]
                     # When paginating backwards (initial fetch), reverse so oldest is first
                     if params["dir"] == "b":
