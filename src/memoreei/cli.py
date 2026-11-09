@@ -813,6 +813,11 @@ def cloud_status() -> None:
     if cert:
         typer.echo(f"Certificate: valid until {_fmt_time(cert['not_after'])}, renews from {_fmt_time(cert['renews_at'])}")
     status = state.status()
+    from memoreei.cloud import standing
+
+    line = standing.describe(state.billing(), ((status or {}).get("tunnel") or {}).get("state"))
+    if line is not None:
+        typer.echo(f"Billing: {line.title}. Manage it at {standing.manage_url(device.auth_url)}")
     if not status or time.time() - status.get("written_at", 0) > 180:
         typer.echo("Tunnel: the memoreei service doesn't seem to be running here, so this computer is "
                    "offline. Set it up with: memoreei service install")

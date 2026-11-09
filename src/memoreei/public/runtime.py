@@ -7,7 +7,8 @@ Three ways it can be:
   cloud    <home>/cloud has an enrollment and a certificate: the listener runs on
            a loopback port with that certificate, the tunnel to the relay feeds it,
            and the certificate is renewed here. memoreei signs chatbots in itself
-           at https://<hostname> (memoreei.oauth)
+           at https://<hostname> (memoreei.oauth). How the account stands is
+           asked here too (memoreei.cloud.standing)
   custom   MEMOREEI_PUBLIC_PORT is set (and no enrollment): the listener runs where
            it's told, for the expert's own tunnel or proxy. With
            MEMOREEI_PUBLIC_MCP_URL (https) memoreei signs chatbots in at that
@@ -38,6 +39,8 @@ log = logging.getLogger("memoreei.public")
 TICK = 5
 RETRY_START = 60
 RENEW_RETRY = (3600, 12 * 3600)
+STANDING_EVERY = 86400       # how the account stands: once a day while the tunnel runs
+STANDING_RETRY = 3600
 LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 
@@ -106,6 +109,8 @@ class PublicRuntime:
         self.renewal: dict[str, Any] = {}
         self._saved_at = float("-inf")
         self._poke = asyncio.Event()
+        self._ask_standing = asyncio.Event()
+        self._tunnel_state: str | None = None
 
     # ── what the dashboard and the CLI see ──────────────────────────────────
 
@@ -193,10 +198,12 @@ class PublicRuntime:
             from memoreei.cloud.tunnel import Tunnel
 
             self._cert_sig = self._cert_signature()
+            self._tunnel_state = None
             self.tunnel = Tunnel(p.tunnel_url or "", p.token or "", self.listener.port,
-                                 on_status=lambda state, message: self._save_status())
+                                 on_status=self._tunnel_status)
             self._tasks = [asyncio.create_task(self.tunnel.run(), name="cloud-tunnel"),
-                           asyncio.create_task(self._renew(), name="cloud-renew")]
+                           asyncio.create_task(self._renew(), name="cloud-renew"),
+                           asyncio.create_task(self._standing(), name="cloud-standing")]
 
     async def _stop(self) -> None:
         for t in self._tasks:
@@ -263,6 +270,7 @@ class PublicRuntime:
                 not_after = await certs.obtain(self.state, Service(device.auth_url), device.hostname, token)
                 log.info("certificate renewed, valid until %s", time.strftime("%Y-%m-%d", time.gmtime(not_after)))
                 self.renewal, retry = {}, RENEW_RETRY[0]
+                self._ask_standing.set()
                 self._maybe_reload_certificate()
             except CloudError as e:
                 wait = max(getattr(e, "retry_after", None) or 0, retry)
@@ -271,6 +279,33 @@ class PublicRuntime:
                 self.renewal = {"last_error": str(e), "next_attempt_at": next_try}
                 self._save_status()
                 retry = min(retry * 2, RENEW_RETRY[1])
+
+    def _tunnel_status(self, state: str, message: str) -> None:
+        # The relay cutting this computer off for billing, or letting it back: ask why.
+        before, self._tunnel_state = self._tunnel_state, state
+        if (state == "unpaid") != (before == "unpaid") and before is not None:
+            self._ask_standing.set()
+        self._save_status()
+
+    async def _standing(self) -> None:
+        """Ask the service how the account stands: now, once a day, and when told to."""
+        from memoreei.cloud import standing
+        from memoreei.cloud.service import CloudError, Service
+
+        while True:
+            self._ask_standing.clear()
+            wait = STANDING_EVERY
+            device, token = self.state.device(), self.state.token()
+            if device is None or token is None:
+                return
+            try:
+                standing.remember(self.state, await Service(device.auth_url).whoami(token))
+                self._save_status()
+            except CloudError as e:
+                log.info("couldn't ask how the account stands: %s", e)
+                wait = STANDING_RETRY
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._ask_standing.wait(), wait)
 
     def _save_status(self) -> None:
         if (self.current is not None and self.current.mode == "cloud") or self.state.device() is not None:

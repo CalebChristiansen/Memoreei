@@ -8,6 +8,7 @@ All of it is in ``<home>/cloud/`` (mode 700):
   key.pem       the TLS private key (mode 600), made here and never sent anywhere
   cert.pem      the certificate chain the service signed for the hostname
   status.json   what the running server last saw, for `memoreei cloud status`
+  billing.json  how the account stands, as the service last said (memoreei.cloud.standing)
 
 device.json is written once enrollment has worked; the server starts the tunnel
 when device.json and cert.pem are both there, and notices either appearing or
@@ -87,6 +88,10 @@ class CloudState:
     def status_path(self) -> Path:
         return self.root / "status.json"
 
+    @property
+    def billing_path(self) -> Path:
+        return self.root / "billing.json"
+
     def device(self) -> Device | None:
         try:
             raw = json.loads(self.device_path.read_text())
@@ -128,6 +133,19 @@ class CloudState:
     def status(self) -> dict[str, Any] | None:
         try:
             return json.loads(self.status_path.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def save_billing(self, billing: dict[str, Any]) -> None:
+        try:
+            _write(self.billing_path, json.dumps({**billing, "fetched_at": int(time.time())}) + "\n", 0o600)
+        except OSError:
+            pass
+
+    def billing(self) -> dict[str, Any] | None:
+        try:
+            raw = json.loads(self.billing_path.read_text())
+            return raw if isinstance(raw, dict) else None
         except (OSError, ValueError):
             return None
 

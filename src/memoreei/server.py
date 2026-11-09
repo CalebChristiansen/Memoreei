@@ -616,7 +616,27 @@ class _Server(FastMCP):  # type: ignore[type-arg]
 
     The SDK drops arguments it doesn't know without a word, so a small model's
     `person: "Jane"` became an unfiltered search that looked like an answer.
+
+    Its instructions are read afresh for each session (each request, over HTTP), so
+    they can say that Memoreei Cloud has cut this computer off for billing
+    (memoreei.cloud.standing) while that's true, and only then.
     """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        low = self._mcp_server
+        base = low.create_initialization_options
+
+        def create_initialization_options(*a: Any, **kw: Any) -> Any:
+            options = base(*a, **kw)
+            from memoreei.cloud.standing import mcp_note
+
+            note = mcp_note()
+            if note and options.instructions is not None:
+                options = options.model_copy(update={"instructions": options.instructions + note})
+            return options
+
+        low.create_initialization_options = create_initialization_options  # type: ignore[method-assign]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         tool = self._tool_manager.get_tool(name)

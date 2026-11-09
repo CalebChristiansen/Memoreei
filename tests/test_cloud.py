@@ -62,6 +62,9 @@ class FakeService:
         self.csrs: list[x509.CertificateSigningRequest] = []
         self.ca = ec.generate_private_key(ec.SECP256R1())
         self.names: list[str] = []
+        self.billing: dict | None = {"standing": "active", "until": int(time.time()) + 300 * 86400,
+                                     "paywall": True}
+        self.asked = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -82,7 +85,11 @@ class FakeService:
         if auth != "Bearer mdt_secret" or "mdt_secret" in self.revoked:
             return httpx.Response(401, json={"error": "unauthorized"})
         if path == "/v1/device":
-            return httpx.Response(200, json={"device_id": "d1", "hostname": HOST})
+            self.asked += 1
+            body = {"device_id": "d1", "hostname": HOST}
+            if self.billing is not None:  # None: a service from before billing
+                body["billing"] = self.billing
+            return httpx.Response(200, json=body)
         if path == "/v1/device/certificate":
             csr = x509.load_pem_x509_csr(json.loads(request.content)["csr"].encode())
             self.csrs.append(csr)
@@ -396,3 +403,93 @@ def test_the_relays_peer_becomes_an_address():
     assert address_of("2001:db8::1") == "2001:db8::1"
     assert address_of("203.0.113.7") == "203.0.113.7"
     assert address_of(None) == "relay" and address_of("") == "relay"
+
+
+# ── how the account stands (memoreei.cloud.standing) ─────────────────────────
+
+from memoreei.cloud import standing  # noqa: E402
+from memoreei.cloud.standing import describe  # noqa: E402
+
+NOW = 1_800_000_000
+DAY = 86400
+
+
+async def test_connect_keeps_how_the_account_stands(fake):
+    fake.billing = {"standing": "trialing", "until": NOW + 9 * DAY, "paywall": True, "trial_days_left": 9}
+    await connect("laptop", service_for=fake.factory)
+    assert CloudState().billing()["standing"] == "trialing"
+
+
+async def test_a_service_from_before_billing_leaves_nothing_to_show(fake):
+    fake.billing = None
+    await connect("laptop", service_for=fake.factory)
+    assert CloudState().ready() and CloudState().billing() is None
+
+
+def test_the_billing_link_is_the_account_site_beside_the_service():
+    assert standing.manage_url("https://auth.dev.memoreei.com") == "https://account.dev.memoreei.com/billing"
+    assert standing.manage_url("https://auth.memoreei.com") == "https://account.memoreei.com/billing"
+
+
+def test_the_card_says_each_standing_in_words():
+    def say(state, until=None, tunnel=None, paywall=True):
+        line = describe({"standing": state, "until": until, "paywall": paywall}, tunnel, now=NOW)
+        return line and (line.title, line.tone)
+
+    assert say("trialing", NOW + 9 * DAY) == ("Trial: 9 days left", "")
+    assert say("trialing", NOW + 1) == ("Trial: 1 day left", "")          # its last day
+    assert say("past_due", NOW + 3 * DAY) == ("Payment failed: update your card", "warn")
+    assert say("disconnected", NOW + 10 * DAY) == ("Disconnected: payment overdue", "bad")
+    assert say("ending", NOW + 30 * DAY)[0].startswith("Cancelled: works until")
+    assert say("cancelled") == ("Disconnected: no subscription", "bad")
+    assert say("active", NOW + 300 * DAY) is None                         # paid up: nothing to say
+    assert say("cancelled", paywall=False) is None                        # nothing is cut off
+    # The relay's word beats a stored answer up to a day old, both ways.
+    assert say("active", NOW + 300 * DAY, tunnel="unpaid") == ("Disconnected: payment overdue", "bad")
+    assert say("disconnected", NOW + 10 * DAY, tunnel="online") is None
+    assert describe(None, None, now=NOW) is None
+
+
+async def test_the_relay_cutting_off_for_payment_keeps_trying(relay):
+    relay.close_code = 4402
+    tunnel = Tunnel(relay.url, "mdt_secret", 9)
+    task = asyncio.create_task(tunnel.run())
+    try:
+        for _ in range(250):
+            if tunnel.state == "unpaid":
+                break
+            await asyncio.sleep(0.02)
+        assert tunnel.state == "unpaid" and "paid up" in tunnel.summary()["message"]
+        assert not task.done()                     # unlike 4401/4403, it isn't the end
+    finally:
+        task.cancel()
+
+
+def test_the_runtime_asks_again_when_the_relay_cuts_off_or_lets_back():
+    from memoreei.public.runtime import PublicRuntime
+
+    rt = PublicRuntime(None, None)
+    seen = []
+    for state in ("connecting", "online", "online", "unpaid", "unpaid", "online", "offline"):
+        rt._ask_standing.clear()
+        rt._tunnel_status(state, "")
+        seen.append(rt._ask_standing.is_set())
+    assert seen == [False, False, False, True, False, True, False]
+
+
+async def test_a_lapsed_account_is_named_in_the_mcp_instructions(fake):
+    from memoreei.server import build_local_server, build_network_server
+
+    await connect("laptop", service_for=fake.factory)
+
+    def instructions(build):
+        return build()._mcp_server.create_initialization_options().instructions
+
+    assert "Memoreei Cloud has disconnected" not in instructions(build_local_server)
+    CloudState().save_billing({"standing": "disconnected", "until": NOW, "paywall": True})
+    for build in (build_local_server, build_network_server):
+        text = instructions(build)
+        assert text.startswith("Memoreei searches") and "Memoreei Cloud has disconnected this computer" in text
+        assert "https://account.example.test/billing" in text
+    CloudState().save_status({"tunnel": {"state": "online"}})          # the relay let it back
+    assert "Memoreei Cloud has disconnected" not in instructions(build_local_server)

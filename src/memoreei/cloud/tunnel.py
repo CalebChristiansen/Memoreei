@@ -13,7 +13,9 @@ peer the relay named, for the gate's rate limits and the access log.
 
 The control socket reconnects with jittered backoff, up to a minute. A close
 with 4401 or 4403 means this computer was removed from the account, and the
-tunnel stops for good; 4409 means another copy of this enrollment came online.
+tunnel stops for good; 4409 means another copy of this enrollment came online;
+4402 means the account isn't paid up, and it keeps trying, so paying reconnects
+it within a minute.
 Failures to connect are sorted into what a person can act on: no internet, a
 network blocking the relay, or a network intercepting encrypted connections.
 """
@@ -33,6 +35,8 @@ log = logging.getLogger("memoreei.cloud")
 
 BACKOFF_MAX = 60
 STABLE_AFTER = 60
+UNPAID = ("Memoreei Cloud disconnected this computer: the account isn't paid up. "
+          "Paying reconnects it within a minute.")
 
 
 class Revoked(Exception):
@@ -149,6 +153,9 @@ class Tunnel:
             code = ws.close_code
         if code in (4401, 4403):
             raise Revoked("This computer was removed from your Memoreei Cloud account.")
+        if code == 4402:
+            self._set("unpaid", UNPAID)
+            return
         if code == 4409:
             self._set("replaced", "Another copy of this computer's enrollment came online, "
                                   "so this one stepped aside.")

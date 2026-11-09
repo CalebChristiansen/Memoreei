@@ -18,7 +18,7 @@ import sys
 import time
 from typing import Any, Awaitable, Callable
 
-from memoreei.cloud import certs
+from memoreei.cloud import certs, standing
 from memoreei.cloud.service import CloudError, DeviceCode, Service
 from memoreei.cloud.state import CloudState, Device, tunnel_url_for
 from memoreei.config import get_config
@@ -85,6 +85,10 @@ async def connect(name: str | None = None, step: Step | None = None, state: Clou
     if not state.has_certificate():
         await _call(step, "certificate", device.hostname)
         await certs.obtain(state, service_for(device.auth_url), device.hostname, token)
+    try:  # how the account stands, for the card; the running server asks again soon
+        standing.remember(state, await service_for(device.auth_url).whoami(token))
+    except CloudError:
+        pass
     return device
 
 
