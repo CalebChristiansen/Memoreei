@@ -78,7 +78,7 @@
   </dl>
   {% include "_awake.html" %}
   <p class="caption">While this computer sleeps or is offline, chatbots can't reach it, and they'll say so.
-  Thanks for supporting memoreei.{% if not billing %} <a href="{{ manage_url }}" rel="noreferrer">Manage billing</a>{% endif %}</p>
+  {% if not billing or not billing.tone %}Thanks for supporting memoreei.{% endif %}{% if not billing %} <a href="{{ manage_url }}" rel="noreferrer">Manage billing</a>{% endif %}</p>
 </section>
 
 {% endif %}

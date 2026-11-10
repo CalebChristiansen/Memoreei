@@ -25,6 +25,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Matrix: redactions.
 
 ### Fixed
+- The Connections card no longer thanks you for supporting memoreei while it says the
+  payment failed or the computer is disconnected for an overdue payment.
 - `memoreei sources invite`, the dashboard's invitations and `memoreei admin-url` name
   the port the server really listens on, not `MEMOREEI_PORT`, when it was started with
   `serve --port`.
