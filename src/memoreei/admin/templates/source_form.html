@@ -44,7 +44,7 @@
   {% else %}
   <p>Signal Desktop locks its messages with a key it keeps in {{ keyring }}. Connecting reads that key once, and Memoreei saves it so it doesn't need to ask again.</p>
   {% if keyring == "the Keychain" %}<p class="hint">macOS will ask whether <b>Memoreei Server</b> may use “Signal Safe Storage”. Choose <b>Allow</b>; you may need your Mac's login password.</p>{% endif %}
-  <p class="hint">Disappearing messages are never kept. Photos and files aren't either: they're noted as “[Photo]”, “[Document] name” and so on, with any caption.</p>
+  <p class="hint">Disappearing messages are kept, marked “expired in Signal” when their time is up (<code>MEMOREEI_MIRROR_DELETIONS</code> in the config file turns that off). Photos and files aren't kept: they're noted as “[Photo]”, “[Document] name” and so on, with any caption.</p>
   {% endif %}
   <div class="row">
     <button>{{ "Connect again" if configured else "Connect" }}</button>
