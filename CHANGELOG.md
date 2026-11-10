@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0rc3] - 2026-11-09
+
 ### Changed
 - **Disappearing messages are kept, and so is what the app deletes, marked.** Signal's
   disappearing messages were never stored; now they are, and a message unsent, deleted
@@ -546,7 +548,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc2...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc3...HEAD
+[0.5.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc2...v0.5.0rc3
 [0.5.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...v0.5.0rc2
 [0.5.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...v0.5.0rc1
 [0.4.7]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.6...v0.4.7
