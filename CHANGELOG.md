@@ -7,6 +7,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0rc4] - 2026-11-21
+
 ### Added
 - **Sign in to the dashboard by SSO.** An OpenID Connect provider (Okta, Entra, Google,
   Authentik, WorkOS and the like) in place of the password and 2FA: one or the other.
@@ -570,7 +572,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc3...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc4...HEAD
+[0.5.0rc4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc3...v0.5.0rc4
 [0.5.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc2...v0.5.0rc3
 [0.5.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...v0.5.0rc2
 [0.5.0rc1]: https://github.com/CalebChristiansen/Memoreei/compare/v0.4.7...v0.5.0rc1
