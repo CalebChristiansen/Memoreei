@@ -242,6 +242,7 @@ def test_the_offer_names_the_trial_and_no_price(server, nobody_called):
 
 @pytest.mark.parametrize("billing,says,cls,thanks", [
     ({"standing": "trialing", "until": int(time.time()) + 9 * 86400 - 60}, "Trial: 9 days left", "billing ", True),
+    ({"standing": "comped", "until": None}, "Beta: on us", "billing ", True),
     ({"standing": "past_due", "until": int(time.time()) + 3 * 86400}, "Payment failed: update your card", "billing warn", False),
     ({"standing": "disconnected", "until": int(time.time()) + 9 * 86400}, "Disconnected: payment overdue", "billing bad", False),
 ])

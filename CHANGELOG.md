@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- The Connections card says **"Beta: on us"** for a Memoreei Cloud account that's free
+  during the beta (by invitation), with the date it ends if it has one, in place of the
+  trial line. `memoreei cloud status` says it too.
+
 ## [0.5.0rc4] - 2026-11-21
 
 ### Added
