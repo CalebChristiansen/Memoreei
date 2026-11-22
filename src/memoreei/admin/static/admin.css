@@ -137,6 +137,10 @@ dl.facts form { margin: 0; display: inline; }
 .bubble pre { margin: 8px 0 0; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--deep-teal);
               color: var(--cream); white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble .button { background: var(--deep-teal); color: var(--cream); flex-shrink: 0; }
+/* The bubble is amber in both themes, so its quiet buttons and captions take its own ink,
+   not the page's (dark mode's amber outline and muted grey vanish on it). */
+.bubble button.quiet, .bubble .button.quiet { background: transparent; color: var(--deep-teal); border-color: var(--deep-teal); }
+.bubble .caption { color: inherit; opacity: .85; }
 
 /* Buttons: primary teal, quiet outline, danger outline. */
 button, .button { font: inherit; font-size: 15px; font-weight: 600; min-height: 44px; padding: 0 20px;

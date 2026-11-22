@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The dashboard's amber bubbles are readable in dark mode.** Their quiet buttons (the
+  password offer's **Skip**) were amber on amber and their captions grey on amber; both
+  now take the bubble's dark ink, in either theme.
+
 ## [0.5.0rc5] - 2026-11-22
 
 ### Added

@@ -279,6 +279,19 @@ def test_a_new_keys_setup_names_where_the_server_really_listens(server, monkeypa
     assert "http://192.0.2.10:3889/mcp" in r.text and "localhost:3889" not in r.text
 
 
+def test_the_amber_bubble_keeps_its_own_ink_for_quiet_buttons_and_captions():
+    # The bubble is amber in both themes; dark mode's amber quiet buttons and grey
+    # captions would vanish on it, so the bubble's rules must outrank them.
+    from pathlib import Path
+
+    import memoreei.admin as admin_pkg
+
+    css = (Path(admin_pkg.__file__).parent / "static" / "admin.css").read_text()
+    assert re.search(r"\.bubble button\.quiet, \.bubble \.button\.quiet \{[^}]*color: var\(--deep-teal\);"
+                     r"[^}]*border-color: var\(--deep-teal\);", css)
+    assert re.search(r"\.bubble \.caption \{[^}]*color: inherit;", css)
+
+
 async def _verify(db_path: str, key: str) -> str | None:
     async with Database(db_path=db_path) as db:
         return await KeyStore(db).verify(key)
