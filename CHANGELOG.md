@@ -7,10 +7,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-- The Connections card says **"On the house"** for a Memoreei Cloud account that's free
-  by invitation, in place of the trial line. `memoreei cloud status` says it too.
-
 ## [0.5.0rc4] - 2026-11-21
 
 ### Added

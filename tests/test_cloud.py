@@ -441,9 +441,6 @@ def test_the_card_says_each_standing_in_words():
     assert say("past_due", NOW + 3 * DAY) == ("Payment failed: update your card", "warn")
     assert say("disconnected", NOW + 10 * DAY) == ("Disconnected: payment overdue", "bad")
     assert say("ending", NOW + 30 * DAY)[0].startswith("Cancelled: works until")
-    assert say("comped") == ("On the house", "")
-    assert describe({"standing": "comped", "until": None}, now=NOW).caption is None
-    assert say("comped", tunnel="unpaid") == ("Disconnected: payment overdue", "bad")   # ended since
     assert say("cancelled") == ("Disconnected: no subscription", "bad")
     assert say("active", NOW + 300 * DAY) is None                         # paid up: nothing to say
     assert say("cancelled", paywall=False) is None                        # nothing is cut off
