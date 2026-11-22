@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0rc5] - 2026-11-22
+
+### Added
+- **The `LICENSE` file.** memoreei has always been MIT, as `pyproject.toml` and the README
+  said; the file itself was missing.
+
 ### Fixed
 - **A new key's setup names an address the server really answers on.** A server
   listening on loopback only (`--host 127.0.0.1`) gave `http://<LAN address>:3679/mcp`,
@@ -588,7 +594,8 @@ published: its release tests failed on a fresh install, against mcp 2.x.)
 - FastEmbed offline embeddings (ONNX)
 - Movie Ring and Contact Dossier example apps
 
-[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc4...HEAD
+[Unreleased]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc5...HEAD
+[0.5.0rc5]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc4...v0.5.0rc5
 [0.5.0rc4]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc3...v0.5.0rc4
 [0.5.0rc3]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc2...v0.5.0rc3
 [0.5.0rc2]: https://github.com/CalebChristiansen/Memoreei/compare/v0.5.0rc1...v0.5.0rc2
