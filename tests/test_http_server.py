@@ -153,6 +153,28 @@ def test_server_urls_one_per_address(monkeypatch):
     assert "use whichever address the client can reach" in text
 
 
+def test_server_urls_name_only_where_it_listens(monkeypatch):
+    monkeypatch.setattr("memoreei.auth.local_ipv4_addresses", lambda: ["192.0.2.10"])
+    for host in ("127.0.0.1", "localhost", "::1"):
+        assert server_urls(3679, None, tls=False, host=host) == ["http://localhost:3679/mcp"]
+    assert server_urls(3889, None, tls=True, host="198.51.100.7") == ["https://198.51.100.7:3889/mcp"]
+    assert server_urls(3679, None, tls=False, host="fd7a:115c::1") == ["http://[fd7a:115c::1]:3679/mcp"]
+    for host in ("0.0.0.0", "::", ""):
+        assert server_urls(3679, None, tls=False, host=host) == ["http://192.0.2.10:3679/mcp"]
+    # A proxy's address still wins.
+    assert server_urls(3679, "https://memories.example.com", tls=False, host="127.0.0.1") == [
+        "https://memories.example.com/mcp"]
+    text = client_config_text("mem_x", server_urls(3679, None, tls=False, host="127.0.0.1"), from_public_url=False)
+    assert "this computer only" in text and "whichever address" not in text
+
+
+def test_key_create_on_a_loopback_only_server(monkeypatch):
+    monkeypatch.setattr("memoreei.auth.local_ipv4_addresses", lambda: ["192.0.2.10"])
+    monkeypatch.setenv("MEMOREEI_HOST", "127.0.0.1")
+    result = runner.invoke(app, ["key", "create", "laptop"])
+    assert "http://localhost:3679/mcp" in result.output and "192.0.2.10" not in result.output
+
+
 # ── serve --http ─────────────────────────────────────────────────────────────
 
 

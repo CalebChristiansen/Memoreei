@@ -171,11 +171,24 @@ def local_ipv4_addresses() -> list[str]:
     return result
 
 
-def server_urls(port: int, public_url: str | None, tls: bool) -> list[str]:
-    """The URL(s) a client could use. MEMOREEI_PUBLIC_URL wins when set."""
+LOOPBACK_HOSTS = ("127.0.0.1", "::1", "localhost")
+WILDCARD_HOSTS = ("", "0.0.0.0", "::")
+
+
+def server_urls(port: int, public_url: str | None, tls: bool, host: str = "0.0.0.0") -> list[str]:
+    """The URL(s) a client could use, for a server listening on ``host``.
+
+    MEMOREEI_PUBLIC_URL wins when set. Otherwise only addresses it really answers on:
+    localhost when it listens on loopback only, the one address it's bound to, or every
+    LAN address when it listens on all of them.
+    """
     if public_url:
         return [public_url if public_url.endswith("/mcp") else public_url + "/mcp"]
     scheme = "https" if tls else "http"
+    if host in LOOPBACK_HOSTS or host.startswith("127."):
+        return [f"{scheme}://localhost:{port}/mcp"]
+    if host not in WILDCARD_HOSTS:
+        return [f"{scheme}://{f'[{host}]' if ':' in host else host}:{port}/mcp"]
     ips = local_ipv4_addresses() or ["<server-ip>"]
     return [f"{scheme}://{ip}:{port}/mcp" for ip in ips]
 
@@ -186,6 +199,8 @@ def client_config_text(key: str, urls: list[str], from_public_url: bool) -> str:
     lines: list[str] = []
     if from_public_url:
         lines += ["  Server URL:", f"    {url}", ""]
+    elif len(urls) == 1 and "://localhost:" in url:
+        lines += ["  Server URL (this computer only):", f"    {url}", ""]
     else:
         lines += ["  Server URL (use whichever address the client can reach):"]
         lines += [f"    {u}" for u in urls]

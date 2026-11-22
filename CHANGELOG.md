@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A new key's setup names an address the server really answers on.** A server
+  listening on loopback only (`--host 127.0.0.1`) gave `http://<LAN address>:3679/mcp`,
+  which nothing could reach; it now gives `http://localhost:3679/mcp`. A server bound to
+  one address names that address, and only one listening on all of them lists the LAN
+  addresses. The same in the dashboard, `memoreei key create` and `memoreei service
+  install`; the first two also follow a server started with `--port`.
+- **Claude Desktop isn't an app on this computer**, as far as memoreei is concerned: its
+  custom connectors are reached from Anthropic's servers, so it needs an address, as
+  Claude.ai does. Connections no longer lists it beside Claude Code for a key, and says
+  where it belongs.
+- **Claude.ai's and ChatGPT's steps** on the Memoreei Cloud card follow their current
+  menus: Plugins → Add → Add custom connector, and Plugins → Add → Add custom MCP server.
+- **The README's forwarded-port example** forwards external 443 and leaves the port out
+  of the address. Claude.ai doesn't connect to a URL that names another port.
+
 ## [0.5.0rc4] - 2026-11-21
 
 ### Added

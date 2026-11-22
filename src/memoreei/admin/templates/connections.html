@@ -68,7 +68,8 @@
     <pre id="cloud-url" class="key">{{ device.mcp_url }}</pre>
     <button type="button" data-copy="cloud-url">Copy</button>
   </div>
-  <p class="caption">In Claude.ai: Customize → Connectors → add a custom connector. In ChatGPT: Settings → Plugins.
+  <p class="caption">In Claude.ai: Plugins → Add → Add custom connector; Claude Desktop and the Claude app then have it too.
+  In ChatGPT: Plugins → Add → Add custom MCP server.
   It asks this computer for permission, with a code: approve it here. Your messages stay on this computer.</p>
   <dl class="facts">
     <dt>Name</dt><dd>{{ device.name }}</dd>
@@ -92,7 +93,7 @@
 <details class="key-row">
   <summary>
     <span><b>An app on this computer</b>
-      <span class="caption">Claude Code, Claude Desktop, a script. One key each; no relay needed.</span></span>
+      <span class="caption">Claude Code, Hermes, a script. One key each; no relay needed.</span></span>
     <span class="button quiet">Make a key</span>
   </summary>
   <form class="new-key" hx-post="/admin/keys" hx-target="#created" hx-swap="innerHTML">

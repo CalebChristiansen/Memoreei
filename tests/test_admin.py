@@ -261,6 +261,24 @@ def test_create_key_shows_it_once_with_client_config(server):
     assert key not in client.get("/admin/keys").text
 
 
+def test_a_new_keys_setup_names_where_the_server_really_listens(server, monkeypatch):
+    import json
+    import os
+
+    from memoreei.config import serving_path
+
+    monkeypatch.setattr("memoreei.auth.local_ipv4_addresses", lambda: ["192.0.2.10"])
+    client = signed_in(server)
+    # Loopback only: the LAN address would refuse every client.
+    serving_path().write_text(json.dumps({"pid": os.getpid(), "host": "127.0.0.1", "port": 3889, "tls": False}))
+    r = client.post("/admin/keys", data={"name": "desktop"}, headers=ORIGIN)
+    assert "http://localhost:3889/mcp" in r.text and "192.0.2.10" not in r.text
+    # Every address: the LAN one, on the port it really runs on.
+    serving_path().write_text(json.dumps({"pid": os.getpid(), "host": "0.0.0.0", "port": 3889, "tls": False}))
+    r = client.post("/admin/keys", data={"name": "phone"}, headers=ORIGIN)
+    assert "http://192.0.2.10:3889/mcp" in r.text and "localhost:3889" not in r.text
+
+
 async def _verify(db_path: str, key: str) -> str | None:
     async with Database(db_path=db_path) as db:
         return await KeyStore(db).verify(key)

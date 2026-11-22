@@ -232,6 +232,27 @@ def test_some_connected_shows_the_ways_in_their_own_card(server):
     assert '<td class="actions">' in r.text and 'class="table-scroll"' in r.text
 
 
+def test_claude_desktop_goes_with_the_web_chatbots_not_the_keys(server):
+    text = signed_in(server).get("/admin/connections").text
+    row = text.split('class="key-row"', 1)[1].split("</summary>", 1)[0]
+    assert "Claude Code" in row and "Claude Desktop" not in row
+    # Its custom connectors are reached from Anthropic's servers, so it needs an address.
+    reach = text.split('class="reach"', 1)[1].split('class="paths"', 1)[0]
+    assert "Claude Desktop" in reach
+
+
+def test_the_card_says_where_to_add_the_address(server, fake):
+    import asyncio
+
+    from memoreei.cloud.connect import connect
+
+    asyncio.run(connect(None))
+    text = signed_in(server).get("/admin/connections").text
+    assert "In Claude.ai: Plugins → Add → Add custom connector" in text
+    assert "In ChatGPT: Plugins → Add → Add custom MCP server" in text
+    assert "Customize" not in text and "Settings → Plugins" not in text
+
+
 # ── how the account stands ───────────────────────────────────────────────────
 
 

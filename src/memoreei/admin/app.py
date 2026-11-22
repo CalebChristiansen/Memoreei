@@ -406,8 +406,10 @@ def _address() -> str:
     """Where clients reach this server, as a new key's setup tells them."""
     from memoreei.auth import server_urls
 
-    cfg = get_config()
-    url = server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert))[0]
+    from memoreei.config import listening
+
+    host, port, tls = listening()
+    url = server_urls(port, get_config().public_url, tls=tls, host=host)[0]
     return url.split("://", 1)[-1].removesuffix("/mcp")
 
 
@@ -655,8 +657,11 @@ async def key_create(request: Request) -> Response:
     listed = {"connections": await connections(), "reachable": _reachable()}
     if error:
         return _page(request, "_key_created.html", error=error, **listed)
+    from memoreei.config import listening
+
     cfg = get_config()
-    urls = server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert))
+    host, port, tls = listening()
+    urls = server_urls(port, cfg.public_url, tls=tls, host=host)
     return _page(
         request,
         "_key_created.html",

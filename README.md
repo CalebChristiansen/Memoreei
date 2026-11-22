@@ -284,14 +284,15 @@ it, the public listener takes `mem_` keys only. To serve TLS from memoreei itsel
 `MEMOREEI_PUBLIC_TLS_CERT` and `MEMOREEI_PUBLIC_TLS_KEY`. The public listener has one
 identity at a time, so it's this or Memoreei Cloud.
 
-**Or forward a port.** With no tunnel at all, forward a port on your router to this
-computer and let memoreei serve TLS itself, with a certificate for a hostname that points
-at your home address:
+**Or forward a port.** With no tunnel at all, forward port 443 on your router to this
+computer's 3680 and let memoreei serve TLS itself, with a certificate for a hostname that
+points at your home address. It has to be 443 on the outside: Claude.ai won't connect to
+an address with any other port in it.
 
 ```bash
 MEMOREEI_PUBLIC_HOST=0.0.0.0                               # listen beyond this computer
-MEMOREEI_PUBLIC_PORT=3680                                  # the port your router forwards here
-MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com:3680/mcp
+MEMOREEI_PUBLIC_PORT=3680                                  # where your router sends external 443
+MEMOREEI_PUBLIC_MCP_URL=https://memories.example.com/mcp   # no port: it's 443
 MEMOREEI_PUBLIC_TLS_CERT=/path/to/fullchain.pem
 MEMOREEI_PUBLIC_TLS_KEY=/path/to/privkey.pem
 ```

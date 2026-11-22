@@ -26,7 +26,7 @@ def print_installed(port: int) -> None:
 
     cfg = get_config()
     typer.echo("\n  ✓ Memoreei service installed and started\n")
-    for url in server_urls(port, cfg.public_url, tls=bool(cfg.tls_cert)):
+    for url in server_urls(port, cfg.public_url, tls=bool(cfg.tls_cert), host=cfg.host):
         typer.echo(f"  Endpoint:  {url}")
     typer.echo("  Clients:   memoreei key create <name>  (one key per client)")
     typer.echo("  Logs:      memoreei service logs")

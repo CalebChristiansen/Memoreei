@@ -679,8 +679,11 @@ def _create_key(name: str) -> None:
         typer.echo(f"A key named '{name}' already exists. Pick another name, or revoke it first.")
         raise typer.Exit(1)
 
+    from memoreei.config import listening
+
     cfg = get_config()
-    urls = server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert))
+    host, port, tls = listening()
+    urls = server_urls(port, cfg.public_url, tls=tls, host=host)
     typer.echo(f"\n  ✓ Created key '{name}'. This is the only time it will be shown:\n")
     typer.echo(f"    {key}\n")
     typer.echo(client_config_text(key, urls, from_public_url=bool(cfg.public_url)))
