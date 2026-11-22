@@ -17,7 +17,7 @@ NEEDLE = "the zebra keeps its umbrella in the larder"
 
 def _memory(content: str = NEEDLE, n: int = 1) -> MemoryItem:
     return MemoryItem(id=f"m{n}", source="manual", source_id=f"s{n}", content=content, summary=None,
-                      participants=["Ada"], ts=1_700_000_000 + n, ingested_at=1_700_000_000,
+                      participants=["Ada Lovelace"], ts=1_700_000_000 + n, ingested_at=1_700_000_000,
                       metadata={}, embedding=[0.5] * 10)
 
 
@@ -40,7 +40,7 @@ async def test_a_new_database_is_encrypted(tmp_path):
     await _store(str(path))
     raw = _on_disk(path)
     assert not raw.startswith(key.SQLITE_HEADER)
-    assert b"zebra" not in raw and b"memories" not in raw and b"Ada" not in raw
+    assert b"zebra" not in raw and b"memories" not in raw and b"Lovelace" not in raw
     assert (tmp_path / "memoreei.key").stat().st_mode & 0o777 == 0o600
     with pytest.raises(sqlite3.DatabaseError):  # ordinary SQLite sees noise
         sqlite3.connect(path).execute("SELECT * FROM sqlite_master").fetchall()

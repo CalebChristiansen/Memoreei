@@ -29,6 +29,7 @@ REFRESH_GRACE = 30             # the refresh token before the newest still works
 FINISH_GRACE = 60              # an approved device code may be collected this late
 MAX_WAITING = 20               # requests waiting at once, from everyone
 MAX_WAITING_PER_ADDRESS = 5
+UNUSED_CLIENT_TTL = 86400      # a self-registered client no grant names is forgotten after a day
 
 # Four characters to read off one screen and find on another. No vowels (no words),
 # nothing that looks like something else (0/O, 1/I/L, 5/S).
@@ -66,11 +67,25 @@ class OAuthStore(Rows):
 
     async def save_client(self, client_id: str, kind: str, metadata_json: str) -> None:
         t = now()
+        if kind == "dcr":
+            await self.forget_unused_clients(t)
         await self._write(
             "INSERT INTO oauth_clients (client_id, kind, metadata, fetched_at, created_at) VALUES (?,?,?,?,?) "
             "ON CONFLICT (client_id) DO UPDATE SET metadata = excluded.metadata, "
             "fetched_at = excluded.fetched_at WHERE oauth_clients.kind = excluded.kind",
             (client_id, kind, metadata_json, t, t))
+
+    async def forget_unused_clients(self, t: int | None = None) -> int:
+        """Delete clients that registered themselves (DCR) over a day ago and never got a
+        grant, nor asked for one in the last day. Some agents (Hermes's device flow) register
+        afresh at every sign-in, so the abandoned ones would otherwise pile up. Swept at
+        each new registration; returns how many went."""
+        cutoff = (now() if t is None else t) - UNUSED_CLIENT_TTL
+        return await self._write(
+            "DELETE FROM oauth_clients WHERE kind = 'dcr' AND created_at < ? "
+            "AND client_id NOT IN (SELECT client_id FROM oauth_grants) "
+            "AND client_id NOT IN (SELECT client_id FROM oauth_requests WHERE created_at >= ?)",
+            (cutoff, cutoff))
 
     async def first_jti(self, client_id: str, jti: str, expires_at: int) -> bool:
         """True the first time a client's assertion id is seen."""

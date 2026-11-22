@@ -294,11 +294,22 @@ def test_status_and_search_with_data(monkeypatch, mock_embedder):
                 summary=None, participants=["Link"], ts=1_700_000_000, ingested_at=1_700_000_000,
                 metadata={}, embedding=[0.0] * 10,
             ))
+            await db.insert_memory(MemoryItem(
+                id="m2", source="whatsapp:heist", source_id="2", content="the donut alibi",
+                summary=None, participants=["Link"], ts=1_700_000_100, ingested_at=1_700_000_100,
+                metadata={"gone": {"how": "deleted", "at": 1_762_700_000}}, embedding=[0.0] * 10,
+            ))
 
     asyncio.run(_seed())
     runner = CliRunner()
     status = runner.invoke(app, ["status"])
     assert status.exit_code == 0, status.output
-    assert "whatsapp:heist" in status.output and "Total messages: 1" in status.output
+    assert "whatsapp:heist" in status.output and "Total messages: 2" in status.output
     miss = runner.invoke(app, ["search", "zzzqqq"])
     assert miss.exit_code == 0, miss.output
+    # A message its app deleted says so, as the MCP results do; one it still has doesn't.
+    hit = runner.invoke(app, ["search", "donut"])
+    assert hit.exit_code == 0, hit.output
+    alibi, heist = (next(b for b in hit.output.split("\n[") if word in b) for word in ("alibi", "heist"))
+    assert "[deleted in WhatsApp on 2025-11-" in alibi
+    assert "deleted in" not in heist

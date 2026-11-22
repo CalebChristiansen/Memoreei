@@ -376,7 +376,8 @@ def search(
             return
 
         for i, r in enumerate(found["results"], 1):
-            typer.echo(f"\n[{i}] {r['date']}  {r['chat']} ({r['platform']})")
+            mark = f"  [{r['mark']}]" if r.get("mark") else ""
+            typer.echo(f"\n[{i}] {r['date']}  {r['chat']} ({r['platform']}){mark}")
             typer.echo(f"    {r['content'][:200]}")
 
     asyncio.run(_run())

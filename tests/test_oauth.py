@@ -555,6 +555,35 @@ def test_names_are_cleaned_before_anyone_sees_them(env):
     assert "<b>evil" not in env.http.get(wait).text  # escaped on the page
 
 
+def test_self_registered_clients_no_grant_names_are_forgotten_after_a_day(env):
+    """Some agents (Hermes's device flow) register afresh at every sign-in."""
+    cb = "http://127.0.0.1:33418/cb"
+
+    def register(name: str) -> str:
+        r = env.http.post("/register", json={"client_name": name, "redirect_uris": [cb]})
+        assert r.status_code == 201
+        return r.json()["client_id"]
+
+    granted, asking, idle, fresh = (register(f"Agent {n}") for n in range(4))
+    ask(env, client=asking, redirect=cb)  # a sign-in waiting now keeps its client
+
+    async def age(store):
+        await store.conn.execute(
+            "INSERT INTO oauth_grants (id, client_id, client_name, client_host, self_registered, resource, "
+            "created_at, revoked_at) VALUES ('g1', ?, 'Agent 0', '127.0.0.1', 1, ?, 0, 1)", (granted, RESOURCE))
+        await store.conn.execute("UPDATE oauth_clients SET created_at = created_at - 86401 WHERE client_id != ?",
+                                 (fresh,))
+        await store.conn.commit()
+
+    env.run(age)
+    newest = register("Agent 4")  # each registration sweeps
+    left = env.run(lambda s: s._all("SELECT client_id FROM oauth_clients WHERE kind = 'dcr'"))
+    assert {r["client_id"] for r in left} == {granted, asking, fresh, newest}
+    r = authorize(env.http, client=idle, redirect=cb)
+    assert r.status_code == 400 and "unknown client_id" in r.text
+    assert env.run(lambda s: s.forget_unused_clients()) == 0
+
+
 @pytest.mark.parametrize("body", [
     {"redirect_uris": ["http://evil.example/cb"]},          # http, not loopback
     {"redirect_uris": ["https://x.example/cb#frag"]},

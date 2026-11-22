@@ -520,6 +520,28 @@ def test_an_issuer_ending_in_a_slash_is_kept_as_it_is(server, idp):
     assert _sso_sign_in(server(client=LAN, base_url=LAN_BASE), idp).status_code == 303
 
 
+@pytest.mark.parametrize("serving_host, listed", [("0.0.0.0", True), ("127.0.0.1", False)])
+def test_the_redirect_uris_name_where_the_server_really_listens(server, idp, monkeypatch, serving_host, listed):
+    # Like backlog 40: `serve --host … --port 3779` while the config says 0.0.0.0:3679
+    # listed callbacks on :3679. The CLI asks from another process, so it reads serving.json.
+    import os
+
+    from memoreei.config import serving_path
+
+    monkeypatch.setenv("MEMOREEI_HOST", "0.0.0.0")
+    monkeypatch.setattr("memoreei.config._config", None)
+    monkeypatch.setattr("memoreei.auth.local_ipv4_addresses", lambda: ["192.0.2.7"])
+    serving_path().write_text(json.dumps({"pid": os.getpid(), "host": serving_host, "port": 4123, "tls": False}))
+    r = runner.invoke(app, ["admin", "sso", "set", "--issuer", IDP, "--client-id", CLIENT,
+                            "--allow", "ada@example.com", "--secret-stdin"], input="s3cret\n")
+    assert r.exit_code == 0, r.output
+    assert ":3679" not in r.output
+    assert ("http://192.0.2.7:4123/admin/sso/callback" in r.output) is listed
+    from memoreei.admin.security import addresses
+
+    assert [a["url"] for a in addresses()] == (["http://192.0.2.7:4123/admin/"] if listed else [])
+
+
 def test_two_tabs_can_each_finish(server, idp):
     _sso_on(server.db_path, remote=True)
     remote = server(client=LAN, base_url=LAN_BASE)

@@ -47,8 +47,14 @@ def _done(message: str, request: Request | None = None) -> Response:
 
 
 def addresses() -> list[dict[str, str]]:
-    """Where the dashboard answers once it's open from anywhere."""
+    """Where the dashboard answers once it's open from anywhere.
+
+    The host, port and TLS are the running server's (memoreei.config.listening), so a
+    server started with ``--host``/``--port`` is listed where it really is, even when the
+    CLI asks from another process.
+    """
     from memoreei.auth import server_urls
+    from memoreei.config import listening
     from memoreei.public import runtime
 
     out = []
@@ -58,8 +64,9 @@ def addresses() -> list[dict[str, str]]:
         what = "Memoreei Cloud" if live.get("mode") == "cloud" else "your own tunnel or proxy"
         out.append({"url": live["issuer"] + "/admin/", "what": f"from anywhere, through {what}"})
     cfg = get_config()
-    if cfg.host not in ("127.0.0.1", "localhost", "::1"):
-        for url in server_urls(cfg.port, cfg.public_url, tls=bool(cfg.tls_cert)):
+    host, port, tls = listening()
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        for url in server_urls(port, cfg.public_url, tls=tls):
             out.append({"url": url.removesuffix("/mcp") + "/admin/",
                         "what": "behind your own proxy" if cfg.public_url else "on this network"})
     return out
@@ -74,11 +81,12 @@ async def security_page(request: Request, error: str | None = None) -> Response:
     sessions = [{**s, "browser": describe_browser(s["user_agent"]),
                  "current": session is not None and s["token_hash"] == session["token_hash"]}
                 for s in await store.sessions()]
+    where = addresses()
     return _page(request, "security.html", nav="security", status_code=400 if error else 200, error=error,
                  message=None if error else _said.pop("message", None), account=await store.account(),
                  recovery_left=await store.recovery_codes_left(), sessions=sessions,
-                 signins=await store.signins(20), addresses=addresses(), min_password=credentials.MIN_PASSWORD,
-                 sso=sso.settings(), callbacks=[a["url"].removesuffix("/admin/") + sso.CALLBACK for a in addresses()])
+                 signins=await store.signins(20), addresses=where, min_password=credentials.MIN_PASSWORD,
+                 sso=sso.settings(), callbacks=[a["url"].removesuffix("/admin/") + sso.CALLBACK for a in where])
 
 
 async def set_password(request: Request) -> Response:

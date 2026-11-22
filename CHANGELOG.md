@@ -17,6 +17,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   still decides whether the dashboard answers elsewhere. The Security page shows it, and
   turns it off on the computer.
 
+### Changed
+- Chatbots and agents that registered themselves (DCR) and never got a grant are
+  forgotten after a day. Some agents (Hermes's device flow) register afresh at every
+  sign-in, so they piled up.
+
+### Fixed
+- `memoreei search` shows what the chat app did to a message ("deleted in Signal on
+  2026-11-09"), as chatbots' results already did.
+- The redirect URIs that SSO lists (`memoreei admin sso set`, the Security page) name the
+  host and port the server really runs on, so a server started with `--host`/`--port`
+  no longer lists addresses it doesn't answer at.
+
 ## [0.5.0rc3] - 2026-11-09
 
 ### Changed
