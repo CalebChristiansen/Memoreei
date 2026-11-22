@@ -136,11 +136,12 @@ CREATE TABLE IF NOT EXISTS admin_recovery_codes (
 );
 
 -- Dashboard sessions. 'link' came from a one-time link (admin-url, the Mac app's menu)
--- and works only on this computer, 'password' from the password, anywhere it's allowed.
+-- and works only on this computer, 'password' from the password and 'sso' from sign-in
+-- by SSO (memoreei.admin.sso), anywhere it's allowed.
 -- Sessions from before this table are in admin_tokens, and count as 'link'.
 CREATE TABLE IF NOT EXISTS admin_sessions (
     token_hash TEXT PRIMARY KEY,
-    how TEXT NOT NULL CHECK (how IN ('link', 'password')),
+    how TEXT NOT NULL CHECK (how IN ('link', 'password', 'sso')),
     peer TEXT,
     user_agent TEXT,
     created_at INTEGER NOT NULL,
@@ -720,6 +721,18 @@ class Database:
             row = await cursor.fetchone()
         if row and "UPDATE OF" not in row[0]:
             await self._db.execute("DROP TRIGGER memories_fts_update")
+        # admin_sessions from before sign-in by SSO allow only 'link' and 'password'. A
+        # CHECK can't be altered, so the table is made again with its rows.
+        async with self._db.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'admin_sessions'"
+        ) as cursor:
+            row = await cursor.fetchone()
+        made_again = row[0].replace("('link', 'password')", "('link', 'password', 'sso')") if row else None
+        if row and made_again != row[0]:
+            await self._db.execute("ALTER TABLE admin_sessions RENAME TO admin_sessions_before_sso")
+            await self._db.execute(made_again)
+            await self._db.execute("INSERT INTO admin_sessions SELECT * FROM admin_sessions_before_sso")
+            await self._db.execute("DROP TABLE admin_sessions_before_sso")
         for trigger in (FTS_TRIGGER_INSERT, FTS_TRIGGER_DELETE, FTS_TRIGGER_UPDATE,
                         CHANGE_TRIGGER_DELETE, CHANGE_TRIGGER_UPDATE):
             await self._db.execute(trigger)

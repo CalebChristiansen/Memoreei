@@ -23,9 +23,11 @@ key_app = typer.Typer(help="Manage API keys for the network server")
 cloud_app = typer.Typer(help="Memoreei Cloud: use this memoreei from Claude.ai, ChatGPT and agents")
 chatbots_app = typer.Typer(help="Chatbots and agents signed in to this memoreei: approve, list, remove")
 sources_app = typer.Typer(help="Other memoreeis as sources: one sends its messages to another")
-admin_app = typer.Typer(help="The dashboard's password, and whether it answers away from this computer")
+admin_app = typer.Typer(help="The dashboard's password or SSO, and whether it answers away from this computer")
+sso_app = typer.Typer(help="Sign in to the dashboard by SSO (OpenID Connect), in place of the password and 2FA")
 app.add_typer(import_app, name="import")
 app.add_typer(admin_app, name="admin")
+admin_app.add_typer(sso_app, name="sso")
 app.add_typer(service_app, name="service")
 app.add_typer(key_app, name="key")
 app.add_typer(cloud_app, name="cloud")
@@ -1323,19 +1325,28 @@ def admin_password(
         password = sys.stdin.readline().rstrip("\r\n")
     else:
         password = typer.prompt("New password", hide_input=True, confirmation_prompt="Again")
-    problem = credentials.password_problem(password)
+    from memoreei.admin import sso
+
+    problem = credentials.password_problem(password) or (sso.environment_refusal() if sso.configured() else None)
     if problem:
         typer.echo(f"  ✗ {problem}", err=True)
         raise typer.Exit(1)
     hashed = credentials.hash_password(password)
 
     async def _set(store):  # type: ignore[no-untyped-def]
+        from memoreei.admin import sso
+
         had = await store.has_password()
         await store.set_password(hashed)
-        return had, (await store.account())["remote"]
+        sso_was_on = sso.configured()
+        if sso_was_on:
+            await sso.turn_off(store)  # one or the other
+        return had, (await store.account())["remote"], sso_was_on
 
-    had, remote = _account_store_run(_set)
+    had, remote, sso_was_on = _account_store_run(_set)
     typer.echo(f"  ✓ Password {'changed: browsers signed in with the old one are signed out' if had else 'set'}.")
+    if sso_was_on:
+        typer.echo("  ✓ Sign-in by SSO is off: it's one or the other.")
     if not remote:
         typer.echo("The dashboard still answers only on this computer. To open it from anywhere too: "
                    "memoreei admin remote on")
@@ -1375,9 +1386,13 @@ def admin_remote(
         return ok
 
     if not _account_store_run(_switch):
-        typer.echo("Set a password first, with: memoreei admin password", err=True)
+        typer.echo("Set a password first, with: memoreei admin password (or sign-in by SSO: memoreei admin sso set)",
+                   err=True)
         raise typer.Exit(1)
-    typer.echo("  ✓ The dashboard answers away from this computer now, to the password." if on else
+    from memoreei.admin import sso
+
+    typer.echo(f"  ✓ The dashboard answers away from this computer now, "
+               f"{'by SSO' if sso.configured() else 'to the password'}." if on else
                "  ✓ The dashboard answers only on this computer again; browsers signed in from away are signed out.")
 
 
@@ -1388,6 +1403,20 @@ def admin_status() -> None:
         return await store.account(), await store.recovery_codes_left(), await store.sessions(), await store.signins(5)
 
     account, left, sessions, signins = _account_store_run(_read)
+    from memoreei.admin import sso
+
+    s = sso.settings(with_secret=True)
+    if s.on:
+        typer.echo(f"Sign-in: by SSO, with {s.label} ({s.issuer}), client {s.client_id}"
+                   f"{'' if s.client_secret else ', no secret'}")
+        typer.echo(f"Who may sign in: {', '.join(s.allow)}")
+        typer.echo("From anywhere: " + ("on" if account["remote"] else "off (memoreei admin remote on)"))
+        typer.echo(f"Signed in: {sum(x['how'] == 'sso' for x in sessions)} by SSO, "
+                   f"{sum(x['how'] == 'link' for x in sessions)} by link")
+        for x in signins:
+            typer.echo(f"  {_fmt_time(x['at'])}  {'signed in' if x['ok'] else 'refused'}  from {x['peer'] or '?'}"
+                       f"  ({'by SSO, ' + x['why'] if x['how'] == 'sso' else x['why']})")
+        return
     if not account["password_hash"]:
         typer.echo("Password: none. The dashboard answers only on this computer (memoreei admin-url).")
         return
@@ -1400,6 +1429,92 @@ def admin_status() -> None:
     for s in signins:
         typer.echo(f"  {_fmt_time(s['at'])}  {'signed in' if s['ok'] else 'refused'}  from {s['peer'] or '?'}"
                    f"  ({s['why']})")
+
+
+@sso_app.command(name="set")
+def admin_sso_set(
+    issuer: str = typer.Option(..., "--issuer", help="The provider's issuer, e.g. https://login.example.com"),
+    client_id: str = typer.Option(..., "--client-id", help="The client ID the provider gave memoreei"),
+    allow: str = typer.Option(..., "--allow", help="Who may sign in: emails (verified by the provider) or "
+                                                   "subjects, comma-separated"),
+    name: str = typer.Option("", "--name", help="What the sign-in button calls the provider"),
+    secret_stdin: bool = typer.Option(False, "--secret-stdin", help="Read the client secret from standard input"),
+    public: bool = typer.Option(False, "--public", help="No client secret: the provider registered a public client"),
+    check: bool = typer.Option(True, "--check/--no-check", help="Fetch the provider's discovery document first"),
+) -> None:
+    """Sign in to the dashboard by SSO. The password and 2FA are removed: it's one or the other."""
+    import sys
+
+    from memoreei.admin import sso
+
+    issuer = issuer.strip()  # exactly as the provider says it: a trailing / counts
+    entries = tuple(a.strip() for a in allow.split(",") if a.strip())
+    problem = sso.environment_refusal() or sso.issuer_problem(issuer) or sso.allow_problem(entries)
+    if problem:
+        typer.echo(f"  ✗ {problem}", err=True)
+        raise typer.Exit(1)
+    if secret_stdin:
+        secret = sys.stdin.readline().strip()
+    elif public:
+        secret = ""
+    else:
+        secret = typer.prompt("Client secret", hide_input=True)
+    if not secret and not public:
+        typer.echo("  ✗ No client secret. For a public client (PKCE alone), say --public.", err=True)
+        raise typer.Exit(1)
+    if check:
+        try:
+            doc = asyncio.run(sso.discover(issuer, refresh=True))
+        except sso.SSOError as e:
+            typer.echo(f"  ✗ {e.reason}. (--no-check saves it anyway.)", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"  ✓ {issuer} answers: signing in at {doc['authorization_endpoint']}")
+
+    async def _on(store):  # type: ignore[no-untyped-def]
+        had = await store.has_password()
+        await sso.turn_on(store, issuer, client_id.strip(), entries, secret or None, name.strip() or None)
+        return had, (await store.account())["remote"]
+
+    had, remote = _account_store_run(_on)
+    typer.echo("  ✓ Sign-in by SSO is on." + (" The password and 2FA are removed." if had else ""))
+    from memoreei.admin.security import addresses
+
+    origins = [a["url"].removesuffix("/admin/") for a in addresses()]
+    from memoreei.cloud.state import CloudState
+
+    device = CloudState().device()
+    if device is not None:
+        origins.insert(0, f"https://{device.hostname}")
+    from memoreei.config import get_config
+
+    cfg = get_config()
+    if cfg.public_mcp_url:
+        origins.insert(0, cfg.public_mcp_url.removesuffix("/mcp"))
+    if origins:
+        typer.echo("The provider must allow this redirect URI (one for each address you sign in at):")
+        for o in dict.fromkeys(origins):
+            typer.echo(f"  {o}{sso.CALLBACK}")
+    else:
+        typer.echo(f"The provider must allow <the dashboard's address>{sso.CALLBACK} as a redirect URI.")
+    if not remote:
+        typer.echo("The dashboard still answers only on this computer. To open it from anywhere too: "
+                   "memoreei admin remote on")
+
+
+@sso_app.command(name="off")
+def admin_sso_off() -> None:
+    """Turn sign-in by SSO off. Without a password the dashboard answers only on this computer."""
+    from memoreei.admin import sso
+
+    async def _off(store):  # type: ignore[no-untyped-def]
+        await sso.turn_off(store)
+
+    if why := sso.environment_refusal():
+        typer.echo(f"  ✗ {why}", err=True)
+        raise typer.Exit(1)
+    _account_store_run(_off)
+    typer.echo("  ✓ Sign-in by SSO is off; browsers signed in with it are signed out. "
+               "Set a password with: memoreei admin password")
 
 
 def _tell(title: str, text: str) -> None:

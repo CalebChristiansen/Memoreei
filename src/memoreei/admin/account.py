@@ -12,6 +12,9 @@ hashes of recovery codes, sessions and known browsers. A forgotten password or a
 phone is reset on the computer (`memoreei admin reset`, or the dashboard there), never
 from away.
 
+Sign-in by SSO (memoreei.admin.sso) takes the password's place: one or the other, never
+both, and the switch and the rules here are the same for it.
+
 Failed sign-ins away from the computer are limited per address and for everyone at
 once, in memory. No limit locks the account: a browser that has signed in before skips
 the limit on everyone, so a stranger's guessing from many addresses can't keep its
@@ -102,9 +105,12 @@ class AccountStore(Rows):
         return bool((await self.account())["password_hash"])
 
     async def remote_open(self) -> bool:
-        """Whether the dashboard answers away from this computer: a password, and the switch."""
+        """Whether the dashboard answers away from this computer: a way to sign in there
+        (a password, or SSO), and the switch."""
+        from memoreei.admin import sso
+
         a = await self.account()
-        return bool(a["password_hash"]) and bool(a["remote"])
+        return (bool(a["password_hash"]) or sso.configured()) and bool(a["remote"])
 
     async def set_password(self, password_hash: str, keep_session: str | None = None) -> None:
         """A new password. Every other password session ends, and every known browser
@@ -121,9 +127,20 @@ class AccountStore(Rows):
         await self.end_sessions("password")
         await self.forget_browsers()
 
+    async def drop_password(self) -> None:
+        """No password and no 2FA, for sign-in by SSO (memoreei.admin.sso). Unlike reset(),
+        access from anywhere stays as it was: SSO is the way in from there now."""
+        await self._update("password_hash = NULL, password_set_at = NULL, totp_secret = NULL, "
+                           "totp_pending = NULL, totp_last_step = NULL, totp_set_at = NULL")
+        await self._write("DELETE FROM admin_recovery_codes")
+        await self.end_sessions("password")
+        await self.forget_browsers()
+
     async def set_remote(self, on: bool) -> bool:
-        """Turn access from anywhere on (only with a password) or off."""
-        if on and not await self.has_password():
+        """Turn access from anywhere on (only with a password, or SSO) or off."""
+        from memoreei.admin import sso
+
+        if on and not (await self.has_password() or sso.configured()):
             return False
         await self._update("remote = ?", (1 if on else 0,))
         return True
@@ -183,7 +200,11 @@ class AccountStore(Rows):
     async def check(self, password: str, code: str = "") -> tuple[bool, str]:
         """(right?, what happened, for the log). The code is looked at only after the
         password is right, so a recovery code is never spent on a wrong password."""
+        from memoreei.admin import sso
+
         a = await self.account()
+        if sso.configured():
+            return False, "sign-in by SSO is on, not the password"
         if not a["password_hash"]:
             return False, "no password is set"
         if not await credentials.check_password_async(password, a["password_hash"]):
@@ -202,7 +223,7 @@ class AccountStore(Rows):
     async def add_session(self, how: str, peer: str | None = None, user_agent: str | None = None) -> str:
         token = secrets.token_urlsafe(32)
         t = now()
-        ttl = PASSWORD_SESSION_TTL if how == "password" else LINK_SESSION_TTL
+        ttl = LINK_SESSION_TTL if how == "link" else PASSWORD_SESSION_TTL  # a password's or SSO's: a week
         await self.conn.execute("DELETE FROM admin_sessions WHERE expires_at <= ?", (t,))
         await self._write(
             "INSERT INTO admin_sessions (token_hash, how, peer, user_agent, created_at, expires_at) "

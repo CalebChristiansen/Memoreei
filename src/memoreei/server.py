@@ -765,6 +765,12 @@ def build_http_app(verify: "Verifier") -> Any:
     async def lifespan(a: Any) -> AsyncIterator[None]:
         # Only the Linux packages look for updates here; Memoreei.app does its own.
         # The public listener (and Memoreei Cloud) runs only when set up: see memoreei.public.
+        from memoreei.admin import sso
+
+        if sso.configured():  # set up in the config file: no password may be left beside it
+            from memoreei.admin.account import account_store
+
+            await sso.settle(await account_store())
         async with inner_lifespan(a), _auto_sync(), _warm_search(), _push_to_peers(), \
                 update_checks(enabled=bundle_root() is not None), public_runtime(verify), stay_awake():
             yield

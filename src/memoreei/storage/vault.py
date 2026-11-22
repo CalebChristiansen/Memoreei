@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS secrets (
 SECRET_VARS: frozenset[str] = frozenset(
     {name for c in CONNECTORS.values() for name, _label, secret, *_ in c["vars"] if secret}
     | {"OPENAI_API_KEY", "GMAIL_PASSWORD"}  # the embedding key; Gmail's older name
+    | {"MEMOREEI_SSO_CLIENT_SECRET"}  # the dashboard's sign-in by SSO (memoreei.admin.sso)
 )
 
 

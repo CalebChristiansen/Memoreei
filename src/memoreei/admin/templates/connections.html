@@ -27,7 +27,7 @@
   </div>
   <svg class="tail" width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M0 0H22L4 14V0Z"/></svg>
 </section>
-{% elif (device or custom) and account.password_hash and not account.remote %}
+{% elif (device or custom) and can_sign_in and not account.remote %}
 <p class="caption">This dashboard answers only on this computer. To open it from anywhere, switch that on in <a href="/admin/security#remote">Security</a>.</p>
 {% endif %}
 

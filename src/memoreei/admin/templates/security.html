@@ -7,7 +7,7 @@
     <h1>Security</h1>
     <p>Who can open this dashboard, and from where.</p>
   </div>
-  {% if account.remote and account.password_hash %}
+  {% if account.remote and (account.password_hash or sso.on) %}
   <span class="pill big"><span class="dot"></span>Open from anywhere</span>
   {% else %}
   <span class="pill big off"><span class="dot"></span>This computer only</span>
@@ -16,11 +16,32 @@
 
 {% if message %}<p role="status">{{ message }}</p>{% endif %}
 {% if error %}<p class="problem" role="alert"><b>{{ error }}</b></p>{% endif %}
-{% if not local %}<p class="caption">You're signed in away from the computer. The password and 2FA can only be changed there.</p>{% endif %}
+{% if not local %}<p class="caption">You're signed in away from the computer. How you sign in can only be changed there.</p>{% endif %}
+
+{% if sso.on %}
+<section class="card" id="sso">
+  <h2>Sign-in by SSO</h2>
+  <p><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>On</span>
+  Away from this computer, you sign in with {{ sso.label }}. Signing in lasts a week.{% if local %} On this computer, the
+  one-time link{% if in_app() %} from the menu bar{% else %} (<code>memoreei admin-url</code>){% endif %} still signs you in without it.{% endif %}</p>
+  <dl class="facts">
+    <dt>Issuer</dt><dd class="mono">{{ sso.issuer }}</dd>
+    <dt>Client ID</dt><dd class="mono">{{ sso.client_id }}</dd>
+    <dt>Who may sign in</dt><dd class="mono">{{ sso.allow|join(", ") }}</dd>
+    {% for a in callbacks %}<dt>{% if loop.first %}Redirect URI{{ "s" if callbacks|length > 1 }}{% endif %}</dt><dd class="mono">{{ a }}</dd>{% endfor %}
+  </dl>
+  <p class="caption">Set in the config file{% if local %}: change it with <code>memoreei admin sso set</code>{% endif %}. The provider must
+  list each redirect URI above for the address you sign in at.</p>
+  {% if local %}<form method="post" action="/admin/security/sso/off"><button class="danger small"
+    hx-post="/admin/security/sso/off" hx-target="body" hx-confirm="Turn off sign-in by SSO? Every browser signed in with it is signed out.">Turn off SSO</button></form>{% endif %}
+</section>
+{% endif %}
 
 <section class="card" id="password">
   <h2>Password</h2>
-  {% if account.password_hash %}
+  {% if sso.on %}
+  <p>Sign-in by SSO is on, so there's no password. Setting one turns SSO off.</p>
+  {% elif account.password_hash %}
   <p>Set {{ account.password_set_at|date }}. Signing in with it lasts a week.{% if local %} On this computer, the
   one-time link{% if in_app() %} from the menu bar{% else %} (<code>memoreei admin-url</code>){% endif %} still signs you in without it.{% endif %}</p>
   {% else %}
@@ -63,7 +84,9 @@
   {% if local %}<form method="post" action="/admin/security/2fa"><button>Set up 2FA</button></form>{% endif %}
   {% endif %}
 </section>
+{% endif %}
 
+{% if account.password_hash or sso.on %}
 <section class="card" id="remote">
   <h2>Manage memoreei from anywhere</h2>
   <div class="switch-row">
@@ -73,7 +96,7 @@
       <button class="switch" aria-pressed="{{ 'true' if account.remote else 'false' }}" aria-label="Manage memoreei from anywhere"><span></span></button>
     </form>
     {% endif %}
-    <span class="caption">{% if account.remote %}On: the dashboard answers away from this computer, to the password{{ " and a code" if account.totp_secret }}.{% else %}Off: the dashboard answers only on this computer.{% endif %}</span>
+    <span class="caption">{% if account.remote %}On: the dashboard answers away from this computer, {% if sso.on %}to {{ sso.label }}{% else %}to the password{{ " and a code" if account.totp_secret }}{% endif %}.{% else %}Off: the dashboard answers only on this computer.{% endif %}</span>
   </div>
   {% if account.remote %}
   {% if addresses %}
@@ -100,7 +123,7 @@
     <tbody>
     {% for s in sessions %}
     <tr><td>{{ s.browser }}{% if s.current %} <span class="caption">(this one)</span>{% endif %}</td>
-      <td>{{ "Password" if s.how == "password" else "One-time link" }}</td>
+      <td>{{ {"password": "Password", "sso": "SSO"}.get(s.how, "One-time link") }}</td>
       <td class="mono">{{ s.peer or "?" }}</td><td>{{ s.created_at|ago|capitalize }}</td></tr>
     {% endfor %}
     </tbody>
@@ -114,7 +137,7 @@
 {% if signins %}
 <section class="card">
   <details>
-    <summary>The last {{ signins|length }} password sign-ins</summary>
+    <summary>The last {{ signins|length }} sign-ins</summary>
     <div class="table-scroll"><table>
       <thead><tr><th scope="col">When</th><th scope="col">From</th><th scope="col">Result</th></tr></thead>
       <tbody>

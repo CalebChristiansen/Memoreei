@@ -18,6 +18,7 @@ from urllib.parse import quote
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
+from memoreei.admin import sso
 from memoreei.admin.account import account_store
 from memoreei.config import get_config
 
@@ -117,8 +118,9 @@ async def _context() -> dict[str, Any]:
         "awake": awake.status(),
         "price": CLOUD_PRICE,
         "account": account,
-        # Connected, and no password yet: suggest one, for the dashboard from anywhere.
-        "password_offer": shown and cfg.password_offer and not account["password_hash"],
+        # Connected, and no way to sign in yet: suggest a password, for the dashboard from anywhere.
+        "password_offer": shown and cfg.password_offer and not account["password_hash"] and not sso.configured(),
+        "can_sign_in": bool(account["password_hash"]) or sso.configured(),
     }
 
 

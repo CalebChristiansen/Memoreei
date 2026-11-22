@@ -298,6 +298,8 @@ class Config:
     cloud_offer: bool = True
     # Whether the Cloud page suggests a password, for the dashboard from anywhere.
     password_offer: bool = True
+    # Sign-in by SSO isn't here: a running server follows MEMOREEI_SSO_* as they change
+    # (memoreei.admin.sso.settings).
 
     # Discord
     discord_token: str | None = None

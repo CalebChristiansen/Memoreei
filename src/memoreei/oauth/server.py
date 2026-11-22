@@ -332,7 +332,7 @@ class SignIn:
     def waiting_page(self, req: dict[str, Any], approve_here: bool = False) -> Response:
         code = html.escape(req["user_code"])
         here = (f"<p><a href='/admin/chatbots/requests/{quote(req['id'])}'>Sign in to approve it here</a> "
-                f"with memoreei's password, if you're away from the computer.</p>") if approve_here else ""
+                f"if you're away from the computer.</p>") if approve_here else ""
         return page(200, "Approve it on your computer",
                     f"<p>{who(req)} wants to use memoreei. To let it, approve this code on the computer "
                     f"memoreei runs on:</p>"
@@ -624,7 +624,7 @@ class SignIn:
     # GET /device
     async def device_page(self, request: Request) -> Response:
         here = ("<p>Away from the computer? <a href='/admin/connections'>Sign in to memoreei's dashboard here</a> "
-                "with its password, and approve it on the Connections page.</p>") if await self._admin_open() else ""
+                "and approve it on the Connections page.</p>") if await self._admin_open() else ""
         return page(200, "Approve it on your computer",
                     "<p>An app asked to use memoreei and gave you a code. To let it, approve that code on "
                     "the computer memoreei runs on: in memoreei's dashboard (from the menu bar on a Mac), "

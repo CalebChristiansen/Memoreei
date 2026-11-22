@@ -28,7 +28,7 @@ from starlette.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
 from memoreei import __version__
-from memoreei.admin import auth
+from memoreei.admin import auth, sso
 from memoreei.admin.account import account_store
 from memoreei.catalog import (
     CONNECTORS,
@@ -105,6 +105,7 @@ class AdminGuard:
                 await _plain(404, "Not found.")(scope, receive, send)
                 return
             origins = {self.public_origin}
+            origin = self.public_origin
             secure = self.public_origin.startswith("https:")
         else:
             local = auth.local_request(client, host)
@@ -115,10 +116,12 @@ class AdminGuard:
                     scope, receive, send
                 )
                 return
-            origins = {f"{request.url.scheme}://{host}".lower()}
+            origin = f"{request.url.scheme}://{host}".lower()
+            origins = {origin}
             secure = request.url.scheme == "https"
             if not local and public_url and auth.host_name(host) == (urlsplit(public_url).hostname or ""):
-                origins.add(auth.origin_of(public_url))
+                origin = auth.origin_of(public_url)  # where the browser is, behind that proxy
+                origins.add(origin)
                 secure = secure or public_url.startswith("https:")
 
         if request.method not in ("GET", "HEAD") and not _origin_allowed(request, origins):
@@ -136,11 +139,15 @@ class AdminGuard:
         session = None if static else await store.session(request.cookies.get(auth.COOKIE))
         if session is not None and session["how"] == "link" and not local:
             session = None  # a link's session never leaves the computer
+        if session is not None and session["how"] in ("password", "sso") \
+                and (session["how"] == "sso") != sso.configured():
+            session = None  # signed in the way that's switched off (memoreei.admin.sso)
         scope.setdefault("state", {})["memoreei_admin"] = {
             "local": local, "public": self.public_origin is not None, "peer": peer,
-            "session": session, "secure": secure,
+            "session": session, "secure": secure, "origin": origin,
         }
-        if session is None and not (path.endswith(("/admin/login", "/admin/signin")) or static):
+        if session is None and not (path.endswith(("/admin/login", "/admin/signin", "/admin/sso/start",
+                                                   "/admin/sso/callback")) or static):
             next_path = path if request.method in ("GET", "HEAD") else None
             response = await signin_page(request, next_path=next_path, status_code=401)
             await response(scope, receive, send)
@@ -158,13 +165,20 @@ def _origin_allowed(request: Request, origins: set[str]) -> bool:
 def where(request: Request) -> dict[str, Any]:
     """What the guard found out about this request: local, public, peer, session, secure."""
     return (request.scope.get("state") or {}).get("memoreei_admin") or {
-        "local": False, "public": False, "peer": None, "session": None, "secure": False}
+        "local": False, "public": False, "peer": None, "session": None, "secure": False, "origin": ""}
 
 
 async def signin_page(request: Request, next_path: str | None = None, error: str | None = None,
                       status_code: int = 200) -> Response:
-    """Signed out: the password form, where there's a password, else how to get a link."""
+    """Signed out: the provider's button with SSO, the password form where there's a
+    password, else how to get a link."""
 
+    s = sso.settings()
+    if s.on:
+        return _secure(templates.TemplateResponse(request, "signin_sso.html", {
+            "version": __version__, "next": auth.safe_next(next_path), "provider": s.label, "error": error,
+            "local": where(request)["local"],
+        }, status_code=status_code))
     account = await (await account_store()).account()
     if not account["password_hash"]:
         return _secure(templates.TemplateResponse(
@@ -384,6 +398,7 @@ async def _status_context() -> dict[str, Any]:
         "problems": failed or fda is False,
         # The welcome's third step, which is optional and leaves with the other two.
         "has_password": await (await account_store()).has_password(),
+        "has_sso": sso.configured(),  # the password's alternative, which settles that step too
     }
 
 
@@ -488,7 +503,7 @@ async def signin(request: Request) -> Response:
     store = await account_store()
     w = where(request)
     peer = w["peer"]
-    if not await store.has_password():
+    if sso.configured() or not await store.has_password():
         return await signin_page(request, status_code=401)
     known = await store.browser_known(request.cookies.get(auth.BROWSER_COOKIE))
     # On the computer there's no limit (it has the one-time link anyway). Elsewhere the
@@ -823,6 +838,7 @@ def build_admin_app(public_origin: str | None = None) -> Any:
         *connections_routes(),
         *cloud_routes(),
         *security_routes(),
+        *sso.routes(),
         *peers_routes(),
         Mount("/static", StaticFiles(directory=str(HERE / "static")), name="static"),
     ]

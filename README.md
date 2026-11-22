@@ -372,6 +372,37 @@ tunnel must pass `Host` on unchanged (Cloudflare Tunnel, Tailscale Funnel and Ca
   can only be turned off. So a stolen session can't lock you out, and a forgotten
   password is reset where memoreei runs.
 
+#### Sign in by SSO
+
+Instead of a password, the dashboard can trust an OpenID Connect provider: Okta, Entra,
+Google, Authentik, Keycloak, WorkOS. **It's one or the other**: setting SSO up removes
+the password and 2FA, and setting a password turns SSO off. On the computer, the
+one-time link works either way, and away from it you still need **Manage memoreei from
+anywhere** switched on.
+
+Register memoreei with the provider as a web application (authorization code; PKCE is
+always used), with the redirect URI `<the dashboard's address>/admin/sso/callback`, one
+for each address you sign in at (`https://<name>.memoreei.net/admin/sso/callback` for
+Memoreei Cloud). Then, on the computer:
+
+```bash
+memoreei admin sso set --issuer https://login.example.com --client-id … \
+  --allow you@example.com --name "Example"   # asks for the client secret (--secret-stdin, or --public for none)
+memoreei admin remote on
+memoreei admin sso off                        # back to the computer only, or set a password
+```
+
+Or put them in `config.env`: `MEMOREEI_SSO_ISSUER`, `MEMOREEI_SSO_CLIENT_ID`,
+`MEMOREEI_SSO_CLIENT_SECRET` (moved into the encrypted database at the next start),
+`MEMOREEI_SSO_ALLOW` and `MEMOREEI_SSO_NAME`. A password left from before is removed when
+memoreei starts. `MEMOREEI_SSO_ALLOW` says who may sign in, comma-separated: an email
+counts only when the provider says it's verified, and anything without an `@` is a
+subject, the ID token's `sub` (stable; the provider's ID for you). The ID token is checked
+against the issuer's published keys, and for its issuer, audience, expiry and nonce. The
+issuer must be https, or plain http on this computer's own loopback.
+
+Whoever runs the provider can sign in as you, so pick one you'd trust with your messages.
+
 ### HTTPS
 
 Plain HTTP is fine on a home network or a VPN. For anything public, put HTTPS in front,
@@ -511,6 +542,7 @@ memoreei open                       # the dashboard, starting Memoreei if needed
 memoreei admin-url [--page connections]   # a one-time dashboard sign-in link
 memoreei stay-awake on|off          # hold off sleep on AC power while chatbots can reach it
 memoreei admin password | remote on|off | status | reset   # the dashboard from anywhere
+memoreei admin sso set … | off                              # or sign in to it by SSO
 memoreei key create | list | revoke <name>
 memoreei service install | status | logs | uninstall | grant-access
 memoreei status                     # message counts, sources, last sync times
@@ -574,6 +606,7 @@ the current directory, which wins over `config.env` and the database.
 | `MEMOREEI_TLS_CERT`, `MEMOREEI_TLS_KEY` | — | serve HTTPS directly |
 | `MEMOREEI_ME` | your account's full name | names, numbers or addresses that mean you, comma-separated |
 | `MEMOREEI_MIRROR_DELETIONS` | — | apps whose deletions memoreei follows rather than keeping and marking: `signal`, `imessage`, `whatsapp`, `matrix`, comma-separated, or `all` ([why](#sources)) |
+| `MEMOREEI_SSO_ISSUER`, `MEMOREEI_SSO_CLIENT_ID`, `MEMOREEI_SSO_CLIENT_SECRET`, `MEMOREEI_SSO_ALLOW`, `MEMOREEI_SSO_NAME` | — | the dashboard's [sign-in by SSO](#sign-in-by-sso), in place of a password; the secret is kept in the database |
 
 Connector settings:
 

@@ -16,7 +16,7 @@ from markupsafe import Markup
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
-from memoreei.admin import auth, credentials
+from memoreei.admin import auth, credentials, sso
 from memoreei.admin.account import account_store
 from memoreei.admin.connections import PATH
 from memoreei.config import get_config, save_settings
@@ -77,7 +77,8 @@ async def security_page(request: Request, error: str | None = None) -> Response:
     return _page(request, "security.html", nav="security", status_code=400 if error else 200, error=error,
                  message=None if error else _said.pop("message", None), account=await store.account(),
                  recovery_left=await store.recovery_codes_left(), sessions=sessions,
-                 signins=await store.signins(20), addresses=addresses(), min_password=credentials.MIN_PASSWORD)
+                 signins=await store.signins(20), addresses=addresses(), min_password=credentials.MIN_PASSWORD,
+                 sso=sso.settings(), callbacks=[a["url"].removesuffix("/admin/") + sso.CALLBACK for a in addresses()])
 
 
 async def set_password(request: Request) -> Response:
@@ -88,14 +89,31 @@ async def set_password(request: Request) -> Response:
     problem = credentials.password_problem(password)
     if problem is None and password != confirm:
         problem = "The two passwords don't match."
+    if problem is None and sso.configured():
+        problem = sso.environment_refusal()  # it can't be turned off from here, so no password beside it
     if problem:
         return await security_page(request, error=problem)
     store = await account_store()
     had = await store.has_password()
     await store.set_password(await credentials.hash_password_async(password), keep_session=request.cookies.get(auth.COOKIE))
+    sso_was_on = sso.configured()
+    if sso_was_on:
+        await sso.turn_off(store)  # one or the other; from anywhere stays as it was
+        log.info("dashboard: sign-in by SSO turned off, for a password")
     log.info("dashboard: the password was %s on the computer", "changed" if had else "set")
     return _done("Password changed. Every browser signed in with the old one is signed out."
-                 if had else "Password set.")
+                 if had else "Password set. Sign-in by SSO is off." if sso_was_on else "Password set.")
+
+
+async def sso_off(request: Request) -> Response:
+    if not _where(request)["local"]:
+        return _on_computer_only()
+    try:
+        await sso.turn_off(await account_store())
+    except sso.SSOError as e:
+        return await security_page(request, error=e.said)
+    log.info("dashboard: sign-in by SSO turned off on the computer")
+    return _done("Sign-in by SSO is off.", request)
 
 
 async def remove_password(request: Request) -> Response:
@@ -168,14 +186,15 @@ async def remote(request: Request) -> Response:
         return _on_computer_only()
     store = await account_store()
     if not await store.set_remote(on):
-        return _done("Set a password first: away from this computer, it's what lets you in.")
+        return _done("Set a password (or sign-in by SSO) first: away from this computer, it's what lets you in.")
     if not on:
         await store.end_sessions("password", keep=request.cookies.get(auth.COOKIE) if _where(request)["local"] else None)
     log.info("dashboard: access from anywhere switched %s (%s)", "on" if on else "off",
              "at the computer" if _where(request)["local"] else f"from {_where(request)['peer']}")
     if not on and not _where(request)["local"]:
         return RedirectResponse("/admin/", status_code=303)  # and that was this browser's way in
-    return _done("The dashboard now answers away from this computer, to the password." if on
+    return _done("The dashboard now answers away from this computer, "
+                 + ("by SSO." if sso.configured() else "to the password.") if on
                  else "The dashboard answers only on this computer again.")
 
 
@@ -197,6 +216,7 @@ def routes() -> list:
         Route("/security", security_page),
         Route("/security/password", set_password, methods=["POST"]),
         Route("/security/password/remove", remove_password, methods=["POST"]),
+        Route("/security/sso/off", sso_off, methods=["POST"]),
         Route("/security/2fa", totp_start, methods=["POST"]),
         Route("/security/2fa/confirm", totp_confirm, methods=["POST"]),
         Route("/security/2fa/off", totp_off, methods=["POST"]),

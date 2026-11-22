@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Sign in to the dashboard by SSO.** An OpenID Connect provider (Okta, Entra, Google,
+  Authentik, WorkOS and the like) in place of the password and 2FA: one or the other.
+  `memoreei admin sso set --issuer … --client-id … --allow you@example.com`, or the
+  `MEMOREEI_SSO_*` settings in `config.env`. The authorization code flow with PKCE, the ID
+  token checked against the issuer's keys, and only the emails (verified) or subjects
+  allowed get in. The one-time link still works on the computer, and "from anywhere"
+  still decides whether the dashboard answers elsewhere. The Security page shows it, and
+  turns it off on the computer.
+
 ## [0.5.0rc3] - 2026-11-09
 
 ### Changed
