@@ -72,11 +72,9 @@ def describe(billing: dict[str, Any] | None, tunnel_state: str | None = None,
     standing, until = b.get("standing"), b.get("until")
     if tunnel_state == "unpaid" and standing not in CUT_OFF:
         standing, until = "disconnected", None
-    if standing == "comped" and (not until or until > now):
+    if standing == "comped":
         # An invitation to the beta: the service's own comp, no Paddle in it.
-        return Line("Beta: on us",
-                    f"Memoreei Cloud is free for you until {_date(until)}." if until
-                    else "Memoreei Cloud is free for you while it's in beta.")
+        return Line("On the house")
     if standing == "trialing" and until and until > now:
         n = days_left(until, now)
         return Line(f"Trial: {n} day{'' if n == 1 else 's'} left",
