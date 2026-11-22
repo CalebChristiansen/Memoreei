@@ -2,6 +2,7 @@
 *.db
 *.db-shm
 *.db-wal
+memoreei.key
 __pycache__/
 *.py[cod]
 *.pyo
